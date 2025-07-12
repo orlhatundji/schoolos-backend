@@ -1,0 +1,431 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum UserType {
+  SUPER_ADMIN
+  ADMIN
+  GUARDIAN
+  STUDENT
+  TEACHER
+}
+
+enum UserTokenType {
+  RESET_PASSWORD
+  REFRESH_TOKEN
+}
+
+model AcademicSession {
+  id                   String                   @id @default(uuid())
+  academicYear         String
+  startDate            DateTime
+  endDate              DateTime
+  isCurrent            Boolean                  @default(false)
+  schoolId             String
+  school               School                   @relation(fields: [schoolId], references: [id])
+  terms                Term[]
+  calendar             AcademicSessionCalendar?
+  studentAttendances   StudentAttendance[]
+  subjectTermStudents  SubjectTermStudent[]
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  deletedAt            DateTime?
+  assessmentStructures AssessmentStructure[]
+}
+
+model AcademicSessionCalendar {
+  id                String                        @id @default(uuid())
+  academicSessionId String                        @unique
+  academicSession   AcademicSession               @relation(fields: [academicSessionId], references: [id])
+  items             AcademicSessionCalendarItem[]
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  deletedAt         DateTime?
+}
+
+model AcademicSessionCalendarItem {
+  id         String                  @id @default(uuid())
+  calendarId String
+  calendar   AcademicSessionCalendar @relation(fields: [calendarId], references: [id])
+  title      String
+  date       DateTime
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  deletedAt  DateTime?
+}
+
+model Admin {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  isSuper   Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model AssessmentComponent {
+  id                    String              @id @default(uuid())
+  assessmentStructureId String
+  assessmentStructure   AssessmentStructure @relation(fields: [assessmentStructureId], references: [id])
+  name                  String // e.g. "Exam", "Test 1"
+  weight                Int // Must sum to 100 for a structure
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  deletedAt             DateTime?
+}
+
+model AssessmentStructure {
+  id                String                @id @default(uuid())
+  schoolId          String
+  school            School                @relation(fields: [schoolId], references: [id])
+  name              String // e.g. "2024 Session", "JSS1 Structure"
+  academicSessionId String
+  academicSession   AcademicSession       @relation(fields: [academicSessionId], references: [id])
+  components        AssessmentComponent[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  deletedAt         DateTime?
+
+  @@index([schoolId])
+  @@index([academicSessionId])
+}
+
+model ClassArm {
+  id                      String                   @id @default(uuid())
+  name                    String
+  levelId                 String
+  level                   Level                    @relation(fields: [levelId], references: [id])
+  departmentId            String?
+  department              Department?              @relation(fields: [departmentId], references: [id])
+  students                Student[]
+  classArmTeachers        ClassArmTeacher[]
+  curriculumProgress      Json?
+  studentAttendances      StudentAttendance[]
+  classArmSubjectTeachers ClassArmSubjectTeacher[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+}
+
+model ClassArmSubjectTeacher {
+  id         String    @id @default(uuid())
+  teacherId  String
+  teacher    Teacher   @relation(fields: [teacherId], references: [id])
+  subjectId  String
+  subject    Subject   @relation(fields: [subjectId], references: [id])
+  classArmId String
+  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+}
+
+model ClassArmTeacher {
+  id         String    @id @default(uuid())
+  teacherId  String
+  classArmId String
+  teacher    Teacher   @relation(fields: [teacherId], references: [id])
+  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+}
+
+model Counter {
+  id       String @id @default(uuid())
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+  entity   String // e.g. "student", "teacher", "guardian"
+  current  Int    @default(0)
+
+  updatedAt DateTime  @updatedAt
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@unique([schoolId, entity])
+}
+
+model Curriculum {
+  id        String           @id @default(uuid())
+  subjectId String
+  subject   Subject          @relation(fields: [subjectId], references: [id])
+  items     CurriculumItem[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deletedAt DateTime?
+}
+
+model CurriculumItem {
+  id                    String                 @id @default(uuid())
+  title                 String
+  curriculumId          String
+  curriculum            Curriculum             @relation(fields: [curriculumId], references: [id])
+  curriculumItemRatings CurriculumItemRating[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+}
+
+model CurriculumItemRating {
+  id               String         @id @default(uuid())
+  studentId        String
+  student          Student        @relation(fields: [studentId], references: [id])
+  curriculumItemId String
+  curriculumItem   CurriculumItem @relation(fields: [curriculumItemId], references: [id])
+  rating           Int
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+}
+
+model Department {
+  id        String     @id @default(uuid())
+  name      String
+  schoolId  String
+  school    School     @relation(fields: [schoolId], references: [id])
+  subjects  Subject[]
+  classArms ClassArm[]
+  hod       Hod?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  @@index([schoolId])
+}
+
+model GradingModel {
+  id        String    @id @default(uuid())
+  schoolId  String    @unique
+  school    School    @relation(fields: [schoolId], references: [id])
+  model     Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model Guardian {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  students  Student[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model Hod {
+  id           String     @id @default(uuid())
+  teacherId    String     @unique
+  departmentId String     @unique
+  teacher      Teacher    @relation(fields: [teacherId], references: [id])
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+}
+
+model Level {
+  id        String     @id @default(uuid())
+  name      String
+  schoolId  String
+  school    School     @relation(fields: [schoolId], references: [id])
+  classArms ClassArm[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+}
+
+model Prefect {
+  id        String    @id @default(uuid())
+  studentId String    @unique
+  student   Student   @relation(fields: [studentId], references: [id])
+  role      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+model School {
+  id                   String                @id @default(uuid())
+  name                 String
+  address              String?
+  code                 String                @unique
+  levels               Level[]
+  gradingModel         GradingModel?
+  academicSessions     AcademicSession[]
+  subjects             Subject[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  users                User[]
+  counters             Counter[]
+  departments          Department[]
+  assessmentStructures AssessmentStructure[]
+}
+
+model Student {
+  id                    String                 @id @default(uuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id])
+  studentNo             String                 @unique
+  admissionDate         DateTime
+  admissionNo           String?                @unique
+  classArmId            String
+  classArm              ClassArm               @relation(fields: [classArmId], references: [id])
+  subjectTermStudents   SubjectTermStudent[]
+  prefect               Prefect?
+  guardianId            String?
+  guardian              Guardian?              @relation(fields: [guardianId], references: [id])
+  curriculumItemRatings CurriculumItemRating[]
+  studentAttendances    StudentAttendance[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+}
+
+model StudentAttendance {
+  id                String           @id @default(uuid())
+  studentId         String
+  student           Student          @relation(fields: [studentId], references: [id])
+  date              DateTime
+  status            AttendanceStatus
+  classArmId        String
+  classArm          ClassArm         @relation(fields: [classArmId], references: [id])
+  academicSessionId String
+  academicSession   AcademicSession  @relation(fields: [academicSessionId], references: [id])
+  termId            String
+  term              Term             @relation(fields: [termId], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([studentId, date])
+}
+
+model Subject {
+  id                      String                   @id @default(uuid())
+  name                    String
+  isElective              Boolean                  @default(false)
+  schoolId                String
+  school                  School                   @relation(fields: [schoolId], references: [id])
+  departmentId            String?
+  department              Department?              @relation(fields: [departmentId], references: [id])
+  curriculums             Curriculum[]
+  subjectTermStudents     SubjectTermStudent[]
+  classArmSubjectTeachers ClassArmSubjectTeacher[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+}
+
+model SubjectTermStudent {
+  id                String                         @id @default(uuid())
+  studentId         String
+  student           Student                        @relation(fields: [studentId], references: [id])
+  subjectId         String
+  subject           Subject                        @relation(fields: [subjectId], references: [id])
+  academicSessionId String
+  academicSession   AcademicSession                @relation(fields: [academicSessionId], references: [id])
+  termId            String
+  term              Term                           @relation(fields: [termId], references: [id])
+  totalScore        Int
+  assessments       SubjectTermStudentAssessment[]
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  deletedAt         DateTime?
+}
+
+model SubjectTermStudentAssessment {
+  id                   String             @id @default(uuid())
+  name                 String
+  score                Int
+  isExam               Boolean            @default(false)
+  subjectTermStudentId String
+  subjectTermStudent   SubjectTermStudent @relation(fields: [subjectTermStudentId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  deletedAt            DateTime?
+}
+
+model Teacher {
+  id                      String                   @id @default(uuid())
+  userId                  String                   @unique
+  user                    User                     @relation(fields: [userId], references: [id])
+  teacherNo               String                   @unique
+  classArmTeachers        ClassArmTeacher[]
+  hod                     Hod?
+  classArmSubjectTeachers ClassArmSubjectTeacher[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+}
+
+model Term {
+  id                  String               @id @default(uuid())
+  name                String
+  academicSessionId   String
+  academicSession     AcademicSession      @relation(fields: [academicSessionId], references: [id])
+  studentAttendances  StudentAttendance[]
+  subjectTermStudents SubjectTermStudent[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+}
+
+model User {
+  id                 String      @id @default(uuid())
+  type               UserType
+  email              String?     @unique
+  phone              String?     @unique
+  password           String
+  phoneVerified      Boolean     @default(false)
+  emailVerified      Boolean     @default(false)
+  firstName          String
+  lastName           String
+  address            String?
+  avatarUrl          String?
+  dateOfBirth        DateTime?
+  schoolId           String
+  school             School      @relation(fields: [schoolId], references: [id])
+  mustUpdatePassword Boolean     @default(false)
+  tokens             UserToken[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  student  Student?
+  guardian Guardian?
+  teacher  Teacher?
+  admin    Admin?
+}
+
+model UserToken {
+  id          String        @id @default(uuid())
+  type        UserTokenType
+  token       String
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  expires     DateTime
+  blacklisted Boolean       @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([userId, type])
+  @@index([type])
+}

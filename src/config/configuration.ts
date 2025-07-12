@@ -1,0 +1,29 @@
+const getConfiguration = () => ({
+  port: parseInt(process.env.PORT, 10) || 3000,
+  database: {
+    url: process.env.DATABASE_URL,
+  },
+  jwt: {
+    secret: process.env.JWT_SECRET,
+    expiresIn: process.env.JWT_EXPIRES_IN,
+    refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET,
+    refreshTokenAge: process.env.REFRESH_TOKEN_AGE,
+  },
+  encryptor: {
+    key: process.env.ENCRYPTOR_SECRET_KEY,
+  },
+  throttler: {
+    ttl: process.env.THROTTLER_TTL,
+    limit: process.env.THROTTLER_LIMIT,
+  },
+  mail: {
+    resendApiKey: process.env.RESEND_API_KEY,
+    mailjetApiKey: process.env.MAILJET_API_KEY,
+    mailjetSecretKey: process.env.MAILJET_SECRET_KEY,
+    defaultEmail: process.env.DEFAULT_SOURCE_EMAIL,
+  },
+  frontendBaseUrl: process.env.FRONTEND_BASE_URL,
+  otpGeneratorKey: process.env.OTP_GENERATOR_KEY,
+});
+
+export default getConfiguration;

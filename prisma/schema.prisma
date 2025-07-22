@@ -27,24 +27,68 @@ enum UserTokenType {
   REFRESH_TOKEN
 }
 
-model AcademicSession {
-  id                   String                   @id @default(uuid())
-  academicYear         String
-  startDate            DateTime
-  endDate              DateTime
-  isCurrent            Boolean                  @default(false)
-  schoolId             String
-  school               School                   @relation(fields: [schoolId], references: [id])
-  terms                Term[]
-  calendar             AcademicSessionCalendar?
-  studentAttendances   StudentAttendance[]
-  subjectTermStudents  SubjectTermStudent[]
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
-  deletedAt            DateTime?
-  assessmentStructures AssessmentStructure[]
+// --- School and Academic Structure ---
+
+/**
+ * School
+ * ------
+ * The top-level entity representing a school or educational institution.
+ * All other entities (students, staff, sessions, etc.) are associated with a school.
+ * This model enables multi-school support within the same system.
+ */
+model School {
+  id               String            @id @default(uuid())
+  name             String
+  address          String?
+  code             String            @unique
+  levels           Level[]
+  gradingModel     GradingModel?
+  academicSessions AcademicSession[]
+  subjects         Subject[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+  users            User[]
+  counters         Counter[]
+  departments      Department[]
+  classArms        ClassArm[]
+  assessments      Assessment[]
 }
 
+/**
+ * AcademicSession
+ * ----------------
+ * Represents a full academic year or session for a school (e.g., 2023/2024).
+ * Each session has a start and end date, and is associated with a specific school.
+ * Academic sessions are divided into terms (e.g., First Term, Second Term).
+ * This entity is central for grouping all academic activities, such as attendance, grading, and curriculum planning, within a specific school year.
+ * The isCurrent flag indicates if this is the active session for the school.
+ */
+model AcademicSession {
+  id                 String                   @id @default(uuid())
+  academicYear       String
+  startDate          DateTime
+  endDate            DateTime
+  isCurrent          Boolean                  @default(false)
+  schoolId           String
+  school             School                   @relation(fields: [schoolId], references: [id])
+  terms              Term[]
+  calendar           AcademicSessionCalendar?
+  studentAttendances StudentAttendance[]
+  subjectTerms       SubjectTerm[]
+  classArms          ClassArm[]
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  deletedAt          DateTime?
+}
+
+/**
+ * AcademicSessionCalendar
+ * -----------------------
+ * Stores the calendar for a specific academic session, including all important dates and events (e.g., holidays, exams, resumption dates).
+ * Each session has one calendar, and each calendar can have multiple items (events).
+ * This helps schools plan and communicate their yearly schedule to staff, students, and guardians.
+ */
 model AcademicSessionCalendar {
   id                String                        @id @default(uuid())
   academicSessionId String                        @unique
@@ -55,188 +99,51 @@ model AcademicSessionCalendar {
   deletedAt         DateTime?
 }
 
+/**
+ * AcademicSessionCalendarItem
+ * ---------------------------
+ * Represents a single event or item in the academic session calendar (e.g., "First Term Begins", "Midterm Break").
+ * Each item has a title, a start date, and optionally an end date.
+ * Used for scheduling and tracking key academic events throughout the session.
+ */
 model AcademicSessionCalendarItem {
   id         String                  @id @default(uuid())
   calendarId String
   calendar   AcademicSessionCalendar @relation(fields: [calendarId], references: [id])
   title      String
-  date       DateTime
+  startDate  DateTime
+  endDate    DateTime?
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
   deletedAt  DateTime?
 }
 
-model Admin {
-  id        String    @id @default(uuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  isSuper   Boolean   @default(false)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+/**
+ * Term
+ * ----
+ * Represents a term within an academic session (e.g., First Term, Second Term).
+ * Terms divide the academic session into manageable periods for teaching, assessment, and reporting.
+ * Each term is linked to an academic session and has its own set of subjects, attendance, and assessments.
+ */
+model Term {
+  id                 String              @id @default(uuid())
+  name               String
+  academicSessionId  String
+  academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id])
+  studentAttendances StudentAttendance[]
+  subjectTerms       SubjectTerm[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 }
 
-model AssessmentComponent {
-  id                    String              @id @default(uuid())
-  assessmentStructureId String
-  assessmentStructure   AssessmentStructure @relation(fields: [assessmentStructureId], references: [id])
-  name                  String // e.g. "Exam", "Test 1"
-  weight                Int // Must sum to 100 for a structure
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
-  deletedAt             DateTime?
-}
-
-model AssessmentStructure {
-  id                String                @id @default(uuid())
-  schoolId          String
-  school            School                @relation(fields: [schoolId], references: [id])
-  name              String // e.g. "2024 Session", "JSS1 Structure"
-  academicSessionId String
-  academicSession   AcademicSession       @relation(fields: [academicSessionId], references: [id])
-  components        AssessmentComponent[]
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  deletedAt         DateTime?
-
-  @@index([schoolId])
-  @@index([academicSessionId])
-}
-
-model ClassArm {
-  id                      String                   @id @default(uuid())
-  name                    String
-  levelId                 String
-  level                   Level                    @relation(fields: [levelId], references: [id])
-  departmentId            String?
-  department              Department?              @relation(fields: [departmentId], references: [id])
-  students                Student[]
-  classArmTeachers        ClassArmTeacher[]
-  curriculumProgress      Json?
-  studentAttendances      StudentAttendance[]
-  classArmSubjectTeachers ClassArmSubjectTeacher[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  deletedAt               DateTime?
-}
-
-model ClassArmSubjectTeacher {
-  id         String    @id @default(uuid())
-  teacherId  String
-  teacher    Teacher   @relation(fields: [teacherId], references: [id])
-  subjectId  String
-  subject    Subject   @relation(fields: [subjectId], references: [id])
-  classArmId String
-  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-}
-
-model ClassArmTeacher {
-  id         String    @id @default(uuid())
-  teacherId  String
-  classArmId String
-  teacher    Teacher   @relation(fields: [teacherId], references: [id])
-  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-}
-
-model Counter {
-  id       String @id @default(uuid())
-  schoolId String
-  school   School @relation(fields: [schoolId], references: [id])
-  entity   String // e.g. "student", "teacher", "guardian"
-  current  Int    @default(0)
-
-  updatedAt DateTime  @updatedAt
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  @@unique([schoolId, entity])
-}
-
-model Curriculum {
-  id        String           @id @default(uuid())
-  subjectId String
-  subject   Subject          @relation(fields: [subjectId], references: [id])
-  items     CurriculumItem[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  deletedAt DateTime?
-}
-
-model CurriculumItem {
-  id                    String                 @id @default(uuid())
-  title                 String
-  curriculumId          String
-  curriculum            Curriculum             @relation(fields: [curriculumId], references: [id])
-  curriculumItemRatings CurriculumItemRating[]
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  deletedAt             DateTime?
-}
-
-model CurriculumItemRating {
-  id               String         @id @default(uuid())
-  studentId        String
-  student          Student        @relation(fields: [studentId], references: [id])
-  curriculumItemId String
-  curriculumItem   CurriculumItem @relation(fields: [curriculumItemId], references: [id])
-  rating           Int
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  deletedAt        DateTime?
-}
-
-model Department {
-  id        String     @id @default(uuid())
-  name      String
-  schoolId  String
-  school    School     @relation(fields: [schoolId], references: [id])
-  subjects  Subject[]
-  classArms ClassArm[]
-  hod       Hod?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  deletedAt DateTime?
-
-  @@index([schoolId])
-}
-
-model GradingModel {
-  id        String    @id @default(uuid())
-  schoolId  String    @unique
-  school    School    @relation(fields: [schoolId], references: [id])
-  model     Json
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model Guardian {
-  id        String    @id @default(uuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  students  Student[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-}
-
-model Hod {
-  id           String     @id @default(uuid())
-  teacherId    String     @unique
-  departmentId String     @unique
-  teacher      Teacher    @relation(fields: [teacherId], references: [id])
-  department   Department @relation(fields: [departmentId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
-}
-
+/**
+ * Level
+ * -----
+ * Represents a grade or year group in the school (e.g., SS1, JSS1, Grade 10).
+ * Levels organize students and class arms by age or academic progress.
+ * This entity is fundamental for structuring the school and managing student progression.
+ */
 model Level {
   id        String     @id @default(uuid())
   name      String
@@ -248,143 +155,67 @@ model Level {
   deletedAt DateTime?
 }
 
-model Prefect {
-  id        String    @id @default(uuid())
-  studentId String    @unique
-  student   Student   @relation(fields: [studentId], references: [id])
-  role      String
+/**
+ * Department
+ * ----------
+ * Represents an academic department within a school (e.g., Science, Arts, Languages).
+ * Departments group related subjects and class arms, and are managed by a head of department (HOD).
+ * This structure supports subject specialization and departmental administration.
+ */
+model Department {
+  id        String     @id @default(uuid())
+  name      String
+  hodId     String?
+  schoolId  String
+  school    School     @relation(fields: [schoolId], references: [id])
+  subjects  Subject[]
+  classArms ClassArm[]
+
+  hod       Hod?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@index([schoolId])
 }
 
-model School {
-  id                   String                @id @default(uuid())
-  name                 String
-  address              String?
-  code                 String                @unique
-  levels               Level[]
-  gradingModel         GradingModel?
-  academicSessions     AcademicSession[]
-  subjects             Subject[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  deletedAt            DateTime?
-  users                User[]
-  counters             Counter[]
-  departments          Department[]
-  assessmentStructures AssessmentStructure[]
-}
-
-model Student {
-  id                    String                 @id @default(uuid())
-  userId                String                 @unique
-  user                  User                   @relation(fields: [userId], references: [id])
-  studentNo             String                 @unique
-  admissionDate         DateTime
-  admissionNo           String?                @unique
-  classArmId            String
-  classArm              ClassArm               @relation(fields: [classArmId], references: [id])
-  subjectTermStudents   SubjectTermStudent[]
-  prefect               Prefect?
-  guardianId            String?
-  guardian              Guardian?              @relation(fields: [guardianId], references: [id])
-  curriculumItemRatings CurriculumItemRating[]
-  studentAttendances    StudentAttendance[]
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  deletedAt             DateTime?
-}
-
-model StudentAttendance {
-  id                String           @id @default(uuid())
-  studentId         String
-  student           Student          @relation(fields: [studentId], references: [id])
-  date              DateTime
-  status            AttendanceStatus
-  classArmId        String
-  classArm          ClassArm         @relation(fields: [classArmId], references: [id])
-  academicSessionId String
-  academicSession   AcademicSession  @relation(fields: [academicSessionId], references: [id])
-  termId            String
-  term              Term             @relation(fields: [termId], references: [id])
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  deletedAt         DateTime?
-
-  @@unique([studentId, date])
-}
-
-model Subject {
+/**
+ * ClassArm
+ * --------
+ * Represents a subdivision of a level or grade (e.g., "SS1A", "Grade 10B").
+ * Each class arm belongs to a level and a school, and may be associated with a department.
+ * Class arms group students for teaching, attendance, and administrative purposes.
+ * They are also linked to teachers and subjects for classroom management.
+ */
+model ClassArm {
   id                      String                   @id @default(uuid())
   name                    String
-  isElective              Boolean                  @default(false)
-  schoolId                String
-  school                  School                   @relation(fields: [schoolId], references: [id])
+  academicSessionId       String
+  academicSession         AcademicSession          @relation(fields: [academicSessionId], references: [id])
+  levelId                 String
+  level                   Level                    @relation(fields: [levelId], references: [id])
   departmentId            String?
   department              Department?              @relation(fields: [departmentId], references: [id])
-  curriculums             Curriculum[]
-  subjectTermStudents     SubjectTermStudent[]
-  classArmSubjectTeachers ClassArmSubjectTeacher[]
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  deletedAt               DateTime?
-}
-
-model SubjectTermStudent {
-  id                String                         @id @default(uuid())
-  studentId         String
-  student           Student                        @relation(fields: [studentId], references: [id])
-  subjectId         String
-  subject           Subject                        @relation(fields: [subjectId], references: [id])
-  academicSessionId String
-  academicSession   AcademicSession                @relation(fields: [academicSessionId], references: [id])
-  termId            String
-  term              Term                           @relation(fields: [termId], references: [id])
-  totalScore        Int
-  assessments       SubjectTermStudentAssessment[]
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
-  deletedAt         DateTime?
-}
-
-model SubjectTermStudentAssessment {
-  id                   String             @id @default(uuid())
-  name                 String
-  score                Int
-  isExam               Boolean            @default(false)
-  subjectTermStudentId String
-  subjectTermStudent   SubjectTermStudent @relation(fields: [subjectTermStudentId], references: [id])
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  deletedAt            DateTime?
-}
-
-model Teacher {
-  id                      String                   @id @default(uuid())
-  userId                  String                   @unique
-  user                    User                     @relation(fields: [userId], references: [id])
-  teacherNo               String                   @unique
+  schoolId                String
+  school                  School                   @relation(fields: [schoolId], references: [id])
+  students                Student[]
   classArmTeachers        ClassArmTeacher[]
-  hod                     Hod?
+  studentAttendances      StudentAttendance[]
   classArmSubjectTeachers ClassArmSubjectTeacher[]
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
 }
 
-model Term {
-  id                  String               @id @default(uuid())
-  name                String
-  academicSessionId   String
-  academicSession     AcademicSession      @relation(fields: [academicSessionId], references: [id])
-  studentAttendances  StudentAttendance[]
-  subjectTermStudents SubjectTermStudent[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  deletedAt           DateTime?
-}
+// --- User Management ---
 
+/**
+ * User
+ * ----
+ * Represents a user account in the system, which can be a student, teacher, admin, or guardian.
+ * Stores authentication and profile information, and links to the specific role entity (student, teacher, etc.).
+ * This model is central for access control, personalization, and communication.
+ */
 model User {
   id                 String      @id @default(uuid())
   type               UserType
@@ -413,6 +244,12 @@ model User {
   admin    Admin?
 }
 
+/**
+ * UserToken
+ * ---------
+ * Represents a token used for user authentication and authorization (e.g., refresh tokens, password reset tokens).
+ * Supports secure login, session management, and account recovery.
+ */
 model UserToken {
   id          String        @id @default(uuid())
   type        UserTokenType
@@ -428,4 +265,393 @@ model UserToken {
 
   @@unique([userId, type])
   @@index([type])
+}
+
+/**
+ * Admin
+ * -----
+ * Represents a system administrator for a school.
+ * Admins have elevated privileges to manage users, configure school settings, and oversee operations.
+ * Each admin is linked to a user account and can be marked as a super admin for higher-level access.
+ * This entity is crucial for access control and school management.
+ */
+model Admin {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  isSuper   Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+/**
+ * Teacher
+ * -------
+ * Represents a teacher employed by the school.
+ * Stores personal and professional information, and links teachers to the subjects and class arms they teach.
+ * Teachers may also have administrative roles (e.g., HOD, class teacher).
+ */
+model Teacher {
+  id                      String                   @id @default(uuid())
+  userId                  String                   @unique
+  user                    User                     @relation(fields: [userId], references: [id])
+  teacherNo               String                   @unique
+  hod                     Hod[]
+  classArmTeachers        ClassArmTeacher[]
+  classArmSubjectTeachers ClassArmSubjectTeacher[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+}
+
+/**
+ * Guardian
+ * --------
+ * Represents a parent or guardian responsible for one or more students.
+ * Guardians can access student information, receive notifications, and communicate with the school.
+ * This entity is key for parent engagement and student support.
+ */
+model Guardian {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  students  Student[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+/**
+ * Student
+ * -------
+ * Represents a student enrolled in the school.
+ * Stores personal, academic, and administrative information about each student.
+ * Students are linked to class arms, guardians, and have records for attendance, assessments, and curriculum progress.
+ */
+model Student {
+  id                    String                 @id @default(uuid())
+  userId                String                 @unique
+  user                  User                   @relation(fields: [userId], references: [id])
+  studentNo             String                 @unique
+  admissionDate         DateTime
+  admissionNo           String?                @unique
+  classArmId            String
+  classArm              ClassArm               @relation(fields: [classArmId], references: [id])
+  subjectTermStudents   SubjectTermStudent[]
+  prefect               Prefect?
+  guardianId            String?
+  guardian              Guardian?              @relation(fields: [guardianId], references: [id])
+  curriculumItemRatings CurriculumItemRating[]
+  studentAttendances    StudentAttendance[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+}
+
+// --- Academic Management ---
+
+/**
+ * Subject
+ * -------
+ * Represents a subject offered by the school (e.g., Mathematics, English Language).
+ * Subjects are linked to departments and schools, and are taught by teachers to students in various class arms.
+ * This entity is central to curriculum planning and academic reporting.
+ */
+model Subject {
+  id                      String                   @id @default(uuid())
+  name                    String
+  isElective              Boolean                  @default(false)
+  schoolId                String
+  school                  School                   @relation(fields: [schoolId], references: [id])
+  departmentId            String?
+  department              Department?              @relation(fields: [departmentId], references: [id])
+  subjectTerms            SubjectTerm[]
+  classArmSubjectTeachers ClassArmSubjectTeacher[]
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+}
+
+/**
+ * SubjectTerm
+ * -----------
+ * Represents the offering of a subject in a specific academic session and term.
+ * Links a subject to a session and term, and is associated with a curriculum for that period.
+ * This enables tracking of what is taught, when, and to whom, across different school years and terms.
+ */
+model SubjectTerm {
+  id                  String               @id @default(uuid())
+  subjectId           String
+  subject             Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  academicSessionId   String
+  academicSession     AcademicSession      @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+  termId              String
+  term                Term                 @relation(fields: [termId], references: [id], onDelete: Cascade)
+  curriculumId        String?              @unique
+  curriculum          Curriculum?          @relation(fields: [curriculumId], references: [id])
+  subjectTermStudents SubjectTermStudent[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+}
+
+/**
+ * Curriculum
+ * ----------
+ * Represents the curriculum for a subject term, defining the topics, lessons, and learning objectives to be covered.
+ * Each curriculum is linked to a subject term and contains multiple curriculum items (topics or units).
+ * This entity is essential for academic planning, ensuring that teaching aligns with educational standards and goals.
+ */
+model Curriculum {
+  id            String           @id @default(uuid())
+  subjectTermId String?          @unique
+  subjectTerm   SubjectTerm?
+  items         CurriculumItem[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+}
+
+/**
+ * CurriculumItem
+ * --------------
+ * Represents a specific topic, lesson, or unit within a curriculum (e.g., "Algebra Basics", "Photosynthesis").
+ * Each item is linked to a curriculum and can be rated or assessed for student understanding.
+ * This allows for granular tracking of what is taught and how well students are grasping each topic.
+ */
+model CurriculumItem {
+  id                    String                 @id @default(uuid())
+  title                 String
+  curriculumId          String
+  curriculum            Curriculum             @relation(fields: [curriculumId], references: [id])
+  curriculumItemRatings CurriculumItemRating[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  deletedAt             DateTime?
+}
+
+/**
+ * CurriculumItemRating
+ * --------------------
+ * Tracks a student's performance or rating on a specific curriculum item.
+ * Useful for formative assessment, personalized learning, and identifying areas where students need support.
+ */
+model CurriculumItemRating {
+  id               String         @id @default(uuid())
+  studentId        String
+  student          Student        @relation(fields: [studentId], references: [id])
+  curriculumItemId String
+  curriculumItem   CurriculumItem @relation(fields: [curriculumItemId], references: [id])
+  rating           Int
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+}
+
+/**
+ * Assessment
+ * ----------
+ * Represents a test, exam, or any form of student assessment (e.g., "Midterm Test", "Final Exam").
+ * Each assessment has a name, optional description, and a maximum score.
+ * Assessments are used to evaluate student performance in various subjects and terms.
+ */
+model Assessment {
+  id          String    @id @default(uuid())
+  schoolId    String
+  school      School    @relation(fields: [schoolId], references: [id])
+  name        String
+  description String?
+  maxScore    Int // sum of maxScores for all assessments for a school must equal 100
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+}
+
+/**
+ * SubjectTermStudent
+ * ------------------
+ * Associates a student with a subject term, tracking their enrollment, performance, and assessments for that subject in that term.
+ * This model enables detailed academic tracking and personalized reporting for each student.
+ */
+model SubjectTermStudent {
+  id            String                         @id @default(uuid())
+  studentId     String
+  student       Student                        @relation(fields: [studentId], references: [id])
+  subjectTermId String
+  subjectTerm   SubjectTerm                    @relation(fields: [subjectTermId], references: [id])
+  totalScore    Int
+  assessments   SubjectTermStudentAssessment[]
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+  deletedAt     DateTime?
+}
+
+/**
+ * SubjectTermStudentAssessment
+ * ----------------------------
+ * Represents an individual assessment (e.g., test, exam, assignment) for a student in a subject term.
+ * Stores the score, type (exam or not), and links to the overall subject term student record.
+ * This enables granular analysis of student performance over time.
+ */
+model SubjectTermStudentAssessment {
+  id                   String             @id @default(uuid())
+  name                 String
+  score                Int
+  isExam               Boolean            @default(false)
+  subjectTermStudentId String
+  subjectTermStudent   SubjectTermStudent @relation(fields: [subjectTermStudentId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  deletedAt            DateTime?
+}
+
+/**
+ * GradingModel
+ * ------------
+ * Defines the grading system for a school (e.g., what score ranges correspond to grades A, B, C, etc.).
+ * Each school can have its own grading model, which is used to interpret student scores and generate report cards.
+ * GradingModel model example
+ * {
+ *   "A": [70, 100],
+ *   "B": [60, 69],
+ *   “C”: [
+ *   ...
+ * }
+ */
+model GradingModel {
+  id        String    @id @default(uuid())
+  schoolId  String    @unique
+  school    School    @relation(fields: [schoolId], references: [id])
+  model     Json
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+// --- Administrative and Support ---
+
+/**
+ * StudentAttendance
+ * -----------------
+ * Tracks a student's attendance for each day, including their status (present, absent, late, excused).
+ * Attendance is linked to the student, class arm, academic session, and term.
+ * This data is vital for monitoring student engagement and compliance.
+ */
+model StudentAttendance {
+  id                String           @id @default(uuid())
+  studentId         String
+  student           Student          @relation(fields: [studentId], references: [id])
+  date              DateTime
+  status            AttendanceStatus
+  classArmId        String
+  classArm          ClassArm         @relation(fields: [classArmId], references: [id])
+  academicSessionId String
+  academicSession   AcademicSession  @relation(fields: [academicSessionId], references: [id])
+  termId            String
+  term              Term             @relation(fields: [termId], references: [id])
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([studentId, date])
+}
+
+/**
+ * ClassArmTeacher
+ * ---------------
+ * Associates a teacher with a class arm, indicating the teacher's responsibility for that class arm (e.g., class teacher or homeroom teacher).
+ * This is used for administrative and pastoral care purposes.
+ */
+model ClassArmTeacher {
+  id         String    @id @default(uuid())
+  teacherId  String
+  classArmId String
+  teacher    Teacher   @relation(fields: [teacherId], references: [id])
+  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+}
+
+/**
+ * ClassArmSubjectTeacher
+ * ----------------------
+ * Associates a teacher with a subject and a class arm, indicating which teacher is responsible for teaching a specific subject to a specific class arm.
+ * This enables flexible assignment of teachers to different subjects and classes.
+ * e.g JSS2A maths teacher is Mr. John Doe
+ */
+model ClassArmSubjectTeacher {
+  id         String    @id @default(uuid())
+  teacherId  String
+  teacher    Teacher   @relation(fields: [teacherId], references: [id])
+  subjectId  String
+  subject    Subject   @relation(fields: [subjectId], references: [id])
+  classArmId String
+  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+}
+
+/**
+ * Hod (Head of Department)
+ * ------------------------
+ * Associates a teacher as the head of a department, giving them administrative responsibilities over that department.
+ * HODs oversee subject delivery, curriculum planning, and departmental staff.
+ * teachers can appear as HODs in multiple departments or the same department for different tenures.
+ * entry is created when a teacher is assigned as HOD for a department.
+ * and we set the hodId for the department.
+ * and the end date is set when the teacher is no longer the HOD of the department.
+ * e.g Mr. John Doe is the HOD of the Science Department
+ */
+model Hod {
+  id        String  @id @default(uuid())
+  teacherId String  @unique
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+
+  departmentId String     @unique
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  startDate DateTime  @default(now())
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+/**
+ * Prefect
+ * -------
+ * Represents a student who has been given a leadership role (e.g., class captain, head boy/girl).
+ * Prefects assist with school discipline, represent the student body, and help organize events.
+ */
+model Prefect {
+  id        String    @id @default(uuid())
+  studentId String    @unique
+  student   Student   @relation(fields: [studentId], references: [id])
+  role      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+/**
+ * Counter
+ * -------
+ * Used to generate and track unique numbers for various entities within a school (e.g., student numbers, teacher numbers).
+ * Ensures that each entity (like a student or teacher) has a unique, sequential identifier within the school.
+ */
+model Counter {
+  id       String @id @default(uuid())
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+  entity   String // e.g. "student", "teacher", "guardian"
+  current  Int    @default(0)
+
+  updatedAt DateTime  @updatedAt
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@unique([schoolId, entity])
 }

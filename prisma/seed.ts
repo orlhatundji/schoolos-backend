@@ -9,8 +9,10 @@ const prisma = new PrismaClient();
 const counterService = new CounterService(prisma);
 
 async function main() {
+  console.log('🚀 Starting seed process...');
   const samplePassword = 'Dev@1234Test';
 
+  console.log('Creating school...');
   const school = await prisma.school.create({
     data: {
       name: 'Bright Future High School',
@@ -19,6 +21,7 @@ async function main() {
     },
   });
 
+  console.log('Creating super admin user...');
   // Create super admin user + admin
   const adminUser = await prisma.user.create({
     data: {
@@ -39,33 +42,81 @@ async function main() {
     },
   });
 
+  console.log('Creating departments...');
   const departments = await Promise.all(
     ['Science', 'Arts', 'Commercial'].map((name) =>
       prisma.department.create({ data: { name, schoolId: school.id } }),
     ),
   );
 
+  console.log('Creating levels...');
   const levels = await Promise.all(
-    ['SS1', 'SS2', 'SS3'].map((name) =>
+    ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'].map((name) =>
       prisma.level.create({ data: { name, schoolId: school.id } }),
     ),
   );
 
+  console.log('Creating academic sessions and terms...');
+  // Academic Sessions & Terms
+  const sessions = await Promise.all(
+    ['2023/2024', '2024/2025'].map((academicYear) =>
+      prisma.academicSession.create({
+        data: {
+          academicYear,
+          schoolId: school.id,
+          isCurrent: academicYear === '2024/2025',
+          startDate: faker.date.past(),
+          endDate: faker.date.future(),
+        },
+      }),
+    ),
+  );
+
+  const terms = [];
+  for (const session of sessions) {
+    for (const name of ['First Term', 'Second Term', 'Third Term']) {
+      const term = await prisma.term.create({
+        data: {
+          name,
+          academicSessionId: session.id,
+        },
+      });
+      terms.push(term);
+    }
+
+    await prisma.academicSessionCalendar.create({
+      data: {
+        academicSessionId: session.id,
+        items: {
+          create: [
+            { title: 'Resumption', startDate: faker.date.past() },
+            { title: 'Midterm Break', startDate: faker.date.recent() },
+            { title: 'End of Term', startDate: faker.date.future() },
+          ],
+        },
+      },
+    });
+  }
+
+  console.log('Creating class arms...');
   const classArms = [];
   for (const level of levels) {
-    for (const arm of ['A', 'B']) {
+    for (const arm of ['A', 'B', 'C']) {
       const dept = faker.helpers.arrayElement(departments);
       const classArm = await prisma.classArm.create({
         data: {
           name: arm,
           levelId: level.id,
           departmentId: dept.id,
+          schoolId: school.id,
+          academicSessionId: faker.helpers.arrayElement(sessions).id,
         },
       });
       classArms.push(classArm);
     }
   }
 
+  console.log('Creating teachers...');
   // Teachers
   const teachers = await Promise.all(
     Array.from({ length: 5 }).map(async (_, i) => {
@@ -98,8 +149,10 @@ async function main() {
     }),
   );
 
+  console.log('Creating subjects and curricula...');
   // Subjects + Curriculum
   const subjects = [];
+  const subjectTerms = [];
   for (const dept of departments) {
     for (let i = 0; i < 3; i++) {
       const name = `${faker.word.adjective()} ${faker.word.noun()}`;
@@ -112,20 +165,32 @@ async function main() {
         },
       });
       subjects.push(subject);
-
-      await prisma.curriculum.create({
-        data: {
-          subjectId: subject.id,
-          items: {
-            create: Array.from({ length: 3 }).map(() => ({
-              title: faker.word.words({ count: { min: 2, max: 5 } }),
-            })),
-          },
-        },
-      });
     }
   }
 
+  for (const subject of subjects) {
+    for (const term of terms) {
+      const subjectTerm = await prisma.subjectTerm.create({
+        data: {
+          subject: { connect: { id: subject.id } },
+          academicSession: { connect: { id: term.academicSessionId } },
+          term: { connect: { id: term.id } },
+          curriculum: {
+            create: {
+              items: {
+                create: Array.from({ length: 3 }).map(() => ({
+                  title: faker.word.words({ count: { min: 2, max: 5 } }),
+                })),
+              },
+            },
+          },
+        },
+      });
+      subjectTerms.push(subjectTerm);
+    }
+  }
+
+  console.log('Assigning class teachers...');
   // Assign class teachers
   for (const classArm of classArms) {
     await prisma.classArmTeacher.create({
@@ -136,6 +201,7 @@ async function main() {
     });
   }
 
+  console.log('Creating students...');
   // Students
   const students: any[] = [];
   let studentCounter = 0;
@@ -197,47 +263,7 @@ async function main() {
     }),
   );
 
-  // Academic Sessions & Terms
-  const sessions = await Promise.all(
-    ['2023/2024', '2024/2025'].map((academicYear) =>
-      prisma.academicSession.create({
-        data: {
-          academicYear,
-          schoolId: school.id,
-          isCurrent: academicYear === '2023/2024',
-          startDate: faker.date.past(),
-          endDate: faker.date.future(),
-        },
-      }),
-    ),
-  );
-
-  const terms = [];
-  for (const session of sessions) {
-    for (const name of ['First Term', 'Second Term', 'Third Term']) {
-      const term = await prisma.term.create({
-        data: {
-          name,
-          academicSessionId: session.id,
-        },
-      });
-      terms.push(term);
-    }
-
-    await prisma.academicSessionCalendar.create({
-      data: {
-        academicSessionId: session.id,
-        items: {
-          create: [
-            { title: 'Resumption', date: faker.date.past() },
-            { title: 'Midterm Break', date: faker.date.recent() },
-            { title: 'End of Term', date: faker.date.future() },
-          ],
-        },
-      },
-    });
-  }
-
+  console.log('Assigning subject teachers to class arms...');
   // Subject → Teacher → ClassArm assignments
   for (const subject of subjects) {
     for (const classArm of classArms) {
@@ -251,6 +277,7 @@ async function main() {
     }
   }
 
+  console.log('Recording student attendance...');
   // Attendance
   const recentSession = sessions.at(-1)!;
   const recentTerm = terms.filter((t) => t.academicSessionId === recentSession.id).at(-1)!;
@@ -271,23 +298,34 @@ async function main() {
     }
   }
 
+  console.log('Creating subject assessments for students...');
   // Subject assessments
   for (const student of students) {
-    for (const subject of subjects) {
+    for (const subjectTerm of subjectTerms) {
       const subjectTermStudent = await prisma.subjectTermStudent.create({
         data: {
-          studentId: student.id,
-          subjectId: subject.id,
-          academicSessionId: recentSession.id,
-          termId: recentTerm.id,
+          student: { connect: { id: student.id } },
+          subjectTerm: { connect: { id: subjectTerm.id } },
           totalScore: 0,
         },
       });
 
       const assessments = [
-        { name: 'PRACTICAL ', score: faker.number.int({ min: 5, max: 20 }), isExam: false },
-        { name: 'MID TERM TEST', score: faker.number.int({ min: 10, max: 30 }), isExam: false },
-        { name: 'FINAL EXAMINATION', score: faker.number.int({ min: 30, max: 60 }), isExam: true },
+        {
+          name: 'PRACTICAL',
+          score: faker.number.int({ min: 5, max: 20 }),
+          isExam: false,
+        },
+        {
+          name: 'MID TERM TEST',
+          score: faker.number.int({ min: 10, max: 30 }),
+          isExam: false,
+        },
+        {
+          name: 'FINAL EXAMINATION',
+          score: faker.number.int({ min: 30, max: 60 }),
+          isExam: true,
+        },
       ];
 
       const created = await Promise.all(
@@ -297,7 +335,7 @@ async function main() {
               name: a.name,
               score: a.score,
               isExam: a.isExam,
-              subjectTermStudentId: subjectTermStudent.id,
+              subjectTermStudent: { connect: { id: subjectTermStudent.id } },
             },
           }),
         ),

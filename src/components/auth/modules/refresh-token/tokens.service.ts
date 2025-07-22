@@ -29,10 +29,11 @@ export class TokensService extends BaseService {
     });
 
     if (!foundRefreshToken) {
-      this.logger.error(`Referesh token not found for user: ${userId}`);
+      this.logger.error(`Refresh token not found for user: ${userId}`);
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
     }
 
+    // ToDo: change blacklist to deletion
     if (foundRefreshToken.blacklisted) {
       this.logger.error(`Refresh token blacklisted ${foundRefreshToken.token}, for user ${userId}`);
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
@@ -47,14 +48,14 @@ export class TokensService extends BaseService {
 
     await this.jwtAuthService.verifyRefreshToken(refreshToken);
 
-    const tokens = await this.generateAndSaveRefreshToken(userId);
+    const tokens = await this.generateTokens(userId);
     return RefreshTokenResult.from(tokens, {
       status: HttpStatus.OK,
       message: AuthMessages.SUCCESS.TOKENS_REFRESHED,
     });
   }
 
-  async generateAndSaveRefreshToken(userId: string): Promise<AuthTokens> {
+  private async generateTokens(userId: string): Promise<AuthTokens> {
     const user = await this.userService.findById(userId);
     if (!user) {
       this.logger.error(`User with id: ${userId} not found`);

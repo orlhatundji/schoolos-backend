@@ -11,5 +11,5 @@ export class CreateSchoolDto {
 
   @IsOptional()
   @IsString()
-  address?: string;
+  primaryAddressId?: string;
 }

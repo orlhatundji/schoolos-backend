@@ -35,7 +35,7 @@ export class UserEntity implements Omit<User, 'password'> {
   schoolId: string;
 
   @ApiProperty()
-  address: string;
+  addressId: string | null;
 
   @ApiProperty()
   avatarUrl: string;

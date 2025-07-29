@@ -16,7 +16,6 @@ async function main() {
   const school = await prisma.school.create({
     data: {
       name: 'Bright Future High School',
-      address: '12 Unity Street, Lagos',
       code: 'BFH',
     },
   });

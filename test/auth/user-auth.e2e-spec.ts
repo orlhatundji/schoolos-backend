@@ -43,7 +43,6 @@ describe('Auth (e2e)', () => {
       password: faker.getStrongPassword(),
       dateOfBirth: faker.getDOB(),
       avatarUrl: faker.getURL(),
-      address: faker.getAddress(),
       email: faker.getEmail(),
       phone: faker.getPhoneNumber(),
     };

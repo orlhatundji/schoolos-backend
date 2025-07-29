@@ -35,7 +35,7 @@ export class CounterService {
     return await this.prisma.$transaction(async (tx) => {
       // Locks the existing row before reading until transaction commits
       const [counter] = await tx.$queryRawUnsafe<{ id: string; current: number }[]>(
-        `SELECT * FROM "Counter" WHERE "entity" = $1 AND "schoolId" = $2 FOR UPDATE`,
+        `SELECT * FROM "counters" WHERE "entity" = $1 AND "schoolId" = $2 FOR UPDATE`,
         entity,
         schoolId,
       );

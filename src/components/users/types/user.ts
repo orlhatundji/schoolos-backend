@@ -6,6 +6,7 @@ import {
   Student,
   Teacher,
   UserToken,
+  Address,
 } from '@prisma/client';
 
 export interface User extends PrismaUser {
@@ -15,4 +16,5 @@ export interface User extends PrismaUser {
   guardian?: Guardian;
   teacher?: Teacher;
   admin?: Admin;
+  address?: Address;
 }

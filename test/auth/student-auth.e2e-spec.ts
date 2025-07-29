@@ -38,7 +38,6 @@ describe('Auth (e2e)', () => {
       password: faker.getStrongPassword(),
       dateOfBirth: faker.getDOB(),
       avatarUrl: faker.getURL(),
-      address: faker.getAddress(),
       email: faker.getEmail(),
       phone: faker.getPhoneNumber(),
       classArmId: classArm.id,
@@ -71,7 +70,6 @@ describe('Auth (e2e)', () => {
     expect(response.body.data.lastName).toEqual(studentPayload.lastName);
     expect(response.body.data.email).toEqual(studentPayload.email);
     expect(response.body.data.phone).toEqual(studentPayload.phone);
-    expect(response.body.data.address).toEqual(studentPayload.address);
     expect(response.body.data.avatarUrl).toEqual(studentPayload.avatarUrl);
     expect(response.body.data).toHaveProperty('id');
     expect(response.body.data).toHaveProperty('createdAt');

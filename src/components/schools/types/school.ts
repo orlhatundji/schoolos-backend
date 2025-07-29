@@ -7,6 +7,7 @@ import {
   AcademicSession,
   Department,
   Counter,
+  Address,
 } from '@prisma/client';
 
 export interface School extends PrismaSchool {
@@ -17,4 +18,5 @@ export interface School extends PrismaSchool {
   academicSessions?: AcademicSession[];
   departments?: Department[];
   counters?: Counter[];
+  primaryAddress?: Address;
 }

@@ -57,7 +57,7 @@ export class CreateUserDto {
   @ApiProperty()
   @IsOptional()
   @IsString()
-  address: string;
+  addressId?: string;
 
   @ApiProperty()
   @IsOptional()

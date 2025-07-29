@@ -27,6 +27,54 @@ enum UserTokenType {
   REFRESH_TOKEN
 }
 
+// --- Address Management ---
+
+/**
+ * Address
+ * -------
+ * Represents a physical address with detailed location information.
+ * Supports geolocation for mapping and distance calculations.
+ * Used by both users and schools for contact and location purposes.
+ */
+model Address {
+  id                String                @id @default(uuid())
+  country           String
+  state             String
+  city              String
+  street1           String
+  street2           String?
+  zip               String?
+  geo               Unsupported("point")? // PostGIS point geometry
+  users             User[]
+  schoolAddress     SchoolAddress[]
+  primarySchools    School[]              @relation("SchoolPrimaryAddress")
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  deletedAt         DateTime?
+
+  @@map("addresses")
+}
+
+/**
+ * SchoolAddress
+ * -------------
+ * Links schools to their addresses, allowing schools to have multiple locations.
+ * Each school can have multiple addresses (e.g., main campus, branch campuses).
+ */
+model SchoolAddress {
+  id        String   @id @default(uuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  addressId String
+  address   Address  @relation(fields: [addressId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@unique([schoolId, addressId])
+  @@map("school_addresses")
+}
+
 // --- School and Academic Structure ---
 
 /**
@@ -39,12 +87,14 @@ enum UserTokenType {
 model School {
   id               String            @id @default(uuid())
   name             String
-  address          String?
   code             String            @unique
+  primaryAddressId String?           // Primary address for the school
+  primaryAddress   Address?          @relation("SchoolPrimaryAddress", fields: [primaryAddressId], references: [id])
   levels           Level[]
   gradingModel     GradingModel?
   academicSessions AcademicSession[]
   subjects         Subject[]
+  addresses        SchoolAddress[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   deletedAt        DateTime?
@@ -53,6 +103,8 @@ model School {
   departments      Department[]
   classArms        ClassArm[]
   assessments      Assessment[]
+
+  @@map("schools")
 }
 
 /**
@@ -80,6 +132,8 @@ model AcademicSession {
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
   deletedAt          DateTime?
+
+  @@map("academic_sessions")
 }
 
 /**
@@ -97,6 +151,8 @@ model AcademicSessionCalendar {
   createdAt         DateTime                      @default(now())
   updatedAt         DateTime                      @updatedAt
   deletedAt         DateTime?
+
+  @@map("academic_session_calendars")
 }
 
 /**
@@ -116,6 +172,8 @@ model AcademicSessionCalendarItem {
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
   deletedAt  DateTime?
+
+  @@map("academic_session_calendar_items")
 }
 
 /**
@@ -135,6 +193,8 @@ model Term {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
+
+  @@map("terms")
 }
 
 /**
@@ -153,6 +213,8 @@ model Level {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   deletedAt DateTime?
+
+  @@map("levels")
 }
 
 /**
@@ -177,6 +239,7 @@ model Department {
   deletedAt DateTime?
 
   @@index([schoolId])
+  @@map("departments")
 }
 
 /**
@@ -205,6 +268,8 @@ model ClassArm {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
+
+  @@map("class_arms")
 }
 
 // --- User Management ---
@@ -226,7 +291,8 @@ model User {
   emailVerified      Boolean     @default(false)
   firstName          String
   lastName           String
-  address            String?
+  addressId          String?
+  address            Address?    @relation(fields: [addressId], references: [id])
   avatarUrl          String?
   dateOfBirth        DateTime?
   schoolId           String
@@ -242,6 +308,8 @@ model User {
   guardian Guardian?
   teacher  Teacher?
   admin    Admin?
+
+  @@map("users")
 }
 
 /**
@@ -265,6 +333,7 @@ model UserToken {
 
   @@unique([userId, type])
   @@index([type])
+  @@map("user_tokens")
 }
 
 /**
@@ -283,6 +352,8 @@ model Admin {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@map("admins")
 }
 
 /**
@@ -303,6 +374,8 @@ model Teacher {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
+
+  @@map("teachers")
 }
 
 /**
@@ -320,6 +393,8 @@ model Guardian {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@map("guardians")
 }
 
 /**
@@ -347,6 +422,8 @@ model Student {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?
+
+  @@map("students")
 }
 
 // --- Academic Management ---
@@ -371,6 +448,8 @@ model Subject {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
+
+  @@map("subjects")
 }
 
 /**
@@ -394,6 +473,8 @@ model SubjectTerm {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?
+
+  @@map("subject_terms")
 }
 
 /**
@@ -411,6 +492,8 @@ model Curriculum {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   deletedAt     DateTime?
+
+  @@map("curriculums")
 }
 
 /**
@@ -429,6 +512,8 @@ model CurriculumItem {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?
+
+  @@map("curriculum_items")
 }
 
 /**
@@ -447,6 +532,8 @@ model CurriculumItemRating {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   deletedAt        DateTime?
+
+  @@map("curriculum_item_ratings")
 }
 
 /**
@@ -466,6 +553,8 @@ model Assessment {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
+
+  @@map("assessments")
 }
 
 /**
@@ -485,6 +574,8 @@ model SubjectTermStudent {
   createdAt     DateTime                       @default(now())
   updatedAt     DateTime                       @updatedAt
   deletedAt     DateTime?
+
+  @@map("subject_term_students")
 }
 
 /**
@@ -504,6 +595,8 @@ model SubjectTermStudentAssessment {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
+
+  @@map("subject_term_student_assessments")
 }
 
 /**
@@ -513,10 +606,10 @@ model SubjectTermStudentAssessment {
  * Each school can have its own grading model, which is used to interpret student scores and generate report cards.
  * GradingModel model example
  * {
- *   "A": [70, 100],
- *   "B": [60, 69],
- *   “C”: [
- *   ...
+ * "A": [70, 100],
+ * "B": [60, 69],
+ * “C”: [
+ * ...
  * }
  */
 model GradingModel {
@@ -527,6 +620,8 @@ model GradingModel {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@map("grading_models")
 }
 
 // --- Administrative and Support ---
@@ -555,6 +650,7 @@ model StudentAttendance {
   deletedAt         DateTime?
 
   @@unique([studentId, date])
+  @@map("student_attendances")
 }
 
 /**
@@ -572,6 +668,8 @@ model ClassArmTeacher {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
+
+  @@map("class_arm_teachers")
 }
 
 /**
@@ -592,6 +690,8 @@ model ClassArmSubjectTeacher {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
+
+  @@map("class_arm_subject_teachers")
 }
 
 /**
@@ -618,6 +718,8 @@ model Hod {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@map("hods")
 }
 
 /**
@@ -634,6 +736,8 @@ model Prefect {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@map("prefects")
 }
 
 /**
@@ -654,4 +758,5 @@ model Counter {
   deletedAt DateTime?
 
   @@unique([schoolId, entity])
+  @@map("counters")
 }

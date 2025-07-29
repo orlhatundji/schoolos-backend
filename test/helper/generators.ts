@@ -13,7 +13,6 @@ export async function generateSchool() {
   return prisma.school.create({
     data: {
       name: `${faker.getSchoolName()} High School`,
-      address: faker.getAddress(),
       code: faker.getSchoolCode(),
     },
   });
@@ -30,7 +29,6 @@ export async function generateUser(type: UserType, schoolId: string) {
       lastName: faker.getLastName(),
       email: faker.getEmail(),
       phone: faker.getPhoneNumber(),
-      address: faker.getAddress(),
       password: hashedPassword,
       schoolId,
     },

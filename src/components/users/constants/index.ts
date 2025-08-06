@@ -4,4 +4,5 @@ export const UserTypes = {
   GUARDIAN: 'GUARDIAN',
   STUDENT: 'STUDENT',
   TEACHER: 'TEACHER',
+  SYSTEM_ADMIN: 'SYSTEM_ADMIN',
 } as const;

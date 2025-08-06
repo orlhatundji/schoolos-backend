@@ -6,6 +6,7 @@ const entityMap: Record<UserType, string> = {
   GUARDIAN: 'G',
   ADMIN: 'A',
   SUPER_ADMIN: 'SA',
+  SYSTEM_ADMIN: 'SYS-ADM',
 };
 
 /**

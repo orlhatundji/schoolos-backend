@@ -4,13 +4,64 @@ import { faker } from '@faker-js/faker';
 import { UserTypes } from '../src/components/users/constants';
 import { CounterService } from '../src/common/counter';
 import { getNextUserEntityNoFormatted } from '../src/utils/misc';
+import { PasswordHasher } from '../src/utils/hasher';
 
 const prisma = new PrismaClient();
+const passwordHasher = new PasswordHasher();
 const counterService = new CounterService(prisma);
 
 async function main() {
   console.log('🚀 Starting seed process...');
   const samplePassword = 'Dev@1234Test';
+
+  console.log('Checking if system admin already exists...');
+  const existingSystemAdmin = await prisma.systemAdmin.findFirst({
+    where: {
+      user: {
+        email: 'platform.admin@example.com',
+      },
+    },
+  });
+
+  if (existingSystemAdmin) {
+    console.log('System admin already exists:', {
+      id: existingSystemAdmin.id,
+      email: 'platform.admin@example.com',
+      password: samplePassword,
+      role: existingSystemAdmin.role,
+    });
+    return;
+  }
+
+  // Create a system admin user
+  console.log('Creating system admin user...');
+  const hashedPassword = await passwordHasher.hash(samplePassword);
+
+  const systemAdminUser = await prisma.user.create({
+    data: {
+      type: UserTypes.SYSTEM_ADMIN,
+      email: 'platform.admin@example.com',
+      phone: '+1234567890',
+      password: hashedPassword,
+      firstName: 'Platform',
+      lastName: 'Admin',
+    },
+  });
+
+  // Create system admin record
+  const systemAdmin = await prisma.systemAdmin.create({
+    data: {
+      userId: systemAdminUser.id,
+      role: 'PLATFORM_ADMIN',
+    },
+  });
+
+  console.log('System admin created:', {
+    id: systemAdmin.id,
+    email: systemAdminUser.email,
+    password: samplePassword, // Plain text for reference
+    role: systemAdmin.role,
+  });
 
   console.log('Creating school...');
   const school = await prisma.school.create({

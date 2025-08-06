@@ -20,11 +20,25 @@ enum UserType {
   GUARDIAN
   STUDENT
   TEACHER
+  SYSTEM_ADMIN
 }
 
 enum UserTokenType {
   RESET_PASSWORD
   REFRESH_TOKEN
+}
+
+enum SchoolSignupStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SchoolType {
+  PRIMARY
+  SECONDARY
+  MIXED
 }
 
 // --- Address Management ---
@@ -295,8 +309,8 @@ model User {
   address            Address?    @relation(fields: [addressId], references: [id])
   avatarUrl          String?
   dateOfBirth        DateTime?
-  schoolId           String
-  school             School      @relation(fields: [schoolId], references: [id])
+  schoolId           String?
+  school             School?      @relation(fields: [schoolId], references: [id])
   mustUpdatePassword Boolean     @default(false)
   tokens             UserToken[]
 
@@ -308,6 +322,7 @@ model User {
   guardian Guardian?
   teacher  Teacher?
   admin    Admin?
+  systemAdmin SystemAdmin?
 
   @@map("users")
 }
@@ -354,6 +369,27 @@ model Admin {
   deletedAt DateTime?
 
   @@map("admins")
+}
+
+/**
+ * SystemAdmin
+ * -----------
+ * Represents an internal system administrator for the platform.
+ * System admins are our own internal staff who control the backend platform,
+ * manage school signup requests, and oversee the entire system.
+ * This is different from school admins who manage individual schools.
+ */
+model SystemAdmin {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  role      String    @default("SYSTEM_ADMIN") // e.g., "PLATFORM_ADMIN", "SUPPORT", "DEVELOPER"
+  reviewedSignupRequests SchoolSignupRequest[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("system_admins")
 }
 
 /**
@@ -759,4 +795,31 @@ model Counter {
 
   @@unique([schoolId, entity])
   @@map("counters")
+}
+
+/**
+ * SchoolSignupRequest
+ * -------------------
+ * Represents a school's signup request for platform access.
+ * Stores all the information submitted by schools during the signup process.
+ * System admins review and approve/reject these requests.
+ */
+model SchoolSignupRequest {
+  id              String              @id @default(uuid())
+  schoolName      String
+  schoolCode      String?             @unique
+  contactPerson   Json                // Store contact person details
+  address         Json                // Store address details
+  schoolDetails   Json                // Store school details
+  status          SchoolSignupStatus  @default(PENDING)
+  submittedAt     DateTime            @default(now())
+  reviewedAt      DateTime?
+  reviewerId      String?
+  reviewer        SystemAdmin?        @relation(fields: [reviewerId], references: [id])
+  notes           String?
+  rejectionReason String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("school_signup_requests")
 }

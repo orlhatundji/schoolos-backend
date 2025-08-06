@@ -15,6 +15,7 @@ export class AccessTokenGuard extends AuthGuard(StrategyEnum.JWT) {
   }
 
   canActivate(context: ExecutionContext) {
+    // return true;
     const isPublic = this.reflector.getAllAndOverride(PublicDecoratorKey, [
       context.getHandler(),
       context.getClass(),
@@ -25,7 +26,7 @@ export class AccessTokenGuard extends AuthGuard(StrategyEnum.JWT) {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic || isGuardedByRefreshToken) return true;
+    if (isGuardedByRefreshToken) return true;
 
     const req = context.switchToHttp().getRequest();
     this._decryptBearerToken(req);
@@ -33,11 +34,17 @@ export class AccessTokenGuard extends AuthGuard(StrategyEnum.JWT) {
   }
 
   private _decryptBearerToken(req: any) {
-    const bearerToken = req.headers?.authorization;
-    if (!bearerToken) return;
-    const token = req.headers?.authorization?.split(' ')[1];
-    const decryptedToken = this.encryptor.decrypt(token);
-    const decryptedBearerToken = `Bearer ${decryptedToken}`;
-    req.headers.authorization = decryptedBearerToken;
+    const authorization = req.headers?.authorization;
+    if (!authorization) return;
+    console.log('authorization:', authorization);
+    const token = authorization.split(' ')[1]; 
+    console.log('token:', token);
+    try {
+      const decryptedToken = this.encryptor.decrypt(token);
+      const decryptedBearerToken = `Bearer ${decryptedToken}`;
+      req.headers.authorization = decryptedBearerToken;
+    } catch (error) {
+      console.log('error:', error);
+    }
   }
 }

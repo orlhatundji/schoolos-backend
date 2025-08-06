@@ -3,6 +3,7 @@ export const AuthMessages = {
     AUTHENTICATED: 'Successfully authenticated user',
     TOKENS_REFRESHED: 'Tokens refreshed successfully',
     TOKEN_BLACKLISTED: 'Token has been blacklisted',
+    LOGIN_SUCCESSFUL: 'Login successful',
   },
   FAILURE: {
     ACCESS_DENIED: 'Access denied',

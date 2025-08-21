@@ -380,14 +380,14 @@ model Admin {
  * This is different from school admins who manage individual schools.
  */
 model SystemAdmin {
-  id        String    @id @default(uuid())
-  userId    String    @unique
-  user      User      @relation(fields: [userId], references: [id])
-  role      String    @default("SYSTEM_ADMIN") // e.g., "PLATFORM_ADMIN", "SUPPORT", "DEVELOPER"
-  reviewedSignupRequests SchoolSignupRequest[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                  String                @id @default(uuid())
+  userId              String                @unique
+  user                User                  @relation(fields: [userId], references: [id])
+  role                String
+  signupRequests      SchoolSignupRequest[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  deletedAt           DateTime?
 
   @@map("system_admins")
 }

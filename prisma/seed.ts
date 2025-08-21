@@ -12,7 +12,7 @@ const counterService = new CounterService(prisma);
 
 async function main() {
   console.log('🚀 Starting seed process...');
-  const samplePassword = 'Dev@1234Test';
+  const samplePassword = 'Password@123';
 
   console.log('Checking if system admin already exists...');
   const existingSystemAdmin = await prisma.systemAdmin.findFirst({
@@ -76,11 +76,11 @@ async function main() {
   const adminUser = await prisma.user.create({
     data: {
       type: UserTypes.SUPER_ADMIN,
-      email: 'olusola.samuel.oluwatobi@gmail.com',
+      email: 'orlhatundji@gmail.com',
       password: bcrypt.hashSync(samplePassword, 10),
       firstName: 'Jane',
       lastName: 'Doe',
-      phone: '08012345678',
+      phone: '09130649019',
       schoolId: school.id,
     },
   });

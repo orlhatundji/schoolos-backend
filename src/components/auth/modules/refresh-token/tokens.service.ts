@@ -132,15 +132,29 @@ export class TokensService extends BaseService {
 
   private _getRefreshTokenExpiry(): number {
     const refreshTokenAge = this.configService.get<string>('jwt.refreshTokenAge');
+    const unit = refreshTokenAge.slice(-1);
+    const value = parseInt(refreshTokenAge.slice(0, -1), 10);
 
-    if (refreshTokenAge.endsWith('m')) {
-      const minutes = parseInt(refreshTokenAge.slice(0, -1), 10);
-      return minutes * 60 * 1000;
-    } else if (refreshTokenAge.endsWith('d')) {
-      const days = parseInt(refreshTokenAge.slice(0, -1), 10);
-      return days * 24 * 60 * 60 * 1000;
-    } else {
+    if (isNaN(value)) {
       throw new Error('Invalid refresh token age format');
+    }
+
+    switch (unit) {
+      case 's':
+        return value * 1000;
+      case 'm':
+        return value * 60 * 1000;
+      case 'h':
+        return value * 60 * 60 * 1000;
+      case 'd':
+        return value * 24 * 60 * 60 * 1000;
+      default:
+        // Assuming it's in milliseconds if no unit
+        const defaultValue = parseInt(refreshTokenAge, 10);
+        if (isNaN(defaultValue)) {
+          throw new Error('Invalid refresh token age format');
+        }
+        return defaultValue;
     }
   }
 }

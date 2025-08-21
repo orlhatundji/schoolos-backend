@@ -26,3 +26,12 @@ export const getNextUserEntityNoFormatted = (
   const twoDigitYear = new Date(date).getFullYear().toString().slice(-2);
   return `${schoolCode}/${entityMap[entityType]}/${twoDigitYear}/${paddedNextSeq}`;
 };
+
+export const USER_ENTITY_PREFIX: Record<UserType, string> = {
+  SUPER_ADMIN: 'SUP-ADM',
+  ADMIN: 'ADM',
+  GUARDIAN: 'GUA',
+  STUDENT: 'STU',
+  TEACHER: 'TEA',
+  SYSTEM_ADMIN: 'SYS-ADM',
+};

@@ -1,7 +1,11 @@
 import { Controller, Post, Body, HttpStatus, Get, Param, UseGuards, Query } from '@nestjs/common';
 import { ApiTags, ApiResponse, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { SchoolSignupService } from './school-signup.service';
-import { CreateSchoolSignupDto, UpdateSchoolSignupStatusDto, GetSchoolSignupRequestsDto } from './dto';
+import {
+  CreateSchoolSignupDto,
+  UpdateSchoolSignupStatusDto,
+  GetSchoolSignupRequestsDto,
+} from './dto';
 import {
   SchoolSignupResult,
   SchoolSignupApprovalResult,

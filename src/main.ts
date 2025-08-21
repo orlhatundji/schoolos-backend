@@ -6,6 +6,11 @@ import { StrategyEnum } from './components/auth/strategies';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableCors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -35,8 +40,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  await app.listen(process.env.PORT || 3000, () =>
-    console.log(`\nApp here: http://localhost:3000/ \n\nDocs here: http://localhost:3000/docs`),
+  await app.listen(process.env.PORT || 8080, () =>
+    console.log(`\nApp here: http://localhost:8080/ \n\nDocs here: http://localhost:8080/docs`),
   );
 }
 bootstrap();

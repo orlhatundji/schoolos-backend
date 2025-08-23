@@ -41,6 +41,11 @@ enum SchoolType {
   MIXED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 // --- Address Management ---
 
 /**
@@ -101,6 +106,7 @@ model SchoolAddress {
 model School {
   id               String            @id @default(uuid())
   name             String
+  logoUrl          String?
   code             String            @unique
   primaryAddressId String?           // Primary address for the school
   primaryAddress   Address?          @relation("SchoolPrimaryAddress", fields: [primaryAddressId], references: [id])
@@ -305,6 +311,7 @@ model User {
   emailVerified      Boolean     @default(false)
   firstName          String
   lastName           String
+  gender             Gender
   addressId          String?
   address            Address?    @relation(fields: [addressId], references: [id])
   avatarUrl          String?

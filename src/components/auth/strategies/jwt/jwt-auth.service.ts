@@ -25,6 +25,13 @@ export class JwtAuthService extends BaseService {
 
     const [accessToken, refreshToken] = await this._getTokensFromPayload(payload);
 
+    // Temporarily return plain tokens for testing - TODO: Re-enable encryption
+    return {
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    };
+
+    /* Original encrypted version:
     const encryptedAccessToken = this.encryptor.encrypt(accessToken);
     const encryptedRefreshToken = this.encryptor.encrypt(refreshToken);
 
@@ -32,6 +39,7 @@ export class JwtAuthService extends BaseService {
       accessToken: encryptedAccessToken,
       refreshToken: encryptedRefreshToken,
     };
+    */
   }
 
   private async _getTokensFromPayload(payload: IJwtPayload): Promise<[string, string]> {

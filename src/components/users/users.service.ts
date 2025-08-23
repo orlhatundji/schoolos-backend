@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UserMessages } from './results';
+
 import { BaseService } from '../../common/base-service';
 import { PasswordHasher } from '../../utils/hasher';
-import { UsersRepository } from './users.repository';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UserMessages } from './results';
 import { User } from './types';
+import { UsersRepository } from './users.repository';
 
 @Injectable()
 export class UsersService extends BaseService {
@@ -52,7 +53,10 @@ export class UsersService extends BaseService {
   }
 
   async findByEmail(email: string) {
-    return this.userRepository.findOne({ where: { email } });
+    return this.userRepository.findOne({
+      where: { email },
+      include: { school: true },
+    });
   }
 
   findById(id: string) {

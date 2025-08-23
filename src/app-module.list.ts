@@ -14,6 +14,9 @@ import { AssessmentsModule } from './components/assessments/assessments.module';
 import { TerminusModule } from '@nestjs/terminus';
 import { SchoolsModule } from './components/schools/schools.module';
 import { UsersModule } from './components/users/users.module';
+import { BffAdminModule } from './components/bff/admin/bff-admin.module';
+import { MailModule } from './utils/mail/mail.module';
+import { MailQueueModule } from './utils/mail-queue/mail-queue.module';
 
 dotenv.config({ path: getEnvFileName(), override: true });
 
@@ -35,6 +38,8 @@ export const AppModuleList = [
     inject: [ConfigService],
   }),
   PrismaModule,
+  MailModule,
+  MailQueueModule,
   UsersModule,
   SchoolsModule,
   StudentsModule,
@@ -42,6 +47,7 @@ export const AppModuleList = [
   AcademicTimelinesModule,
   RolesManagerModule,
   AdminModule,
+  BffAdminModule,
   TerminusModule,
   AssessmentsModule,
 ];

@@ -32,6 +32,9 @@ export class UserEntity implements Omit<User, 'password'> {
   lastName: string;
 
   @ApiProperty()
+  gender: 'MALE' | 'FEMALE';
+
+  @ApiProperty()
   schoolId: string;
 
   @ApiProperty()
@@ -55,7 +58,9 @@ export class UserEntity implements Omit<User, 'password'> {
   public static from(user: User): UserEntity {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...filteredUser } = user;
-    return filteredUser;
+    const userEntity = new UserEntity();
+    Object.assign(userEntity, filteredUser);
+    return userEntity;
   }
 }
 

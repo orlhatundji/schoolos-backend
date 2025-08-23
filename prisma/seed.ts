@@ -30,46 +30,64 @@ async function main() {
       password: samplePassword,
       role: existingSystemAdmin.role,
     });
-    return;
+
+    // Check if school and students already exist
+    const existingSchool = await prisma.school.findFirst();
+    const studentCount = await prisma.student.count();
+
+    if (existingSchool && studentCount > 0) {
+      console.log(`School and ${studentCount} students already exist. Seed completed.`);
+      return;
+    }
+
+    console.log('School or students missing. Continuing with seed...');
+  } else {
+    // Create a system admin user
+    console.log('Creating system admin user...');
+    const hashedPassword = await passwordHasher.hash(samplePassword);
+
+    const systemAdminUser = await prisma.user.create({
+      data: {
+        type: UserTypes.SYSTEM_ADMIN,
+        email: 'platform.admin@example.com',
+        phone: '+1234567890',
+        password: hashedPassword,
+        firstName: 'Platform',
+        lastName: 'Admin',
+        gender: 'MALE',
+      },
+    });
+
+    // Create system admin record
+    const systemAdmin = await prisma.systemAdmin.create({
+      data: {
+        userId: systemAdminUser.id,
+        role: 'PLATFORM_ADMIN',
+      },
+    });
+
+    console.log('System admin created:', {
+      id: systemAdmin.id,
+      email: systemAdminUser.email,
+      password: samplePassword, // Plain text for reference
+      role: systemAdmin.role,
+    });
   }
 
-  // Create a system admin user
-  console.log('Creating system admin user...');
-  const hashedPassword = await passwordHasher.hash(samplePassword);
+  console.log('Getting or creating school...');
+  let school = await prisma.school.findFirst();
 
-  const systemAdminUser = await prisma.user.create({
-    data: {
-      type: UserTypes.SYSTEM_ADMIN,
-      email: 'platform.admin@example.com',
-      phone: '+1234567890',
-      password: hashedPassword,
-      firstName: 'Platform',
-      lastName: 'Admin',
-    },
-  });
-
-  // Create system admin record
-  const systemAdmin = await prisma.systemAdmin.create({
-    data: {
-      userId: systemAdminUser.id,
-      role: 'PLATFORM_ADMIN',
-    },
-  });
-
-  console.log('System admin created:', {
-    id: systemAdmin.id,
-    email: systemAdminUser.email,
-    password: samplePassword, // Plain text for reference
-    role: systemAdmin.role,
-  });
-
-  console.log('Creating school...');
-  const school = await prisma.school.create({
-    data: {
-      name: 'Bright Future High School',
-      code: 'BFH',
-    },
-  });
+  if (!school) {
+    school = await prisma.school.create({
+      data: {
+        name: 'Bright Future High School',
+        code: 'BFH',
+      },
+    });
+    console.log('School created:', school.name);
+  } else {
+    console.log('School already exists:', school.name);
+  }
 
   console.log('Creating super admin user...');
   // Create super admin user + admin
@@ -82,6 +100,7 @@ async function main() {
       lastName: 'Doe',
       phone: '09130649019',
       schoolId: school.id,
+      gender: 'FEMALE',
     },
   });
 
@@ -179,6 +198,7 @@ async function main() {
           lastName: faker.person.lastName(),
           phone: faker.phone.number({ style: 'international' }),
           schoolId: school.id,
+          gender: faker.person.sex() === 'male' ? 'MALE' : 'FEMALE',
         },
       });
 
@@ -259,7 +279,7 @@ async function main() {
   await Promise.all(
     classArms.map(async (classArm) => {
       const studentsPerArm = await Promise.all(
-        Array.from({ length: 5 }).map(async (_, i) => {
+        Array.from({ length: 15 }).map(async (_, i) => {
           const studentUser = await prisma.user.create({
             data: {
               type: UserTypes.STUDENT,
@@ -269,6 +289,7 @@ async function main() {
               lastName: faker.person.lastName(),
               phone: faker.phone.number({ style: 'international' }),
               schoolId: school.id,
+              gender: faker.person.sex() === 'male' ? 'MALE' : 'FEMALE',
             },
           });
 

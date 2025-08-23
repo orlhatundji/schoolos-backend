@@ -15,6 +15,12 @@ import {
 import { UserType } from '@prisma/client';
 import { PasswordValidator } from '../../../utils/password';
 
+// Define Gender enum for validation
+enum Gender {
+  MALE = 'MALE',
+  FEMALE = 'FEMALE',
+}
+
 export class CreateUserDto {
   @ApiProperty()
   @IsString()
@@ -23,6 +29,10 @@ export class CreateUserDto {
   @ApiProperty()
   @IsString()
   lastName: string;
+
+  @ApiProperty({ enum: Gender })
+  @IsEnum(Gender, { message: 'Gender must be either MALE or FEMALE' })
+  gender: Gender;
 
   @MaxLength(PasswordValidator.GetMaxLength())
   @MinLength(PasswordValidator.GetMinLength())

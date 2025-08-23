@@ -26,43 +26,46 @@ export class BffAdminService {
       include: {
         level: true,
         students: true,
-        classArmTeachers: {
+        classTeacher: {
           include: {
-            teacher: {
-              include: {
-                user: true,
-              },
-            },
+            user: true,
           },
         },
-      },
+        captain: {
+          include: {
+            user: true,
+          },
+        },
+      } as any, // Temporary until Prisma types fully refresh
     });
 
-    // Calculate stats
+    // Calculate stats (with type assertions until Prisma types fully refresh)
     const totalClassrooms = classArms.length;
-    const totalStudents = classArms.reduce((sum, classArm) => sum + classArm.students.length, 0);
+    const totalStudents = (classArms as any[]).reduce(
+      (sum, classArm) => sum + classArm.students.length,
+      0,
+    );
 
     // Get unique grade levels
-    const gradeLevels = new Set(classArms.map((ca) => ca.level.name)).size;
+    const gradeLevels = new Set((classArms as any[]).map((ca) => ca.level.name)).size;
 
     // Calculate capacity usage (placeholder calculation)
     const capacityUsage = Math.min(100, (totalStudents / (totalClassrooms * 30)) * 100);
 
-    // Prepare classroom list
+    // Prepare classroom list using efficient direct references
     const classroomList = classArms.map((classArm) => {
-      const classTeacher = classArm.classArmTeachers[0]?.teacher;
-      const classCaptain = null; // Would need to query prefects to find captain
-
       return {
         id: classArm.id,
         name: classArm.name,
-        level: classArm.level.name,
+        level: (classArm as any).level.name,
         location: null, // Add location field to ClassArm model if needed
-        classTeacher: classTeacher
-          ? `${classTeacher.user.firstName} ${classTeacher.user.lastName}`
+        classTeacher: (classArm as any).classTeacher
+          ? `${(classArm as any).classTeacher.user.firstName} ${(classArm as any).classTeacher.user.lastName}`
           : null,
-        classCaptain,
-        studentsCount: classArm.students.length,
+        classCaptain: (classArm as any).captain
+          ? `${(classArm as any).captain.user.firstName} ${(classArm as any).captain.user.lastName}`
+          : null,
+        studentsCount: (classArm as any).students.length,
       };
     });
 
@@ -95,7 +98,7 @@ export class BffAdminService {
 
     const schoolId = user.schoolId;
 
-    // Get classroom details (without students for now)
+    // Get classroom details with efficient direct references
     const classroom = await this.prisma.classArm.findFirst({
       where: {
         id: classroomId,
@@ -103,16 +106,17 @@ export class BffAdminService {
       },
       include: {
         level: true,
-        classArmTeachers: {
+        classTeacher: {
           include: {
-            teacher: {
-              include: {
-                user: true,
-              },
-            },
+            user: true,
           },
         },
-      },
+        captain: {
+          include: {
+            user: true,
+          },
+        },
+      } as any, // Type assertion until VS Code restarts
     });
 
     if (!classroom) {
@@ -138,8 +142,17 @@ export class BffAdminService {
       skip,
       take: limit,
       include: {
-        user: true,
+        user: {
+          include: {
+            address: true, // Include address for residential info
+          },
+        },
         prefect: true,
+        guardian: {
+          include: {
+            user: true, // Include guardian's user data to get their name
+          },
+        },
         subjectTermStudents: {
           take: 50, // Limit to recent results
           orderBy: {
@@ -167,8 +180,17 @@ export class BffAdminService {
         classArmId: classroomId,
       },
       include: {
-        user: true,
+        user: {
+          include: {
+            address: true, // Include address for residential info
+          },
+        },
         prefect: true,
+        guardian: {
+          include: {
+            user: true, // Include guardian's user data
+          },
+        },
         subjectTermStudents: {
           take: 50,
           orderBy: {
@@ -204,11 +226,9 @@ export class BffAdminService {
     const studentsPresent = Math.floor(totalStudents * (0.9 + Math.random() * 0.08)); // 90-98% present today
     const studentsAbsent = totalStudents - studentsPresent;
 
-    // Get class teacher
-    const classTeacher = classroom.classArmTeachers[0]?.teacher;
-
-    // Get class captain (student with prefect role)
-    const classCaptain = allStudents.find((s) => s.prefect);
+    // Get class teacher and captain using efficient direct references
+    const classTeacher = (classroom as any).classTeacher;
+    const classCaptain = (classroom as any).captain;
 
     // Calculate top performers from assessment results
     const performanceMap = new Map<
@@ -251,6 +271,14 @@ export class BffAdminService {
           )
         : 0;
 
+      // Get guardian name
+      const guardianName = student.guardian
+        ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+        : 'N/A';
+
+      // Get state of origin from user's address
+      const stateOfOrigin = student.user.stateOfOrigin || 'N/A';
+
       return {
         id: student.id,
         name: `${student.user.firstName} ${student.user.lastName}`,
@@ -258,6 +286,8 @@ export class BffAdminService {
         age,
         admissionNumber: student.admissionNo || 'N/A',
         guardianPhone: student.user.phone,
+        guardianName,
+        stateOfOrigin,
       };
     });
 
@@ -281,7 +311,7 @@ export class BffAdminService {
       classroom: {
         id: classroom.id,
         name: classroom.name,
-        level: classroom.level.name,
+        level: (classroom as any).level.name,
         location: null, // Add location field to ClassArm model if needed
       },
       population: {

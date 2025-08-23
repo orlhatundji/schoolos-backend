@@ -68,6 +68,12 @@ class StudentInfoResult {
 
   @ApiProperty({ example: '+1234567890', nullable: true })
   guardianPhone: string | null;
+
+  @ApiProperty({ example: 'John Smith' })
+  guardianName: string;
+
+  @ApiProperty({ example: 'Lagos' })
+  stateOfOrigin: string;
 }
 
 class ClassroomInfoResult {

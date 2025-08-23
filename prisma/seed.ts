@@ -90,26 +90,36 @@ async function main() {
   }
 
   console.log('Creating super admin user...');
-  // Create super admin user + admin
-  const adminUser = await prisma.user.create({
-    data: {
-      type: UserTypes.SUPER_ADMIN,
-      email: 'orlhatundji@gmail.com',
-      password: bcrypt.hashSync(samplePassword, 10),
-      firstName: 'Jane',
-      lastName: 'Doe',
-      phone: '09130649019',
-      schoolId: school.id,
-      gender: 'FEMALE',
-    },
+  // Check if super admin already exists
+  let adminUser = await prisma.user.findUnique({
+    where: { email: 'orlhatundji@gmail.com' },
   });
 
-  await prisma.admin.create({
-    data: {
-      userId: adminUser.id,
-      isSuper: true,
-    },
-  });
+  if (!adminUser) {
+    // Create super admin user + admin
+    adminUser = await prisma.user.create({
+      data: {
+        type: UserTypes.SUPER_ADMIN,
+        email: 'orlhatundji@gmail.com',
+        password: bcrypt.hashSync(samplePassword, 10),
+        firstName: 'Jane',
+        lastName: 'Doe',
+        phone: '09130649019',
+        schoolId: school.id,
+        gender: 'FEMALE',
+      },
+    });
+
+    await prisma.admin.create({
+      data: {
+        userId: adminUser.id,
+        isSuper: true,
+      },
+    });
+    console.log('Super admin created');
+  } else {
+    console.log('Super admin already exists');
+  }
 
   console.log('Creating departments...');
   const departments = await Promise.all(
@@ -261,78 +271,178 @@ async function main() {
   }
 
   console.log('Assigning class teachers...');
-  // Assign class teachers
+  // Assign class teachers with direct references
   for (const classArm of classArms) {
+    const selectedTeacher = faker.helpers.arrayElement(teachers);
+
+    // Create the junction record (for backward compatibility)
     await prisma.classArmTeacher.create({
       data: {
         classArmId: classArm.id,
-        teacherId: faker.helpers.arrayElement(teachers).id,
+        teacherId: selectedTeacher.id,
       },
+    });
+
+    // Update the classArm with direct reference
+    await prisma.classArm.update({
+      where: { id: classArm.id },
+      data: { classTeacherId: selectedTeacher.id },
     });
   }
 
   console.log('Creating students...');
   // Students
   const students: any[] = [];
+
+  // Nigerian states for state of origin
+  const nigerianStates = [
+    'Lagos',
+    'Kano',
+    'Rivers',
+    'Kaduna',
+    'Oyo',
+    'Imo',
+    'Borno',
+    'Osun',
+    'Delta',
+    'Ondo',
+    'Anambra',
+    'Taraba',
+    'Katsina',
+    'Cross River',
+    'Niger',
+    'Akwa Ibom',
+    'Jigawa',
+    'Enugu',
+    'Kebbi',
+    'Sokoto',
+    'Adamawa',
+    'Plateau',
+    'Kogi',
+    'Bauchi',
+    'Kwara',
+    'Eboyi',
+    'Abia',
+    'Edo',
+    'Yobe',
+    'Zamfara',
+    'Nasarawa',
+    'Gombe',
+    'Ekiti',
+    'Bayelsa',
+    'Abuja FCT',
+  ];
+
   let studentCounter = 0;
 
-  await Promise.all(
-    classArms.map(async (classArm) => {
-      const studentsPerArm = await Promise.all(
-        Array.from({ length: 15 }).map(async (_, i) => {
-          const studentUser = await prisma.user.create({
-            data: {
-              type: UserTypes.STUDENT,
-              email: `student${studentCounter++}@brightfuture.edu.ng`,
-              password: bcrypt.hashSync(samplePassword, 10),
-              firstName: faker.person.firstName(),
-              lastName: faker.person.lastName(),
-              phone: faker.phone.number({ style: 'international' }),
-              schoolId: school.id,
-              gender: faker.person.sex() === 'male' ? 'MALE' : 'FEMALE',
-            },
-          });
+  // Process classrooms sequentially to avoid database overload
+  for (const classArm of classArms) {
+    console.log(`Creating students for ${classArm.name}...`);
+    const studentsPerArm = await Promise.all(
+      Array.from({ length: 25 }).map(async (_, i) => {
+        const studentUser = await prisma.user.create({
+          data: {
+            type: UserTypes.STUDENT,
+            email: `student${studentCounter++}@brightfuture.edu.ng`,
+            password: bcrypt.hashSync(samplePassword, 10),
+            firstName: faker.person.firstName(),
+            lastName: faker.person.lastName(),
+            phone: faker.phone.number({ style: 'international' }),
+            schoolId: school.id,
+            gender: faker.person.sex() === 'male' ? 'MALE' : 'FEMALE',
+            dateOfBirth: faker.date.birthdate({ min: 12, max: 18, mode: 'age' }), // Students aged 12-18
+            stateOfOrigin: faker.helpers.arrayElement(nigerianStates), // Random Nigerian state
+          },
+        });
 
-          const nextStudentSeq = await counterService.getNextSequenceNo(
-            UserTypes.STUDENT,
-            school.id,
-          );
+        const nextStudentSeq = await counterService.getNextSequenceNo(UserTypes.STUDENT, school.id);
 
-          const admissionNo = faker.string.alphanumeric(7);
-          const admissionDate = faker.date.past();
-          const studentNo = getNextUserEntityNoFormatted(
-            UserTypes.STUDENT,
-            school.code,
+        const admissionNo = faker.string.alphanumeric(7);
+        const admissionDate = faker.date.past();
+        const studentNo = getNextUserEntityNoFormatted(
+          UserTypes.STUDENT,
+          school.code,
+          admissionDate,
+          nextStudentSeq,
+        );
+
+        const student = await prisma.student.create({
+          data: {
+            userId: studentUser.id,
+            studentNo,
             admissionDate,
-            nextStudentSeq,
-          );
+            admissionNo,
+            classArmId: classArm.id,
+          },
+        });
 
-          const student = await prisma.student.create({
+        // Create address for the student
+        const studentAddress = await prisma.address.create({
+          data: {
+            country: 'Nigeria',
+            state: faker.location.state(),
+            city: faker.location.city(),
+            street1: faker.location.streetAddress(),
+            street2: faker.location.secondaryAddress(),
+            zip: faker.location.zipCode(),
+          },
+        });
+
+        // Update student user with address
+        await prisma.user.update({
+          where: { id: studentUser.id },
+          data: { addressId: studentAddress.id },
+        });
+
+        // Create guardian for the student
+        const guardianUser = await prisma.user.create({
+          data: {
+            type: UserTypes.GUARDIAN,
+            email: `guardian_${Date.now()}_${Math.random().toString(36).substring(7)}@example.com`, // Unique guardian email
+            password: bcrypt.hashSync(samplePassword, 10),
+            firstName: faker.person.firstName(),
+            lastName: faker.person.lastName(),
+            phone: faker.phone.number({ style: 'international' }),
+            schoolId: school.id,
+            gender: faker.person.sex() === 'male' ? 'MALE' : 'FEMALE',
+            dateOfBirth: faker.date.birthdate({ min: 30, max: 60, mode: 'age' }), // Guardians aged 30-60
+            stateOfOrigin: faker.helpers.arrayElement(nigerianStates), // Random Nigerian state
+          },
+        });
+
+        const guardian = await prisma.guardian.create({
+          data: {
+            userId: guardianUser.id,
+          },
+        });
+
+        // Link student to guardian
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { guardianId: guardian.id },
+        });
+
+        if (i === 0) {
+          await prisma.prefect.create({
             data: {
-              userId: studentUser.id,
-              studentNo,
-              admissionDate,
-              admissionNo,
-              classArmId: classArm.id,
+              studentId: student.id,
+              role: 'Health Prefect',
             },
           });
 
-          if (i === 0) {
-            await prisma.prefect.create({
-              data: {
-                studentId: student.id,
-                role: 'Health Prefect',
-              },
-            });
-          }
+          // Update the classArm with direct captain reference
+          await prisma.classArm.update({
+            where: { id: classArm.id },
+            data: { captainId: student.id },
+          });
+        }
 
-          return student;
-        }),
-      );
+        return student;
+      }),
+    );
 
-      students.push(...studentsPerArm);
-    }),
-  );
+    students.push(...studentsPerArm);
+  }
 
   console.log('Assigning subject teachers to class arms...');
   // Subject → Teacher → ClassArm assignments

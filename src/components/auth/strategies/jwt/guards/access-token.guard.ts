@@ -37,9 +37,9 @@ export class AccessTokenGuard extends AuthGuard(StrategyEnum.JWT) {
   private _decryptBearerToken(req: any) {
     const authorization = req.headers?.authorization;
     if (!authorization) return;
-    console.log('authorization:', authorization);
+    // console.log('authorization:', authorization);
     const token = authorization.split(' ')[1];
-    console.log('token:', token);
+    // console.log('token:', token);
 
     // Check if token looks like an encrypted token (has colon separator)
     if (token.includes(':')) {
@@ -53,7 +53,7 @@ export class AccessTokenGuard extends AuthGuard(StrategyEnum.JWT) {
         // If decryption fails, assume it's already a plain JWT and leave it as is
       }
     } else {
-      console.log('Token appears to be plain JWT, no decryption needed');
+      // console.log('Token appears to be plain JWT, no decryption needed');
       // Token doesn't look encrypted, leave it as is
     }
   }

@@ -50,6 +50,8 @@ export interface StudentInfo {
   age: number;
   admissionNumber: string;
   guardianPhone: string | null;
+  guardianName: string;
+  stateOfOrigin: string;
 }
 
 export interface PaginationInfo {

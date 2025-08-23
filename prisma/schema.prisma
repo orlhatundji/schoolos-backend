@@ -281,6 +281,13 @@ model ClassArm {
   department              Department?              @relation(fields: [departmentId], references: [id])
   schoolId                String
   school                  School                   @relation(fields: [schoolId], references: [id])
+  
+  // Direct references for easier querying
+  classTeacherId          String?                  // Direct reference to class teacher (not unique - teacher can handle multiple classes)
+  classTeacher            Teacher?                 @relation("ClassArmTeacher", fields: [classTeacherId], references: [id])
+  captainId               String?                  @unique // Direct reference to class captain (student)
+  captain                 Student?                 @relation("ClassArmCaptain", fields: [captainId], references: [id])
+  
   students                Student[]
   classArmTeachers        ClassArmTeacher[]
   studentAttendances      StudentAttendance[]
@@ -312,6 +319,7 @@ model User {
   firstName          String
   lastName           String
   gender             Gender
+  stateOfOrigin      String?     // Where the user's family originates from
   addressId          String?
   address            Address?    @relation(fields: [addressId], references: [id])
   avatarUrl          String?
@@ -414,6 +422,7 @@ model Teacher {
   hod                     Hod[]
   classArmTeachers        ClassArmTeacher[]
   classArmSubjectTeachers ClassArmSubjectTeacher[]
+  classArmsAsTeacher      ClassArm[]               @relation("ClassArmTeacher") // Direct class teacher relation
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
@@ -462,6 +471,7 @@ model Student {
   guardian              Guardian?              @relation(fields: [guardianId], references: [id])
   curriculumItemRatings CurriculumItemRating[]
   studentAttendances    StudentAttendance[]
+  classArmAsCaptain     ClassArm?              @relation("ClassArmCaptain") // Direct class captain relation
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?

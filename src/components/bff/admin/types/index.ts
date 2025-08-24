@@ -91,3 +91,30 @@ export interface ClassroomDetailsData {
   students: PaginatedStudents;
   topPerformers: TopPerformer[];
 }
+
+export interface StudentDetailInfo {
+  id: string;
+  name: string;
+  studentId: string;
+  admissionNumber: string;
+  gender: string;
+  age: number;
+  stateOfOrigin: string;
+  guardianName: string;
+  guardianPhone: string | null;
+  telephone: string | null;
+  className: string;
+  classLevel: string;
+  averageGrade: number;
+  isPresent: boolean;
+  attendanceRate: number;
+  avatarUrl: string | null;
+}
+
+export interface PaginatedStudentDetails {
+  students: StudentDetailInfo[];
+  pagination: PaginationInfo;
+}
+
+// Type alias for single student details (same structure as StudentDetailInfo)
+export type SingleStudentDetails = StudentDetailInfo;

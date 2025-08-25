@@ -118,3 +118,67 @@ export interface PaginatedStudentDetails {
 
 // Type alias for single student details (same structure as StudentDetailInfo)
 export type SingleStudentDetails = StudentDetailInfo;
+
+// Teacher-related types
+export interface TeacherStats {
+  totalTeachers: number;
+  activeTeachers: number;
+  inactiveTeachers: number;
+  onLeaveTeachers: number;
+}
+
+export interface TeacherInfo {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  department: string;
+  subjects: string[];
+  employment: 'full-time' | 'part-time' | 'contract';
+  experience: number;
+  qualification: string;
+  joinDate: string; // YYYY-MM-DD
+  lastLogin: string | null; // ISO 8601
+  status: 'active' | 'inactive' | 'on-leave';
+  classesAssigned: string[];
+  avatar: string | null; // URL
+}
+
+export interface TeachersViewData {
+  stats: TeacherStats;
+  teachers: TeacherInfo[];
+}
+
+export interface SingleTeacherDetails {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  department: string;
+  subjects: string[];
+  employment: 'full-time' | 'part-time' | 'contract';
+  experience: number;
+  qualification: string;
+  joinDate: string; // YYYY-MM-DD
+  lastLogin: string | null; // ISO 8601
+  status: 'active' | 'inactive' | 'on-leave';
+  classesAssigned: string[];
+  avatar: string | null; // URL
+  // Additional detailed fields
+  dateOfBirth: string | null; // YYYY-MM-DD
+  gender: string;
+  stateOfOrigin: string | null;
+  address: {
+    street1: string | null;
+    street2: string | null;
+    city: string | null;
+    state: string | null;
+    country: string | null;
+  } | null;
+  isHOD: boolean;
+  hodDepartment: string | null;
+  totalStudents: number;
+  averageClassSize: number;
+}

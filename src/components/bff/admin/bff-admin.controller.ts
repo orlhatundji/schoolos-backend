@@ -9,7 +9,9 @@ import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
+import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
+import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
 
 @Controller('bff/admin')
@@ -28,6 +30,39 @@ export class BffAdminController {
   async getClassroomsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getClassroomsViewData(userId);
     return new AdminClassroomsViewResult(data);
+  }
+
+  @Get('teachers-view')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: AdminTeachersViewResult,
+    description: 'Get teachers overview with statistics and detailed teacher information',
+  })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getTeachersView(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getTeachersViewData(userId);
+    return new AdminTeachersViewResult(data);
+  }
+
+  @Get('teacher/:teacherId')
+  @ApiParam({
+    name: 'teacherId',
+    description: 'The ID of the teacher to get details for',
+    type: 'string',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: SingleTeacherDetailsResult,
+    description:
+      'Detailed information about a specific teacher including personal info, department, subjects, classes, and performance metrics',
+  })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getSingleTeacherDetails(
+    @GetCurrentUserId() userId: string,
+    @Param('teacherId') teacherId: string,
+  ) {
+    const data = await this.bffAdminService.getSingleTeacherDetails(userId, teacherId);
+    return new SingleTeacherDetailsResult(data);
   }
 
   @Get('classroom/:classroomId/details')

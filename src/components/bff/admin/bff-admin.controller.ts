@@ -8,13 +8,16 @@ import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
 import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
 import {
+  ArchiveDepartmentSwagger,
   ClassroomDetailsLimitQuery,
   ClassroomDetailsPageQuery,
   ClassroomDetailsParam,
   ClassroomDetailsResponse,
   ClassroomsViewSwagger,
+  CreateDepartmentSwagger,
   CreateSubjectSwagger,
   DeleteSubjectSwagger,
+  DepartmentsViewSwagger,
   SingleStudentDetailsParam,
   SingleStudentDetailsResponse,
   SingleTeacherDetailsParam,
@@ -27,20 +30,29 @@ import {
   StudentsViewSwagger,
   SubjectsViewSwagger,
   TeachersViewSwagger,
+  UnarchiveDepartmentSwagger,
+  UpdateDepartmentSwagger,
   UpdateSubjectSwagger,
 } from './bff-admin.swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
+import { AdminDepartmentsViewResult } from './results/admin-departments-view.result';
 import { AdminStudentsViewResult } from './results/admin-students-view.result';
 import { AdminSubjectsViewResult } from './results/admin-subjects-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
+import { ArchiveDepartmentResult } from './results/archive-department.result';
+import { CreateDepartmentResult } from './results/create-department.result';
 import { CreateSubjectResult } from './results/create-subject.result';
 import { DeleteSubjectResult } from './results/delete-subject.result';
+import { UnarchiveDepartmentResult } from './results/unarchive-department.result';
+import { UpdateDepartmentResult } from './results/update-department.result';
 import { UpdateSubjectResult } from './results/update-subject.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
+import { CreateDepartmentDto } from './dto/create-department.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
+import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 
 @Controller('bff/admin')
@@ -111,6 +123,64 @@ export class BffAdminController {
   async deleteSubject(@GetCurrentUserId() userId: string, @Param('subjectId') subjectId: string) {
     const data = await this.bffAdminService.deleteSubject(userId, subjectId);
     return new DeleteSubjectResult(data);
+  }
+
+  // Department endpoints
+  @Get('departments-view')
+  @DepartmentsViewSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getDepartmentsView(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getDepartmentsViewData(userId);
+    return new AdminDepartmentsViewResult(data);
+  }
+
+  @Post('departments')
+  @CreateDepartmentSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async createDepartment(
+    @GetCurrentUserId() userId: string,
+    @Body() createDepartmentDto: CreateDepartmentDto,
+  ) {
+    const data = await this.bffAdminService.createDepartment(userId, createDepartmentDto);
+    return new CreateDepartmentResult(data);
+  }
+
+  @Put('departments/:departmentId')
+  @UpdateDepartmentSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async updateDepartment(
+    @GetCurrentUserId() userId: string,
+    @Param('departmentId') departmentId: string,
+    @Body() updateDepartmentDto: UpdateDepartmentDto,
+  ) {
+    const data = await this.bffAdminService.updateDepartment(
+      userId,
+      departmentId,
+      updateDepartmentDto,
+    );
+    return new UpdateDepartmentResult(data);
+  }
+
+  @Post('departments/:departmentId/archive')
+  @ArchiveDepartmentSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async archiveDepartment(
+    @GetCurrentUserId() userId: string,
+    @Param('departmentId') departmentId: string,
+  ) {
+    const data = await this.bffAdminService.archiveDepartment(userId, departmentId);
+    return new ArchiveDepartmentResult(data);
+  }
+
+  @Post('departments/:departmentId/unarchive')
+  @UnarchiveDepartmentSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async unarchiveDepartment(
+    @GetCurrentUserId() userId: string,
+    @Param('departmentId') departmentId: string,
+  ) {
+    const data = await this.bffAdminService.unarchiveDepartment(userId, departmentId);
+    return new UnarchiveDepartmentResult(data);
   }
 
   @Get('teacher/:teacherId')

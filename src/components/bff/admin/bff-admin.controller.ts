@@ -1,5 +1,5 @@
-import { Controller, Get, HttpStatus, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
 import { StrategyEnum } from '../../auth/strategies';
@@ -7,6 +7,23 @@ import { AccessTokenGuard } from '../../auth/strategies/jwt/guards';
 import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
 import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
+import {
+  ClassroomDetailsLimitQuery,
+  ClassroomDetailsPageQuery,
+  ClassroomDetailsParam,
+  ClassroomDetailsResponse,
+  ClassroomsViewSwagger,
+  SingleStudentDetailsParam,
+  SingleStudentDetailsResponse,
+  SingleTeacherDetailsParam,
+  SingleTeacherDetailsResponse,
+  StudentDetailsClassroomQuery,
+  StudentDetailsLimitQuery,
+  StudentDetailsPageQuery,
+  StudentDetailsResponse,
+  StudentDetailsSearchQuery,
+  TeachersViewSwagger,
+} from './bff-admin.swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
@@ -22,10 +39,7 @@ export class BffAdminController {
   constructor(private readonly bffAdminService: BffAdminService) {}
 
   @Get('classrooms-view')
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: AdminClassroomsViewResult,
-  })
+  @ClassroomsViewSwagger()
   @CheckPolicies(new ManageStudentPolicyHandler())
   async getClassroomsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getClassroomsViewData(userId);
@@ -33,11 +47,7 @@ export class BffAdminController {
   }
 
   @Get('teachers-view')
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: AdminTeachersViewResult,
-    description: 'Get teachers overview with statistics and detailed teacher information',
-  })
+  @TeachersViewSwagger()
   @CheckPolicies(new ManageStudentPolicyHandler())
   async getTeachersView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getTeachersViewData(userId);
@@ -45,17 +55,8 @@ export class BffAdminController {
   }
 
   @Get('teacher/:teacherId')
-  @ApiParam({
-    name: 'teacherId',
-    description: 'The ID of the teacher to get details for',
-    type: 'string',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: SingleTeacherDetailsResult,
-    description:
-      'Detailed information about a specific teacher including personal info, department, subjects, classes, and performance metrics',
-  })
+  @SingleTeacherDetailsParam()
+  @SingleTeacherDetailsResponse()
   @CheckPolicies(new ManageStudentPolicyHandler())
   async getSingleTeacherDetails(
     @GetCurrentUserId() userId: string,
@@ -66,31 +67,10 @@ export class BffAdminController {
   }
 
   @Get('classroom/:classroomId/details')
-  @ApiParam({
-    name: 'classroomId',
-    description: 'The ID of the classroom to get details for',
-    type: 'string',
-  })
-  @ApiQuery({
-    name: 'page',
-    description: 'Page number for student pagination',
-    type: 'number',
-    required: false,
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    description: 'Number of students per page',
-    type: 'number',
-    required: false,
-    example: 10,
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: AdminClassroomDetailsResult,
-    description:
-      'Detailed information about a specific classroom including population, attendance, teachers, students, and top performers',
-  })
+  @ClassroomDetailsParam()
+  @ClassroomDetailsPageQuery()
+  @ClassroomDetailsLimitQuery()
+  @ClassroomDetailsResponse()
   @CheckPolicies(new ManageStudentPolicyHandler())
   async getClassroomDetails(
     @GetCurrentUserId() userId: string,
@@ -111,37 +91,11 @@ export class BffAdminController {
   }
 
   @Get('students')
-  @ApiQuery({
-    name: 'page',
-    description: 'Page number for student pagination',
-    type: 'number',
-    required: false,
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    description: 'Number of students per page',
-    type: 'number',
-    required: false,
-    example: 20,
-  })
-  @ApiQuery({
-    name: 'classroomId',
-    description: 'Filter students by classroom ID',
-    type: 'string',
-    required: false,
-  })
-  @ApiQuery({
-    name: 'search',
-    description: 'Search students by name, admission number, or student ID',
-    type: 'string',
-    required: false,
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: StudentDetailsResult,
-    description: 'Paginated list of student details with comprehensive information',
-  })
+  @StudentDetailsPageQuery()
+  @StudentDetailsLimitQuery()
+  @StudentDetailsClassroomQuery()
+  @StudentDetailsSearchQuery()
+  @StudentDetailsResponse()
   @CheckPolicies(new ManageStudentPolicyHandler())
   async getStudentDetails(
     @GetCurrentUserId() userId: string,
@@ -164,16 +118,8 @@ export class BffAdminController {
   }
 
   @Get('student/:studentId')
-  @ApiParam({
-    name: 'studentId',
-    description: 'The ID of the student to get details for',
-    type: 'string',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    type: SingleStudentDetailsResult,
-    description: 'Detailed information about a specific student',
-  })
+  @SingleStudentDetailsParam()
+  @SingleStudentDetailsResponse()
   @CheckPolicies(new ManageStudentPolicyHandler())
   async getSingleStudentDetails(
     @GetCurrentUserId() userId: string,

@@ -239,7 +239,7 @@ async function main() {
       const subject = await prisma.subject.create({
         data: {
           name: name.charAt(0).toUpperCase() + name.slice(1),
-          isElective: faker.datatype.boolean(),
+          category: faker.helpers.arrayElement(['CORE', 'GENERAL', 'VOCATIONAL']),
           schoolId: school.id,
           departmentId: dept.id,
         },

@@ -9,6 +9,7 @@ import { BffAdminController } from './bff-admin.controller';
 import { BffAdminService } from './bff-admin.service';
 import { BffAdminClassroomService } from './services/bff-admin-classroom.service';
 import { BffAdminStudentService } from './services/bff-admin-student.service';
+import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
 
 @Module({
@@ -18,6 +19,7 @@ import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
     BffAdminService,
     BffAdminTeacherService,
     BffAdminStudentService,
+    BffAdminSubjectService,
     BffAdminClassroomService,
     Encryptor,
   ],

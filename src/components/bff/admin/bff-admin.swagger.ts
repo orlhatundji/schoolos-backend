@@ -4,6 +4,7 @@ import { ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
 import { AdminStudentsViewResult } from './results/admin-students-view.result';
+import { AdminAdminsViewResult } from './results/admin-admins-view.result';
 import { AdminDepartmentsViewResult } from './results/admin-departments-view.result';
 import { AdminSubjectsViewResult } from './results/admin-subjects-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
@@ -218,4 +219,12 @@ export const UnarchiveDepartmentSwagger = () =>
     status: HttpStatus.OK,
     type: UnarchiveDepartmentResult,
     description: 'Department unarchived successfully',
+  });
+
+// Admins View
+export const AdminsViewSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AdminAdminsViewResult,
+    description: 'Get admins overview with statistics and detailed admin information',
   });

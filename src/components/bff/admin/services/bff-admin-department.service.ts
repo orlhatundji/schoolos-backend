@@ -176,6 +176,13 @@ export class BffAdminDepartmentService {
         code: createDepartmentDto.code.toUpperCase(),
         schoolId,
         hodId: createDepartmentDto.hodId || null,
+        ...(createDepartmentDto.hodId && {
+          hod: {
+            create: {
+              teacherId: createDepartmentDto.hodId,
+            },
+          },
+        }),
       },
       include: {
         hod: {
@@ -312,6 +319,23 @@ export class BffAdminDepartmentService {
         ...(updateDepartmentDto.name && { name: updateDepartmentDto.name }),
         ...(updateDepartmentDto.code && { code: updateDepartmentDto.code.toUpperCase() }),
         ...(updateDepartmentDto.hodId !== undefined && { hodId: updateDepartmentDto.hodId }),
+        ...(updateDepartmentDto.hodId && {
+          hod: {
+            upsert: {
+              create: {
+                teacherId: updateDepartmentDto.hodId,
+              },
+              update: {
+                teacherId: updateDepartmentDto.hodId,
+              },
+            },
+          },
+        }),
+        ...(updateDepartmentDto.hodId === null && {
+          hod: {
+            delete: true,
+          },
+        }),
       },
       include: {
         hod: {

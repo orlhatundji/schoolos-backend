@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../../prisma';
+import { BffAdminAdminService } from './services/bff-admin-admin.service';
 import { BffAdminClassroomService } from './services/bff-admin-classroom.service';
 import { BffAdminDepartmentService } from './services/bff-admin-department.service';
 import { BffAdminStudentService } from './services/bff-admin-student.service';
@@ -12,6 +13,7 @@ import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import {
   AdminClassroomsViewData,
+  AdminsViewData,
   ClassroomDetailsData,
   DepartmentsViewData,
   PaginatedStudentDetails,
@@ -31,6 +33,7 @@ export class BffAdminService {
     private readonly classroomService: BffAdminClassroomService,
     private readonly subjectService: BffAdminSubjectService,
     private readonly departmentService: BffAdminDepartmentService,
+    private readonly adminService: BffAdminAdminService,
   ) {}
 
   async getClassroomsViewData(userId: string): Promise<AdminClassroomsViewData> {
@@ -97,7 +100,11 @@ export class BffAdminService {
     return this.departmentService.createDepartment(userId, createDepartmentDto);
   }
 
-  async updateDepartment(userId: string, departmentId: string, updateDepartmentDto: UpdateDepartmentDto) {
+  async updateDepartment(
+    userId: string,
+    departmentId: string,
+    updateDepartmentDto: UpdateDepartmentDto,
+  ) {
     return this.departmentService.updateDepartment(userId, departmentId, updateDepartmentDto);
   }
 
@@ -107,5 +114,10 @@ export class BffAdminService {
 
   async unarchiveDepartment(userId: string, departmentId: string) {
     return this.departmentService.unarchiveDepartment(userId, departmentId);
+  }
+
+  // Admin methods
+  async getAdminsViewData(userId: string): Promise<AdminsViewData> {
+    return this.adminService.getAdminsViewData(userId);
   }
 }

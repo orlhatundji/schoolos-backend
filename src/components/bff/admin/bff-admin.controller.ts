@@ -8,6 +8,7 @@ import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
 import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
 import {
+  AdminsViewSwagger,
   ArchiveDepartmentSwagger,
   ClassroomDetailsLimitQuery,
   ClassroomDetailsPageQuery,
@@ -34,6 +35,7 @@ import {
   UpdateDepartmentSwagger,
   UpdateSubjectSwagger,
 } from './bff-admin.swagger';
+import { AdminAdminsViewResult } from './results/admin-admins-view.result';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
 import { AdminDepartmentsViewResult } from './results/admin-departments-view.result';
@@ -76,6 +78,14 @@ export class BffAdminController {
   async getTeachersView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getTeachersViewData(userId);
     return new AdminTeachersViewResult(data);
+  }
+
+  @Get('admins-view')
+  @AdminsViewSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getAdminsView(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getAdminsViewData(userId);
+    return new AdminAdminsViewResult(data);
   }
 
   @Get('students-view')

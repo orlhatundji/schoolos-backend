@@ -123,8 +123,12 @@ async function main() {
 
   console.log('Creating departments...');
   const departments = await Promise.all(
-    ['Science', 'Arts', 'Commercial'].map((name) =>
-      prisma.department.create({ data: { name, schoolId: school.id } }),
+    [
+      { name: 'Science', code: 'SCI' },
+      { name: 'Arts', code: 'ART' },
+      { name: 'Commercial', code: 'COM' },
+    ].map((dept) =>
+      prisma.department.create({ data: { name: dept.name, code: dept.code, schoolId: school.id } }),
     ),
   );
 

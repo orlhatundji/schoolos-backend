@@ -4,10 +4,15 @@ import { ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
 import { AdminStudentsViewResult } from './results/admin-students-view.result';
+import { AdminDepartmentsViewResult } from './results/admin-departments-view.result';
 import { AdminSubjectsViewResult } from './results/admin-subjects-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
+import { ArchiveDepartmentResult } from './results/archive-department.result';
+import { CreateDepartmentResult } from './results/create-department.result';
 import { CreateSubjectResult } from './results/create-subject.result';
 import { DeleteSubjectResult } from './results/delete-subject.result';
+import { UnarchiveDepartmentResult } from './results/unarchive-department.result';
+import { UpdateDepartmentResult } from './results/update-department.result';
 import { UpdateSubjectResult } from './results/update-subject.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
@@ -173,4 +178,44 @@ export const DeleteSubjectSwagger = () =>
     status: HttpStatus.OK,
     type: DeleteSubjectResult,
     description: 'Subject deleted successfully',
+  });
+
+// Departments View
+export const DepartmentsViewSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AdminDepartmentsViewResult,
+    description: 'Get departments overview with statistics and detailed department information',
+  });
+
+// Create Department
+export const CreateDepartmentSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.CREATED,
+    type: CreateDepartmentResult,
+    description: 'Department created successfully',
+  });
+
+// Update Department
+export const UpdateDepartmentSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: UpdateDepartmentResult,
+    description: 'Department updated successfully',
+  });
+
+// Archive Department
+export const ArchiveDepartmentSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: ArchiveDepartmentResult,
+    description: 'Department archived successfully',
+  });
+
+// Unarchive Department
+export const UnarchiveDepartmentSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: UnarchiveDepartmentResult,
+    description: 'Department unarchived successfully',
   });

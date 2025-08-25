@@ -265,6 +265,7 @@ model Level {
 model Department {
   id        String     @id @default(uuid())
   name      String
+  code      String     @unique // Three character department code (e.g., SCI, MAT, ENG)
   hodId     String?
   schoolId  String
   school    School     @relation(fields: [schoolId], references: [id])

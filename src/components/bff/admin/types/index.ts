@@ -236,3 +236,31 @@ export interface SubjectsViewData {
   stats: SubjectStats;
   subjects: SubjectInfo[];
 }
+
+// Departments View types
+export interface DepartmentStats {
+  totalDepartments: number;
+  activeDepartments: number;
+  archivedDepartments: number;
+  departmentsWithHOD: number;
+  departmentsWithoutHOD: number;
+}
+
+export interface DepartmentInfo {
+  id: string;
+  name: string;
+  code: string;
+  hodName: string | null;
+  hodId: string | null;
+  subjectsCount: number;
+  classesCount: number;
+  teachersCount: number;
+  status: 'active' | 'archived';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DepartmentsViewData {
+  stats: DepartmentStats;
+  departments: DepartmentInfo[];
+}

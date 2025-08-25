@@ -22,10 +22,12 @@ import {
   StudentDetailsPageQuery,
   StudentDetailsResponse,
   StudentDetailsSearchQuery,
+  StudentsViewSwagger,
   TeachersViewSwagger,
 } from './bff-admin.swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
+import { AdminStudentsViewResult } from './results/admin-students-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
@@ -52,6 +54,14 @@ export class BffAdminController {
   async getTeachersView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getTeachersViewData(userId);
     return new AdminTeachersViewResult(data);
+  }
+
+  @Get('students-view')
+  @StudentsViewSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getStudentsView(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getStudentsViewData(userId);
+    return new AdminStudentsViewResult(data);
   }
 
   @Get('teacher/:teacherId')

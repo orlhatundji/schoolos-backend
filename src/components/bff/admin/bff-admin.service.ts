@@ -11,6 +11,7 @@ import {
   SingleStudentDetails,
   SingleTeacherDetails,
   TeachersViewData,
+  StudentsViewData,
 } from './types';
 
 @Injectable()
@@ -55,5 +56,9 @@ export class BffAdminService {
 
   async getSingleTeacherDetails(userId: string, teacherId: string): Promise<SingleTeacherDetails> {
     return this.teacherService.getSingleTeacherDetails(userId, teacherId);
+  }
+
+  async getStudentsViewData(userId: string): Promise<StudentsViewData> {
+    return this.studentService.getStudentsViewData(userId);
   }
 }

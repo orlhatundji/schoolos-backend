@@ -182,3 +182,27 @@ export interface SingleTeacherDetails {
   totalStudents: number;
   averageClassSize: number;
 }
+
+// Students View types
+export interface StudentStats {
+  totalStudents: number;
+  maleStudents: number;
+  femaleStudents: number;
+  graduatedStudents: number;
+  attendanceToday: {
+    present: number;
+    absent: number;
+    presentPercentage: number;
+    absentPercentage: number;
+  };
+  statusBreakdown: {
+    active: number;
+    inactive: number;
+    suspended: number;
+  };
+}
+
+export interface StudentsViewData {
+  stats: StudentStats;
+  students: StudentDetailInfo[];
+}

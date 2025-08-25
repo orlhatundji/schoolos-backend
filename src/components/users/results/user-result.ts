@@ -47,6 +47,9 @@ export class UserEntity implements Omit<User, 'password'> {
   dateOfBirth: Date;
 
   @ApiProperty()
+  lastLoginAt: Date | null;
+
+  @ApiProperty()
   stateOfOrigin: string | null;
 
   @ApiProperty()

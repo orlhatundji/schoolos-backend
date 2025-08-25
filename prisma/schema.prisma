@@ -46,6 +46,18 @@ enum Gender {
   FEMALE
 }
 
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+}
+
 // --- Address Management ---
 
 /**
@@ -252,6 +264,7 @@ model Department {
   school    School     @relation(fields: [schoolId], references: [id])
   subjects  Subject[]
   classArms ClassArm[]
+  teachers  Teacher[]  // Teachers assigned to this department
 
   hod       Hod?
   createdAt DateTime  @default(now())
@@ -324,6 +337,7 @@ model User {
   address            Address?    @relation(fields: [addressId], references: [id])
   avatarUrl          String?
   dateOfBirth        DateTime?
+  lastLoginAt        DateTime?    // Track when user last logged in
   schoolId           String?
   school             School?      @relation(fields: [schoolId], references: [id])
   mustUpdatePassword Boolean     @default(false)
@@ -419,6 +433,12 @@ model Teacher {
   userId                  String                   @unique
   user                    User                     @relation(fields: [userId], references: [id])
   teacherNo               String                   @unique
+  departmentId            String?                  // Direct department assignment
+  department              Department?              @relation(fields: [departmentId], references: [id])
+  status                  TeacherStatus            @default(ACTIVE)
+  employmentType          EmploymentType           @default(FULL_TIME)
+  qualification           String?                  // Teacher's educational qualification
+  joinDate                DateTime                 @default(now())
   hod                     Hod[]
   classArmTeachers        ClassArmTeacher[]
   classArmSubjectTeachers ClassArmSubjectTeacher[]

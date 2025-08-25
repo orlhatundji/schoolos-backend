@@ -3,6 +3,7 @@ import { ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
+import { AdminStudentsViewResult } from './results/admin-students-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
@@ -128,4 +129,12 @@ export const SingleStudentDetailsResponse = () =>
     status: HttpStatus.OK,
     type: SingleStudentDetailsResult,
     description: 'Detailed information about a specific student',
+  });
+
+// Students View
+export const StudentsViewSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AdminStudentsViewResult,
+    description: 'Get students overview with statistics and detailed student information',
   });

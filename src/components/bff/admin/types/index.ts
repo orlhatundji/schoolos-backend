@@ -264,3 +264,27 @@ export interface DepartmentsViewData {
   stats: DepartmentStats;
   departments: DepartmentInfo[];
 }
+
+// Admins View types
+export interface AdminStats {
+  totalAdmins: number;
+  activeAdmins: number;
+  inactiveAdmins: number;
+  suspendedAdmins: number;
+  hodCount: number;
+}
+
+export interface AdminInfo {
+  id: string;
+  name: string;
+  role: string;
+  department: string | null;
+  status: 'active' | 'inactive' | 'suspended';
+  lastLoginAt: Date | null;
+  createdAt: Date;
+}
+
+export interface AdminsViewData {
+  stats: AdminStats;
+  admins: AdminInfo[];
+}

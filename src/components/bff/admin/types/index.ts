@@ -206,3 +206,33 @@ export interface StudentsViewData {
   stats: StudentStats;
   students: StudentDetailInfo[];
 }
+
+import { SubjectCategory } from '@prisma/client';
+
+// Subjects View types
+export interface SubjectStats {
+  totalSubjects: number;
+  categoryBreakdown: {
+    core: number;
+    general: number;
+    vocational: number;
+  };
+  departmentBreakdown: {
+    [departmentName: string]: number;
+  };
+}
+
+export interface SubjectInfo {
+  id: string;
+  name: string;
+  department: string | null;
+  category: SubjectCategory;
+  classesCount: number;
+  studentCount: number;
+  status: 'active' | 'inactive';
+}
+
+export interface SubjectsViewData {
+  stats: SubjectStats;
+  subjects: SubjectInfo[];
+}

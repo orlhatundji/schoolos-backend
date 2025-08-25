@@ -58,6 +58,12 @@ enum EmploymentType {
   CONTRACT
 }
 
+enum SubjectCategory {
+  CORE
+  GENERAL
+  VOCATIONAL
+}
+
 // --- Address Management ---
 
 /**
@@ -511,7 +517,7 @@ model Student {
 model Subject {
   id                      String                   @id @default(uuid())
   name                    String
-  isElective              Boolean                  @default(false)
+  category                SubjectCategory          @default(CORE)
   schoolId                String
   school                  School                   @relation(fields: [schoolId], references: [id])
   departmentId            String?

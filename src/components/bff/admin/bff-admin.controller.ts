@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Put, Delete, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -13,6 +13,8 @@ import {
   ClassroomDetailsParam,
   ClassroomDetailsResponse,
   ClassroomsViewSwagger,
+  CreateSubjectSwagger,
+  DeleteSubjectSwagger,
   SingleStudentDetailsParam,
   SingleStudentDetailsResponse,
   SingleTeacherDetailsParam,
@@ -23,15 +25,23 @@ import {
   StudentDetailsResponse,
   StudentDetailsSearchQuery,
   StudentsViewSwagger,
+  SubjectsViewSwagger,
   TeachersViewSwagger,
+  UpdateSubjectSwagger,
 } from './bff-admin.swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
 import { AdminStudentsViewResult } from './results/admin-students-view.result';
+import { AdminSubjectsViewResult } from './results/admin-subjects-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
+import { CreateSubjectResult } from './results/create-subject.result';
+import { DeleteSubjectResult } from './results/delete-subject.result';
+import { UpdateSubjectResult } from './results/update-subject.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
+import { CreateSubjectDto } from './dto/create-subject.dto';
+import { UpdateSubjectDto } from './dto/update-subject.dto';
 
 @Controller('bff/admin')
 @ApiTags('BFF - Admin')
@@ -62,6 +72,45 @@ export class BffAdminController {
   async getStudentsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getStudentsViewData(userId);
     return new AdminStudentsViewResult(data);
+  }
+
+  @Get('subjects-view')
+  @SubjectsViewSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getSubjectsView(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getSubjectsViewData(userId);
+    return new AdminSubjectsViewResult(data);
+  }
+
+  @Post('subjects')
+  @CreateSubjectSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async createSubject(
+    @GetCurrentUserId() userId: string,
+    @Body() createSubjectDto: CreateSubjectDto,
+  ) {
+    const data = await this.bffAdminService.createSubject(userId, createSubjectDto);
+    return new CreateSubjectResult(data);
+  }
+
+  @Put('subjects/:subjectId')
+  @UpdateSubjectSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async updateSubject(
+    @GetCurrentUserId() userId: string,
+    @Param('subjectId') subjectId: string,
+    @Body() updateSubjectDto: UpdateSubjectDto,
+  ) {
+    const data = await this.bffAdminService.updateSubject(userId, subjectId, updateSubjectDto);
+    return new UpdateSubjectResult(data);
+  }
+
+  @Delete('subjects/:subjectId')
+  @DeleteSubjectSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async deleteSubject(@GetCurrentUserId() userId: string, @Param('subjectId') subjectId: string) {
+    const data = await this.bffAdminService.deleteSubject(userId, subjectId);
+    return new DeleteSubjectResult(data);
   }
 
   @Get('teacher/:teacherId')

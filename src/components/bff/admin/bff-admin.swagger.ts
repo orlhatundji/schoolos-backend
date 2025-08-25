@@ -4,7 +4,11 @@ import { ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
 import { AdminStudentsViewResult } from './results/admin-students-view.result';
+import { AdminSubjectsViewResult } from './results/admin-subjects-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
+import { CreateSubjectResult } from './results/create-subject.result';
+import { DeleteSubjectResult } from './results/delete-subject.result';
+import { UpdateSubjectResult } from './results/update-subject.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
@@ -137,4 +141,36 @@ export const StudentsViewSwagger = () =>
     status: HttpStatus.OK,
     type: AdminStudentsViewResult,
     description: 'Get students overview with statistics and detailed student information',
+  });
+
+// Subjects View
+export const SubjectsViewSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AdminSubjectsViewResult,
+    description: 'Get subjects overview with statistics and detailed subject information',
+  });
+
+// Create Subject
+export const CreateSubjectSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.CREATED,
+    type: CreateSubjectResult,
+    description: 'Subject created successfully',
+  });
+
+// Update Subject
+export const UpdateSubjectSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: UpdateSubjectResult,
+    description: 'Subject updated successfully',
+  });
+
+// Delete Subject
+export const DeleteSubjectSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: DeleteSubjectResult,
+    description: 'Subject deleted successfully',
   });

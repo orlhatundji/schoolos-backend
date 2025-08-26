@@ -7,10 +7,13 @@ import { BffAdminDepartmentService } from './services/bff-admin-department.servi
 import { BffAdminStudentService } from './services/bff-admin-student.service';
 import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
+import { BffAdminLevelService } from './services/bff-admin-level.service';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
+import { CreateLevelDto } from './dto/create-level.dto';
+import { UpdateLevelDto } from './dto/update-level.dto';
 import {
   AdminClassroomsViewData,
   AdminsViewData,
@@ -22,6 +25,7 @@ import {
   TeachersViewData,
   StudentsViewData,
   SubjectsViewData,
+  LevelsViewData,
 } from './types';
 
 @Injectable()
@@ -33,6 +37,7 @@ export class BffAdminService {
     private readonly classroomService: BffAdminClassroomService,
     private readonly subjectService: BffAdminSubjectService,
     private readonly departmentService: BffAdminDepartmentService,
+    private readonly levelService: BffAdminLevelService,
     private readonly adminService: BffAdminAdminService,
   ) {}
 
@@ -114,6 +119,35 @@ export class BffAdminService {
 
   async unarchiveDepartment(userId: string, departmentId: string) {
     return this.departmentService.unarchiveDepartment(userId, departmentId);
+  }
+
+  async deleteDepartment(userId: string, departmentId: string) {
+    return this.departmentService.deleteDepartment(userId, departmentId);
+  }
+
+  // Level methods
+  async getLevelsViewData(userId: string): Promise<LevelsViewData> {
+    return this.levelService.getLevelsViewData(userId);
+  }
+
+  async createLevel(userId: string, createLevelDto: CreateLevelDto) {
+    return this.levelService.createLevel(userId, createLevelDto);
+  }
+
+  async updateLevel(userId: string, levelId: string, updateLevelDto: UpdateLevelDto) {
+    return this.levelService.updateLevel(userId, levelId, updateLevelDto);
+  }
+
+  async archiveLevel(userId: string, levelId: string) {
+    return this.levelService.archiveLevel(userId, levelId);
+  }
+
+  async unarchiveLevel(userId: string, levelId: string) {
+    return this.levelService.unarchiveLevel(userId, levelId);
+  }
+
+  async deleteLevel(userId: string, levelId: string) {
+    return this.levelService.deleteLevel(userId, levelId);
   }
 
   // Admin methods

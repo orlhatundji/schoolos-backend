@@ -18,6 +18,13 @@ import { UpdateSubjectResult } from './results/update-subject.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
+import { DeleteDepartmentResult } from './results/delete-department.result';
+import { AdminLevelsViewResult } from './results/admin-levels-view.result';
+import { CreateLevelResult } from './results/create-level.result';
+import { UpdateLevelResult } from './results/update-level.result';
+import { ArchiveLevelResult } from './results/archive-level.result';
+import { UnarchiveLevelResult } from './results/unarchive-level.result';
+import { DeleteLevelResult } from './results/delete-level.result';
 
 // Classrooms View
 export const ClassroomsViewSwagger = () =>
@@ -219,6 +226,62 @@ export const UnarchiveDepartmentSwagger = () =>
     status: HttpStatus.OK,
     type: UnarchiveDepartmentResult,
     description: 'Department unarchived successfully',
+  });
+
+// Delete Department
+export const DeleteDepartmentSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: DeleteDepartmentResult,
+    description: 'Department deleted successfully',
+  });
+
+// Levels View
+export const LevelsViewSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AdminLevelsViewResult,
+    description: 'Get levels overview with statistics and detailed level information',
+  });
+
+// Create Level
+export const CreateLevelSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.CREATED,
+    type: CreateLevelResult,
+    description: 'Level created successfully',
+  });
+
+// Update Level
+export const UpdateLevelSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: UpdateLevelResult,
+    description: 'Level updated successfully',
+  });
+
+// Archive Level
+export const ArchiveLevelSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: ArchiveLevelResult,
+    description: 'Level archived successfully',
+  });
+
+// Unarchive Level
+export const UnarchiveLevelSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: UnarchiveLevelResult,
+    description: 'Level unarchived successfully',
+  });
+
+// Delete Level
+export const DeleteLevelSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: DeleteLevelResult,
+    description: 'Level deleted successfully',
   });
 
 // Admins View

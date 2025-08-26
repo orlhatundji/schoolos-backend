@@ -245,6 +245,7 @@ model Term {
 model Level {
   id        String     @id @default(uuid())
   name      String
+  code      String     @unique // Three character level code (e.g., JSS, SS1, PRI)
   schoolId  String
   school    School     @relation(fields: [schoolId], references: [id])
   classArms ClassArm[]

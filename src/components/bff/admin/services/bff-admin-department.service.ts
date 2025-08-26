@@ -465,4 +465,71 @@ export class BffAdminDepartmentService {
       id: departmentId,
     };
   }
+
+  async deleteDepartment(userId: string, departmentId: string) {
+    // First, get the user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not found or not associated with a school');
+    }
+
+    const schoolId = user.schoolId;
+
+    // Check if department exists and belongs to the school
+    const department = await this.prisma.department.findFirst({
+      where: {
+        id: departmentId,
+        schoolId,
+      },
+      include: {
+        subjects: {
+          where: { deletedAt: null },
+        },
+        classArms: {
+          where: { deletedAt: null },
+        },
+        teachers: {
+          where: { deletedAt: null },
+        },
+        hod: true,
+      },
+    });
+
+    if (!department) {
+      throw new NotFoundException('Department not found');
+    }
+
+    // Check if department has associated records
+    const hasSubjects = department.subjects.length > 0;
+    const hasClassArms = department.classArms.length > 0;
+    const hasTeachers = department.teachers.length > 0;
+    const hasHOD = !!department.hod;
+
+    if (hasSubjects || hasClassArms || hasTeachers || hasHOD) {
+      const reasons = [];
+      if (hasSubjects) reasons.push('subjects');
+      if (hasClassArms) reasons.push('class arms');
+      if (hasTeachers) reasons.push('teachers');
+      if (hasHOD) reasons.push('head of department');
+
+      throw new BadRequestException(
+        `Cannot delete department. It has associated ${reasons.join(', ')}. Please reassign or remove all associated ${reasons.join(', ')} first.`,
+      );
+    }
+
+    // Permanently delete the department
+    await this.prisma.department.delete({
+      where: { id: departmentId },
+    });
+
+    return {
+      success: true,
+      message: 'Department deleted successfully',
+      id: departmentId,
+    };
+  }
 }

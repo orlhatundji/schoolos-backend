@@ -288,3 +288,28 @@ export interface AdminsViewData {
   stats: AdminStats;
   admins: AdminInfo[];
 }
+
+// Levels View types
+export interface LevelStats {
+  totalLevels: number;
+  activeLevels: number;
+  archivedLevels: number;
+  levelsWithClassArms: number;
+  levelsWithoutClassArms: number;
+}
+
+export interface LevelInfo {
+  id: string;
+  name: string;
+  code: string;
+  classArmsCount: number;
+  studentsCount: number;
+  status: 'active' | 'archived';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface LevelsViewData {
+  stats: LevelStats;
+  levels: LevelInfo[];
+}

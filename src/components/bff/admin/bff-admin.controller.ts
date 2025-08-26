@@ -34,6 +34,13 @@ import {
   UnarchiveDepartmentSwagger,
   UpdateDepartmentSwagger,
   UpdateSubjectSwagger,
+  DeleteDepartmentSwagger,
+  LevelsViewSwagger,
+  CreateLevelSwagger,
+  UpdateLevelSwagger,
+  ArchiveLevelSwagger,
+  UnarchiveLevelSwagger,
+  DeleteLevelSwagger,
 } from './bff-admin.swagger';
 import { AdminAdminsViewResult } from './results/admin-admins-view.result';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
@@ -42,6 +49,7 @@ import { AdminDepartmentsViewResult } from './results/admin-departments-view.res
 import { AdminStudentsViewResult } from './results/admin-students-view.result';
 import { AdminSubjectsViewResult } from './results/admin-subjects-view.result';
 import { AdminTeachersViewResult } from './results/admin-teachers-view.result';
+import { AdminLevelsViewResult } from './results/admin-levels-view.result';
 import { ArchiveDepartmentResult } from './results/archive-department.result';
 import { CreateDepartmentResult } from './results/create-department.result';
 import { CreateSubjectResult } from './results/create-subject.result';
@@ -56,6 +64,14 @@ import { CreateDepartmentDto } from './dto/create-department.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
+import { DeleteDepartmentResult } from './results/delete-department.result';
+import { CreateLevelDto } from './dto/create-level.dto';
+import { UpdateLevelDto } from './dto/update-level.dto';
+import { CreateLevelResult } from './results/create-level.result';
+import { UpdateLevelResult } from './results/update-level.result';
+import { ArchiveLevelResult } from './results/archive-level.result';
+import { UnarchiveLevelResult } from './results/unarchive-level.result';
+import { DeleteLevelResult } from './results/delete-level.result';
 
 @Controller('bff/admin')
 @ApiTags('BFF - Admin')
@@ -191,6 +207,70 @@ export class BffAdminController {
   ) {
     const data = await this.bffAdminService.unarchiveDepartment(userId, departmentId);
     return new UnarchiveDepartmentResult(data);
+  }
+
+  @Delete('departments/:departmentId')
+  @DeleteDepartmentSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async deleteDepartment(
+    @GetCurrentUserId() userId: string,
+    @Param('departmentId') departmentId: string,
+  ) {
+    const data = await this.bffAdminService.deleteDepartment(userId, departmentId);
+    return new DeleteDepartmentResult(data);
+  }
+
+  // Level endpoints
+  @Get('levels-view')
+  @LevelsViewSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getLevelsView(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getLevelsViewData(userId);
+    return new AdminLevelsViewResult(data);
+  }
+
+  @Post('levels')
+  @CreateLevelSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async createLevel(@GetCurrentUserId() userId: string, @Body() createLevelDto: CreateLevelDto) {
+    const data = await this.bffAdminService.createLevel(userId, createLevelDto);
+    return new CreateLevelResult(data);
+  }
+
+  @Put('levels/:levelId')
+  @UpdateLevelSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async updateLevel(
+    @GetCurrentUserId() userId: string,
+    @Param('levelId') levelId: string,
+    @Body() updateLevelDto: UpdateLevelDto,
+  ) {
+    const data = await this.bffAdminService.updateLevel(userId, levelId, updateLevelDto);
+    return new UpdateLevelResult(data);
+  }
+
+  @Post('levels/:levelId/archive')
+  @ArchiveLevelSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async archiveLevel(@GetCurrentUserId() userId: string, @Param('levelId') levelId: string) {
+    const data = await this.bffAdminService.archiveLevel(userId, levelId);
+    return new ArchiveLevelResult(data);
+  }
+
+  @Post('levels/:levelId/unarchive')
+  @UnarchiveLevelSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async unarchiveLevel(@GetCurrentUserId() userId: string, @Param('levelId') levelId: string) {
+    const data = await this.bffAdminService.unarchiveLevel(userId, levelId);
+    return new UnarchiveLevelResult(data);
+  }
+
+  @Delete('levels/:levelId')
+  @DeleteLevelSwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async deleteLevel(@GetCurrentUserId() userId: string, @Param('levelId') levelId: string) {
+    const data = await this.bffAdminService.deleteLevel(userId, levelId);
+    return new DeleteLevelResult(data);
   }
 
   @Get('teacher/:teacherId')

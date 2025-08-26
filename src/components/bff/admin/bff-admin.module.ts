@@ -10,6 +10,7 @@ import { BffAdminService } from './bff-admin.service';
 import { BffAdminAdminService } from './services/bff-admin-admin.service';
 import { BffAdminClassroomService } from './services/bff-admin-classroom.service';
 import { BffAdminDepartmentService } from './services/bff-admin-department.service';
+import { BffAdminLevelService } from './services/bff-admin-level.service';
 import { BffAdminStudentService } from './services/bff-admin-student.service';
 import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
@@ -23,6 +24,7 @@ import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
     BffAdminStudentService,
     BffAdminSubjectService,
     BffAdminDepartmentService,
+    BffAdminLevelService,
     BffAdminClassroomService,
     BffAdminAdminService,
     Encryptor,

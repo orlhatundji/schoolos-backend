@@ -6,9 +6,12 @@ import {
 } from './academic-sessions';
 import { TermsService, TermsController, TermsRepository } from './terms';
 import { PrismaService, PrismaModule } from '../../prisma';
+import { AuthModule } from '../auth/auth.module';
+import { RolesManagerModule } from '../roles-manager/roles-manager.module';
+import { Encryptor } from '../../utils/encryptor';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule, RolesManagerModule],
   controllers: [AcademicSessionsController, TermsController],
   providers: [
     PrismaService,
@@ -16,6 +19,7 @@ import { PrismaService, PrismaModule } from '../../prisma';
     AcademicSessionsRepository,
     TermsService,
     TermsRepository,
+    Encryptor,
   ],
   exports: [AcademicSessionsService, TermsService],
 })

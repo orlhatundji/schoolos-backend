@@ -15,7 +15,6 @@ export class BffAdminDepartmentService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDepartmentsViewData(userId: string): Promise<DepartmentsViewData> {
-    // First, get the user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { schoolId: true },
@@ -27,7 +26,6 @@ export class BffAdminDepartmentService {
 
     const schoolId = user.schoolId;
 
-    // Get all departments for the school with their related data
     const departments = await this.prisma.department.findMany({
       where: { schoolId },
       include: {

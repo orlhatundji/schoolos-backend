@@ -1,22 +1,23 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
-import { StudentsService } from './students.service';
-import { StudentMessages, StudentResult } from './results';
 import { ApiBadRequestResponse, ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { StrategyEnum } from '../auth/strategies';
+import { CheckPolicies, PoliciesGuard } from '../roles-manager';
 import { UserMessages } from '../users/results';
 import { CreateStudentDto, UpdateStudentDto } from './dto';
-import { CheckPolicies, PoliciesGuard } from '../roles-manager';
 import { ManageStudentPolicyHandler } from './policies';
-import { StrategyEnum } from '../auth/strategies';
+import { StudentMessages, StudentResult } from './results';
+import { StudentsService } from './students.service';
 
 @Controller('students')
 @ApiTags('Student')

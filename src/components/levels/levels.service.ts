@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLevelDto } from './dto/create-level.dto';
 import { UpdateLevelDto } from './dto/update-level.dto';
@@ -150,7 +150,7 @@ export class LevelsService {
     });
 
     if (classArms) {
-      throw new Error(
+      throw new BadRequestException(
         'Cannot delete level. It has associated class arms. Please reassign or remove all associated class arms first.',
       );
     }

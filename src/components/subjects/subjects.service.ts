@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
@@ -15,7 +15,7 @@ export class SubjectsService {
     });
 
     if (!user?.schoolId) {
-      throw new Error('User not associated with a school');
+      throw new BadRequestException('User not associated with a school');
     }
 
     const subject = await this.prisma.subject.create({
@@ -45,7 +45,7 @@ export class SubjectsService {
     });
 
     if (!user?.schoolId) {
-      throw new Error('User not associated with a school');
+      throw new BadRequestException('User not associated with a school');
     }
 
     // Verify the subject belongs to the user's school
@@ -57,7 +57,7 @@ export class SubjectsService {
     });
 
     if (!existingSubject) {
-      throw new Error('Subject not found or access denied');
+      throw new NotFoundException('Subject not found or access denied');
     }
 
     const subject = await this.prisma.subject.update({
@@ -87,7 +87,7 @@ export class SubjectsService {
     });
 
     if (!user?.schoolId) {
-      throw new Error('User not associated with a school');
+      throw new BadRequestException('User not associated with a school');
     }
 
     // Verify the subject belongs to the user's school
@@ -99,16 +99,22 @@ export class SubjectsService {
     });
 
     if (!existingSubject) {
-      throw new Error('Subject not found or access denied');
+      throw new NotFoundException('Subject not found or access denied');
     }
 
     // Check if subject is being used in any curriculum or assessments
     const subjectUsage = await this.prisma.subjectTerm.findFirst({
       where: { subjectId },
+      include: {
+        subjectTermStudents: true,
+      },
     });
 
     if (subjectUsage) {
-      throw new Error('Cannot delete subject. It is being used in curriculum or assessments.');
+      if (subjectUsage.subjectTermStudents.length > 0) {
+        throw new BadRequestException('Cannot delete subject. It has associated student enrollments. Please remove all student enrollments first.');
+      }
+      throw new BadRequestException('Cannot delete subject. It is being used in curriculum or assessments.');
     }
 
     await this.prisma.subject.delete({

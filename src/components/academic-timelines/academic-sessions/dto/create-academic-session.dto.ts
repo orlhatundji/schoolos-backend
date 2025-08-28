@@ -49,11 +49,5 @@ export class CreateAcademicSessionDto {
   @IsOptional()
   isCurrent?: boolean;
 
-  @ApiProperty({
-    example: '8f709fb4-60b4-4a1c-a2c9-3f1fa2fce009',
-    description: 'UUID of the school this session belongs to',
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  schoolId: string;
+
 }

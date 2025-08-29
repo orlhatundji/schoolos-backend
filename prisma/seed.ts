@@ -541,6 +541,199 @@ async function main() {
     }
   }
 
+  console.log('Creating payment structures...');
+  // Payment Structures
+  const paymentStructures = [];
+
+  // Create different types of payment structures
+  const paymentStructureData = [
+    {
+      name: 'First Term Tuition Fee',
+      description: 'Tuition fees for the first term of the academic session',
+      amount: 50000,
+      category: 'TUITION',
+      frequency: 'ONCE_PER_TERM',
+      academicSessionId: sessions[1].id, // Current session
+      termId: terms.filter((t) => t.academicSessionId === sessions[1].id)[0].id, // First term
+    },
+    {
+      name: 'Second Term Tuition Fee',
+      description: 'Tuition fees for the second term of the academic session',
+      amount: 50000,
+      category: 'TUITION',
+      frequency: 'ONCE_PER_TERM',
+      academicSessionId: sessions[1].id, // Current session
+      termId: terms.filter((t) => t.academicSessionId === sessions[1].id)[1].id, // Second term
+    },
+    {
+      name: 'Third Term Tuition Fee',
+      description: 'Tuition fees for the third term of the academic session',
+      amount: 50000,
+      category: 'TUITION',
+      frequency: 'ONCE_PER_TERM',
+      academicSessionId: sessions[1].id, // Current session
+      termId: terms.filter((t) => t.academicSessionId === sessions[1].id)[2].id, // Third term
+    },
+    {
+      name: 'Examination Fee',
+      description: 'Examination fees for the academic session',
+      amount: 15000,
+      category: 'EXAMINATION',
+      frequency: 'ONCE_PER_SESSION',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Library Fee',
+      description: 'Library access and maintenance fees',
+      amount: 5000,
+      category: 'LIBRARY',
+      frequency: 'ONCE_PER_SESSION',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Laboratory Fee',
+      description: 'Science laboratory usage fees',
+      amount: 8000,
+      category: 'LABORATORY',
+      frequency: 'ONCE_PER_SESSION',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Sports Fee',
+      description: 'Sports and physical education fees',
+      amount: 3000,
+      category: 'SPORTS',
+      frequency: 'ONCE_PER_SESSION',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Transport Fee',
+      description: 'School transportation fees',
+      amount: 25000,
+      category: 'TRANSPORT',
+      frequency: 'MONTHLY',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Uniform Fee',
+      description: 'School uniform fees',
+      amount: 12000,
+      category: 'UNIFORM',
+      frequency: 'ONCE_PER_SESSION',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Textbook Fee',
+      description: 'Textbook and learning material fees',
+      amount: 10000,
+      category: 'TEXTBOOK',
+      frequency: 'ONCE_PER_SESSION',
+      academicSessionId: sessions[1].id, // Current session
+    },
+    {
+      name: 'Excursion Fee',
+      description: 'Educational excursion and field trip fees',
+      amount: 8000,
+      category: 'EXCURSION',
+      frequency: 'CUSTOM',
+      academicSessionId: sessions[1].id, // Current session
+      dueDate: faker.date.future(),
+    },
+  ];
+
+  for (const paymentData of paymentStructureData) {
+    const paymentStructure = await prisma.paymentStructure.create({
+      data: {
+        name: paymentData.name,
+        description: paymentData.description,
+        amount: paymentData.amount,
+        currency: 'NGN',
+        category: paymentData.category as any,
+        frequency: paymentData.frequency as any,
+        school: { connect: { id: school.id } },
+        ...(paymentData.academicSessionId && {
+          academicSession: { connect: { id: paymentData.academicSessionId } },
+        }),
+        ...(paymentData.termId && { term: { connect: { id: paymentData.termId } } }),
+        ...(paymentData.dueDate && { dueDate: paymentData.dueDate }),
+        isActive: true,
+      },
+    });
+    paymentStructures.push(paymentStructure);
+  }
+
+  console.log('Generating student payments...');
+  // Generate student payments for each payment structure
+  const studentPayments = [];
+
+  for (const student of students) {
+    for (const paymentStructure of paymentStructures) {
+      // Determine payment status randomly
+      const statusOptions = ['PENDING', 'PAID', 'PARTIAL', 'OVERDUE', 'WAIVED'];
+      const status = faker.helpers.arrayElement(statusOptions);
+
+      // Calculate due date based on payment structure
+      let dueDate = new Date();
+      if (paymentStructure.termId) {
+        // For term-based payments, set due date to end of term
+        const term = terms.find((t) => t.id === paymentStructure.termId);
+        if (term) {
+          dueDate = faker.date.between({ from: term.createdAt, to: faker.date.future() });
+        }
+      } else if (paymentStructure.dueDate) {
+        dueDate = paymentStructure.dueDate;
+      } else {
+        // For session-based payments, set due date within the session
+        dueDate = faker.date.between({ from: new Date(), to: faker.date.future() });
+      }
+
+      // Calculate paid amount based on status
+      let paidAmount = 0;
+      let paidAt = null;
+
+      if (status === 'PAID') {
+        paidAmount = Number(paymentStructure.amount);
+        paidAt = faker.date.between({ from: paymentStructure.createdAt, to: dueDate });
+      } else if (status === 'PARTIAL') {
+        paidAmount = faker.number.int({ min: 1000, max: Number(paymentStructure.amount) - 1000 });
+        paidAt = faker.date.between({ from: paymentStructure.createdAt, to: dueDate });
+      }
+
+      // Add some overdue payments
+      if (status === 'OVERDUE') {
+        dueDate = faker.date.past();
+      }
+
+      const studentPayment = await prisma.studentPayment.create({
+        data: {
+          student: { connect: { id: student.id } },
+          paymentStructure: { connect: { id: paymentStructure.id } },
+          amount: paymentStructure.amount,
+          currency: paymentStructure.currency,
+          status: status as any,
+          dueDate,
+          paidAmount,
+          paidAt,
+          ...(status === 'WAIVED' && {
+            waivedBy: adminUser.id,
+            waivedAt: faker.date.between({ from: paymentStructure.createdAt, to: new Date() }),
+            waiverReason: faker.helpers.arrayElement([
+              'Financial hardship',
+              'Academic excellence',
+              'Special circumstances',
+              'Scholarship recipient',
+              'Staff discount',
+            ]),
+          }),
+        },
+      });
+
+      studentPayments.push(studentPayment);
+    }
+  }
+
+  console.log(`✅ Created ${paymentStructures.length} payment structures`);
+  console.log(`✅ Generated ${studentPayments.length} student payments`);
   console.log('✅ School seed data generated successfully!');
 }
 

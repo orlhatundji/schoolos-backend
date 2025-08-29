@@ -20,6 +20,7 @@ import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
 import { MailModule } from './utils/mail/mail.module';
 import { MailQueueModule } from './utils/mail-queue/mail-queue.module';
+import { PaymentsModule } from './components/payments/payments.module';
 
 dotenv.config({ path: getEnvFileName(), override: true });
 
@@ -56,4 +57,5 @@ export const AppModuleList = [
   LevelsModule,
   TerminusModule,
   AssessmentsModule,
+  PaymentsModule,
 ];

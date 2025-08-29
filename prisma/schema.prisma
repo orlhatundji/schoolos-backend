@@ -64,6 +64,35 @@ enum SubjectCategory {
   VOCATIONAL
 }
 
+enum PaymentFrequency {
+  ONCE_PER_SESSION
+  ONCE_PER_TERM
+  MONTHLY
+  WEEKLY
+  CUSTOM
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  PARTIAL
+  WAIVED
+}
+
+enum PaymentCategory {
+  TUITION
+  EXAMINATION
+  LIBRARY
+  LABORATORY
+  SPORTS
+  TRANSPORT
+  UNIFORM
+  TEXTBOOK
+  EXCURSION
+  OTHER
+}
+
 // --- Address Management ---
 
 /**
@@ -141,6 +170,7 @@ model School {
   departments      Department[]
   classArms        ClassArm[]
   assessments      Assessment[]
+  paymentStructures PaymentStructure[]
 
   @@map("schools")
 }
@@ -167,6 +197,7 @@ model AcademicSession {
   studentAttendances StudentAttendance[]
   subjectTerms       SubjectTerm[]
   classArms          ClassArm[]
+  paymentStructures  PaymentStructure[]
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
   deletedAt          DateTime?
@@ -228,6 +259,7 @@ model Term {
   academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id])
   studentAttendances StudentAttendance[]
   subjectTerms       SubjectTerm[]
+  paymentStructures  PaymentStructure[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
@@ -249,6 +281,7 @@ model Level {
   schoolId  String
   school    School     @relation(fields: [schoolId], references: [id])
   classArms ClassArm[]
+  paymentStructures PaymentStructure[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   deletedAt DateTime?
@@ -313,6 +346,7 @@ model ClassArm {
   classArmTeachers        ClassArmTeacher[]
   studentAttendances      StudentAttendance[]
   classArmSubjectTeachers ClassArmSubjectTeacher[]
+  paymentStructures       PaymentStructure[]
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
@@ -499,6 +533,7 @@ model Student {
   guardian              Guardian?              @relation(fields: [guardianId], references: [id])
   curriculumItemRatings CurriculumItemRating[]
   studentAttendances    StudentAttendance[]
+  studentPayments       StudentPayment[]
   classArmAsCaptain     ClassArm?              @relation("ClassArmCaptain") // Direct class captain relation
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
@@ -867,4 +902,92 @@ model SchoolSignupRequest {
   updatedAt       DateTime            @updatedAt
 
   @@map("school_signup_requests")
+}
+
+// --- Payment Management ---
+
+/**
+ * PaymentStructure
+ * ----------------
+ * Defines payment structures that can be applied to different categories of students.
+ * Each payment structure has a specific amount, frequency, and can be applied to
+ * academic sessions, terms, levels, class arms, or individual students.
+ */
+model PaymentStructure {
+  id                String           @id @default(uuid())
+  name              String
+  description       String?
+  amount            Decimal          @db.Decimal(10, 2)
+  currency          String           @default("NGN")
+  category          PaymentCategory
+  frequency         PaymentFrequency
+  schoolId          String
+  school            School           @relation(fields: [schoolId], references: [id])
+  
+  // Scope fields - these determine which students the payment applies to
+  academicSessionId String?
+  academicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id])
+  termId            String?
+  term              Term?            @relation(fields: [termId], references: [id])
+  levelId           String?
+  level             Level?           @relation(fields: [levelId], references: [id])
+  classArmId        String?
+  classArm          ClassArm?        @relation(fields: [classArmId], references: [id])
+  
+  // Custom due date for the payment
+  dueDate           DateTime?
+  
+  // Payment structure can be active or inactive
+  isActive          Boolean          @default(true)
+  
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+  
+  // Related payment assignments
+  studentPayments   StudentPayment[]
+  
+  @@index([schoolId])
+  @@index([academicSessionId])
+  @@index([termId])
+  @@index([levelId])
+  @@index([classArmId])
+  @@map("payment_structures")
+}
+
+/**
+ * StudentPayment
+ * --------------
+ * Links payment structures to individual students, creating specific payment obligations.
+ * This allows for tracking individual student payment status and history.
+ */
+model StudentPayment {
+  id                  String           @id @default(uuid())
+  studentId           String
+  student             Student          @relation(fields: [studentId], references: [id])
+  paymentStructureId  String
+  paymentStructure    PaymentStructure @relation(fields: [paymentStructureId], references: [id])
+  
+  // Payment details
+  amount              Decimal          @db.Decimal(10, 2)
+  currency            String           @default("NGN")
+  status              PaymentStatus    @default(PENDING)
+  dueDate             DateTime
+  paidAmount          Decimal          @db.Decimal(10, 2) @default(0)
+  paidAt              DateTime?
+  
+  // Additional information
+  notes               String?
+  waivedBy            String?          // User ID who waived the payment
+  waivedAt            DateTime?
+  waiverReason        String?
+  
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  deletedAt           DateTime?
+  
+  @@index([studentId])
+  @@index([paymentStructureId])
+  @@index([dueDate])
+  @@map("student_payments")
 }

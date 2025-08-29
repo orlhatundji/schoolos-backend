@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+
 import { PrismaService } from '../../../prisma/prisma.service';
-import { StudentPaymentsRepository } from './student-payments.repository';
 import { UpdateStudentPaymentDto } from './dto/update-student-payment.dto';
+import { StudentPaymentsRepository } from './student-payments.repository';
 
 @Injectable()
 export class StudentPaymentsService {
@@ -73,7 +74,11 @@ export class StudentPaymentsService {
     return this.studentPaymentsRepository.findByStudent(studentId, user.schoolId);
   }
 
-  async updateStudentPayment(userId: string, id: string, updateStudentPaymentDto: UpdateStudentPaymentDto) {
+  async updateStudentPayment(
+    userId: string,
+    id: string,
+    updateStudentPaymentDto: UpdateStudentPaymentDto,
+  ) {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -209,7 +214,9 @@ export class StudentPaymentsService {
       const newStatus = updateDto.status;
 
       if (!validTransitions[currentStatus]?.includes(newStatus)) {
-        throw new BadRequestException(`Invalid status transition from ${currentStatus} to ${newStatus}`);
+        throw new BadRequestException(
+          `Invalid status transition from ${currentStatus} to ${newStatus}`,
+        );
       }
     }
 
@@ -227,7 +234,9 @@ export class StudentPaymentsService {
     // Validate waiver fields
     if (updateDto.waivedBy || updateDto.waivedAt || updateDto.waiverReason) {
       if (!updateDto.waivedBy || !updateDto.waiverReason) {
-        throw new BadRequestException('Both waivedBy and waiverReason are required when waiving a payment');
+        throw new BadRequestException(
+          'Both waivedBy and waiverReason are required when waiving a payment',
+        );
       }
     }
   }

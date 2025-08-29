@@ -1,26 +1,34 @@
 import { Module } from '@nestjs/common';
-import {
-  AcademicSessionsService,
-  AcademicSessionsController,
-  AcademicSessionsRepository,
-} from './academic-sessions';
-import { TermsService, TermsController, TermsRepository } from './terms';
-import { PrismaService, PrismaModule } from '../../prisma';
+
+import { PrismaModule, PrismaService } from '../../prisma';
+import { Encryptor } from '../../utils/encryptor';
 import { AuthModule } from '../auth/auth.module';
 import { RolesManagerModule } from '../roles-manager/roles-manager.module';
-import { Encryptor } from '../../utils/encryptor';
+import {
+  AcademicCalendarController,
+  AcademicCalendarRepository,
+  AcademicCalendarService,
+} from './academic-calendar';
+import {
+  AcademicSessionsController,
+  AcademicSessionsRepository,
+  AcademicSessionsService,
+} from './academic-sessions';
+import { TermsController, TermsRepository, TermsService } from './terms';
 
 @Module({
   imports: [PrismaModule, AuthModule, RolesManagerModule],
-  controllers: [AcademicSessionsController, TermsController],
+  controllers: [AcademicSessionsController, TermsController, AcademicCalendarController],
   providers: [
     PrismaService,
     AcademicSessionsService,
     AcademicSessionsRepository,
     TermsService,
     TermsRepository,
+    AcademicCalendarService,
+    AcademicCalendarRepository,
     Encryptor,
   ],
-  exports: [AcademicSessionsService, TermsService],
+  exports: [AcademicSessionsService, TermsService, AcademicCalendarService],
 })
 export class AcademicTimelinesModule {}

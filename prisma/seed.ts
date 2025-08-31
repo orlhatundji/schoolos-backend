@@ -1,11 +1,13 @@
-import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+
 import { faker } from '@faker-js/faker';
-import { UserTypes } from '../src/components/users/constants';
+import { PrismaClient } from '@prisma/client';
+
 import { CounterService } from '../src/common/counter';
-import { getNextUserEntityNoFormatted } from '../src/utils/misc';
-import { PasswordHasher } from '../src/utils/hasher';
 import { ActivityLogService } from '../src/common/services/activity-log.service';
+import { UserTypes } from '../src/components/users/constants';
+import { PasswordHasher } from '../src/utils/hasher';
+import { getNextUserEntityNoFormatted } from '../src/utils/misc';
 
 const prisma = new PrismaClient();
 const passwordHasher = new PasswordHasher();
@@ -146,8 +148,11 @@ async function main() {
 
   console.log('Creating super admin user...');
   // Check if super admin already exists
-  let adminUser = await prisma.user.findUnique({
-    where: { email: 'orlhatundji@gmail.com' },
+  let adminUser = await prisma.user.findFirst({
+    where: {
+      email: 'orlhatundji@gmail.com',
+      schoolId: school.id,
+    },
   });
 
   if (!adminUser) {

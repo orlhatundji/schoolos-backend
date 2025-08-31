@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PrismaModule } from '../../../prisma/prisma.module';
+import { ActivityLogModule } from '../../../common/modules/activity-log.module';
 import { Encryptor } from '../../../utils/encryptor';
 import { JwtAuthModule } from '../../auth/strategies/jwt/jwt-auth.module';
 import { RolesManagerModule } from '../../roles-manager/roles-manager.module';
@@ -16,7 +17,7 @@ import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
 
 @Module({
-  imports: [PrismaModule, UsersModule, RolesManagerModule, JwtAuthModule],
+  imports: [PrismaModule, ActivityLogModule, UsersModule, RolesManagerModule, JwtAuthModule],
   controllers: [BffAdminController],
   providers: [
     BffAdminService,

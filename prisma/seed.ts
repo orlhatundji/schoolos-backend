@@ -5,10 +5,42 @@ import { UserTypes } from '../src/components/users/constants';
 import { CounterService } from '../src/common/counter';
 import { getNextUserEntityNoFormatted } from '../src/utils/misc';
 import { PasswordHasher } from '../src/utils/hasher';
+import { ActivityLogService } from '../src/common/services/activity-log.service';
 
 const prisma = new PrismaClient();
 const passwordHasher = new PasswordHasher();
 const counterService = new CounterService(prisma);
+const activityLogService = new ActivityLogService(prisma);
+
+// Helper function to log seed activities
+async function logSeedActivity(
+  userId: string,
+  schoolId: string,
+  action: string,
+  entityType: string,
+  entityId: string,
+  description: string,
+  details?: any,
+) {
+  try {
+    await activityLogService.logActivity({
+      userId,
+      schoolId,
+      action,
+      entityType,
+      entityId,
+      description,
+      details,
+      ipAddress: '127.0.0.1',
+      userAgent: 'Seed Script',
+      requestId: `seed-${Date.now()}`,
+      severity: 'INFO',
+      category: 'SYSTEM',
+    });
+  } catch (error) {
+    console.warn(`Failed to log activity: ${error}`);
+  }
+}
 
 async function main() {
   console.log('🚀 Starting seed process...');
@@ -66,6 +98,17 @@ async function main() {
       },
     });
 
+    // Log system admin creation
+    await logSeedActivity(
+      systemAdminUser.id,
+      'system',
+      'CREATE',
+      'SystemAdmin',
+      systemAdmin.id,
+      'System admin created during seeding',
+      { role: systemAdmin.role },
+    );
+
     console.log('System admin created:', {
       id: systemAdmin.id,
       email: systemAdminUser.email,
@@ -84,6 +127,18 @@ async function main() {
         code: 'BFH',
       },
     });
+
+    // Log school creation
+    await logSeedActivity(
+      'system',
+      school.id,
+      'CREATE',
+      'School',
+      school.id,
+      'School created during seeding',
+      { name: school.name, code: school.code },
+    );
+
     console.log('School created:', school.name);
   } else {
     console.log('School already exists:', school.name);
@@ -110,12 +165,24 @@ async function main() {
       },
     });
 
-    await prisma.admin.create({
+    const superAdmin = await prisma.admin.create({
       data: {
         userId: adminUser.id,
         isSuper: true,
       },
     });
+
+    // Log super admin creation
+    await logSeedActivity(
+      adminUser.id,
+      school.id,
+      'CREATE',
+      'Admin',
+      superAdmin.id,
+      'Super admin created during seeding',
+      { isSuper: superAdmin.isSuper },
+    );
+
     console.log('Super admin created');
   } else {
     console.log('Super admin already exists');
@@ -132,6 +199,19 @@ async function main() {
     ),
   );
 
+  // Log department creation
+  for (const dept of departments) {
+    await logSeedActivity(
+      adminUser.id,
+      school.id,
+      'CREATE',
+      'Department',
+      dept.id,
+      'Department created during seeding',
+      { name: dept.name, code: dept.code },
+    );
+  }
+
   console.log('Creating levels...');
   const levels = await Promise.all(
     [
@@ -145,6 +225,19 @@ async function main() {
       prisma.level.create({ data: { name: level.name, code: level.code, schoolId: school.id } }),
     ),
   );
+
+  // Log level creation
+  for (const level of levels) {
+    await logSeedActivity(
+      adminUser.id,
+      school.id,
+      'CREATE',
+      'Level',
+      level.id,
+      'Level created during seeding',
+      { name: level.name, code: level.code },
+    );
+  }
 
   console.log('Creating academic sessions and terms...');
   // Academic Sessions & Terms
@@ -491,9 +584,20 @@ async function main() {
   }
 
   console.log('Creating subject assessments for students...');
-  // Subject assessments
-  for (const student of students) {
-    for (const subjectTerm of subjectTerms) {
+  // Subject assessments - Optimized to create less data
+  // Only create assessments for current session and a subset of students
+  const currentSession = sessions.find((s) => s.isCurrent);
+  const currentSessionTerms = terms.filter((t) => t.academicSessionId === currentSession?.id);
+  const currentSubjectTerms = subjectTerms.filter((st) =>
+    currentSessionTerms.some((term) => term.id === st.termId),
+  );
+
+  // Only create assessments for first 5 students and first 3 subjects to reduce data
+  const studentsForAssessments = students.slice(0, 5);
+  const subjectsForAssessments = currentSubjectTerms.slice(0, 3);
+
+  for (const student of studentsForAssessments) {
+    for (const subjectTerm of subjectsForAssessments) {
       const subjectTermStudent = await prisma.subjectTermStudent.create({
         data: {
           student: { connect: { id: student.id } },
@@ -540,6 +644,10 @@ async function main() {
       });
     }
   }
+
+  console.log(
+    `✅ Created assessments for ${studentsForAssessments.length} students and ${subjectsForAssessments.length} subjects`,
+  );
 
   console.log('Creating payment structures...');
   // Payment Structures

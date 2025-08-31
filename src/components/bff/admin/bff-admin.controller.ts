@@ -1,7 +1,9 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
+import { LogActivity } from '../../../common/decorators/log-activity.decorator';
+import { ActivityLogInterceptor } from '../../../common/interceptors/activity-log.interceptor';
 import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards';
 import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
@@ -28,6 +30,7 @@ import {
   SubjectsViewSwagger,
   TeachersViewSwagger,
   LevelsViewSwagger,
+  DashboardSummarySwagger,
 } from './bff-admin.swagger';
 import { AdminAdminsViewResult } from './results/admin-admins-view.result';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
@@ -40,6 +43,7 @@ import { AdminLevelsViewResult } from './results/admin-levels-view.result';
 import { SingleStudentDetailsResult } from './results/single-student-details.result';
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
+import { DashboardSummaryResult } from './results/dashboard-summary.result';
 
 @Controller('bff/admin')
 @ApiTags('BFF - Admin')
@@ -47,6 +51,50 @@ import { StudentDetailsResult } from './results/student-details.result';
 @UseGuards(AccessTokenGuard, PoliciesGuard)
 export class BffAdminController {
   constructor(private readonly bffAdminService: BffAdminService) {}
+
+  @Get('dashboard-summary')
+  @DashboardSummarySwagger()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_DASHBOARD',
+    entityType: 'DASHBOARD',
+    description: 'Admin viewed dashboard summary',
+    category: 'ADMINISTRATION',
+  })
+  async getDashboardSummary(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getDashboardSummaryData(userId);
+    return new DashboardSummaryResult(data);
+  }
+
+  @Get('recent-activities')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_RECENT_ACTIVITIES',
+    entityType: 'ACTIVITY_LOG',
+    description: 'Admin viewed recent activities',
+    category: 'ADMINISTRATION',
+  })
+  async getRecentActivities(
+    @GetCurrentUserId() userId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('action') action?: string,
+    @Query('category') category?: string,
+    @Query('severity') severity?: string,
+    @Query('userId') activityUserId?: string,
+  ) {
+    const data = await this.bffAdminService.getRecentActivities(userId, {
+      limit: limit ? parseInt(limit) : 20,
+      offset: offset ? parseInt(offset) : 0,
+      action,
+      category,
+      severity,
+      userId: activityUserId,
+    });
+    return data;
+  }
 
   @Get('classrooms-view')
   @ClassroomsViewSwagger()

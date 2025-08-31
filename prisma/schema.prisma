@@ -171,6 +171,7 @@ model School {
   classArms        ClassArm[]
   assessments      Assessment[]
   paymentStructures PaymentStructure[]
+  userActivities    UserActivity[]
 
   @@map("schools")
 }
@@ -394,6 +395,7 @@ model User {
   teacher  Teacher?
   admin    Admin?
   systemAdmin SystemAdmin?
+  activities UserActivity[]
 
   @@map("users")
 }
@@ -990,4 +992,49 @@ model StudentPayment {
   @@index([paymentStructureId])
   @@index([dueDate])
   @@map("student_payments")
+}
+
+/**
+ * UserActivity
+ * ------------
+ * Tracks all user activities and actions within the system for audit and monitoring purposes.
+ * Provides comprehensive audit trail for security, compliance, and analytics.
+ * Each activity is linked to a user and school, with detailed information about the action performed.
+ */
+model UserActivity {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  
+  // Activity details
+  action      String   // e.g., "LOGIN", "CREATE_STUDENT", "UPDATE_PAYMENT", "DELETE_TEACHER"
+  entityType  String   // e.g., "STUDENT", "TEACHER", "PAYMENT", "ATTENDANCE", "ASSESSMENT"
+  entityId    String?  // ID of the affected entity (if applicable)
+  
+  // Additional context
+  details     Json?    // Structured data about the action (old values, new values, etc.)
+  description String?  // Human-readable description of the activity
+  
+  // Request context
+  ipAddress   String?  // IP address of the request
+  userAgent   String?  // User agent string
+  requestId   String?  // Unique request identifier for tracing
+  
+  // Metadata
+  severity    String   @default("INFO") // INFO, WARNING, ERROR, CRITICAL
+  category    String?  // e.g., "AUTHENTICATION", "DATA_MANAGEMENT", "FINANCIAL", "ACADEMIC"
+  
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([schoolId])
+  @@index([action])
+  @@index([entityType])
+  @@index([timestamp])
+  @@index([severity])
+  @@index([category])
+  @@map("user_activities")
 }

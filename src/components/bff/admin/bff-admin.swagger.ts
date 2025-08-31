@@ -25,6 +25,7 @@ import { UpdateLevelResult } from './results/update-level.result';
 import { ArchiveLevelResult } from './results/archive-level.result';
 import { UnarchiveLevelResult } from './results/unarchive-level.result';
 import { DeleteLevelResult } from './results/delete-level.result';
+import { DashboardSummaryResult } from './results/dashboard-summary.result';
 
 // Classrooms View
 export const ClassroomsViewSwagger = () =>
@@ -290,4 +291,12 @@ export const AdminsViewSwagger = () =>
     status: HttpStatus.OK,
     type: AdminAdminsViewResult,
     description: 'Get admins overview with statistics and detailed admin information',
+  });
+
+// Dashboard Summary
+export const DashboardSummarySwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: DashboardSummaryResult,
+    description: 'Get comprehensive dashboard summary with aggregated statistics for all major resources including students, teachers, classrooms, subjects, departments, levels, admins, attendance, payments, and recent activities',
   });

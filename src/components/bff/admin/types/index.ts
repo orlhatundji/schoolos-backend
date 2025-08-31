@@ -313,3 +313,183 @@ export interface LevelsViewData {
   stats: LevelStats;
   levels: LevelInfo[];
 }
+
+// Dashboard Summary types
+export interface DashboardOverview {
+  totalStudents: number;
+  totalTeachers: number;
+  totalClassrooms: number;
+  totalSubjects: number;
+  totalDepartments: number;
+  totalLevels: number;
+  totalAdmins: number;
+}
+
+export interface DashboardStudentStats {
+  totalStudents: number;
+  maleStudents: number;
+  femaleStudents: number;
+  activeStudents: number;
+  graduatedStudents: number;
+  newAdmissions: number;
+  genderDistribution: {
+    male: number;
+    female: number;
+    malePercentage: number;
+    femalePercentage: number;
+  };
+}
+
+export interface DashboardTeacherStats {
+  totalTeachers: number;
+  activeTeachers: number;
+  inactiveTeachers: number;
+  onLeaveTeachers: number;
+  employmentBreakdown: {
+    fullTime: number;
+    partTime: number;
+    contract: number;
+  };
+  statusBreakdown: {
+    active: number;
+    inactive: number;
+    onLeave: number;
+  };
+}
+
+export interface DashboardClassroomStats {
+  totalClassrooms: number;
+  classroomsWithTeachers: number;
+  classroomsWithoutTeachers: number;
+  averageClassSize: number;
+  largestClass: {
+    name: string;
+    size: number;
+  };
+  smallestClass: {
+    name: string;
+    size: number;
+  };
+}
+
+export interface DashboardSubjectStats {
+  totalSubjects: number;
+  categoryBreakdown: {
+    core: number;
+    general: number;
+    vocational: number;
+  };
+  subjectsWithTeachers: number;
+  subjectsWithoutTeachers: number;
+}
+
+export interface DashboardDepartmentStats {
+  totalDepartments: number;
+  activeDepartments: number;
+  archivedDepartments: number;
+  departmentsWithHOD: number;
+  departmentsWithoutHOD: number;
+  averageTeachersPerDept: number;
+}
+
+export interface DashboardLevelStats {
+  totalLevels: number;
+  activeLevels: number;
+  archivedLevels: number;
+  levelsWithClassArms: number;
+  levelsWithoutClassArms: number;
+  averageStudentsPerLevel: number;
+}
+
+export interface DashboardAdminStats {
+  totalAdmins: number;
+  activeAdmins: number;
+  inactiveAdmins: number;
+  superAdmins: number;
+  regularAdmins: number;
+}
+
+export interface DashboardAttendanceStats {
+  totalAttendanceRecords: number;
+  todayAttendanceRecords: number;
+  presentToday: number;
+  absentToday: number;
+  lateToday: number;
+  excusedToday: number;
+  attendanceRate: number;
+  totalStudents: number;
+}
+
+export interface DashboardPaymentStats {
+  totalPayments: number;
+  paidPayments: number;
+  pendingPayments: number;
+  overduePayments: number;
+  partialPayments: number;
+  totalAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
+  overdueAmount: number;
+  collectionRate: number;
+}
+
+export interface AcademicInfo {
+  currentSession: string;
+  currentTerm: string;
+  sessionStartDate: Date;
+  sessionEndDate: Date;
+  daysRemaining: number;
+}
+
+export interface DashboardAcademicPerformanceStats {
+  totalAssessments: number;
+  totalSubjectsWithAssessments: number;
+  averageAssessmentScore: number;
+  highestAssessmentScore: number;
+  lowestAssessmentScore: number;
+}
+
+export interface DashboardFinancialStats {
+  totalRevenue: number;
+  totalExpenses: number;
+  netProfit: number;
+  totalIncome: number;
+  totalExpenseAmount: number;
+  totalIncomeAmount: number;
+  totalExpenseAmountByCategory: any;
+  totalIncomeAmountByCategory: any;
+}
+
+export interface DashboardOperationalStats {
+  totalStaff: number;
+  totalTeachers: number;
+  totalStudents: number;
+  totalClassrooms: number;
+  totalSubjects: number;
+  totalDepartments: number;
+  totalLevels: number;
+  totalAssessments: number;
+  totalAttendanceRecords: number;
+  totalPayments: number;
+  totalExpenses: number;
+  totalIncome: number;
+  totalRevenue: number;
+  totalNetProfit: number;
+}
+
+export interface DashboardSummaryData {
+  overview: DashboardOverview;
+  studentStats: DashboardStudentStats;
+  teacherStats: DashboardTeacherStats;
+  classroomStats: DashboardClassroomStats;
+  subjectStats: DashboardSubjectStats;
+  departmentStats: DashboardDepartmentStats;
+  levelStats: DashboardLevelStats;
+  adminStats: DashboardAdminStats;
+  attendanceStats: DashboardAttendanceStats;
+  paymentStats: DashboardPaymentStats;
+  academicPerformanceStats: DashboardAcademicPerformanceStats;
+  financialStats: DashboardFinancialStats;
+  operationalStats: DashboardOperationalStats;
+  academicInfo: AcademicInfo;
+}

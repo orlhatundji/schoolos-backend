@@ -367,8 +367,8 @@ model ClassArm {
 model User {
   id                 String      @id @default(uuid())
   type               UserType
-  email              String?     @unique
-  phone              String?     @unique
+  email              String?
+  phone              String?
   password           String
   phoneVerified      Boolean     @default(false)
   emailVerified      Boolean     @default(false)
@@ -397,6 +397,9 @@ model User {
   systemAdmin SystemAdmin?
   activities UserActivity[]
 
+  // School-scoped uniqueness constraints
+  @@unique([email, schoolId])
+  @@unique([phone, schoolId])
   @@map("users")
 }
 

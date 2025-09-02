@@ -1,0 +1,59 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install pnpm
+      run: npm install -g pnpm
+      
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      
+    - name: Build application
+      run: pnpm run build
+      
+    - name: Deploy to Lightsail
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.LIGHTSAIL_HOST }}
+        username: ${{ secrets.LIGHTSAIL_USERNAME }}
+        key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+        script: |
+          # Navigate to app directory
+          cd /home/bitnami/schoolos-backend
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Install dependencies
+          pnpm install --frozen-lockfile
+          
+          # Build the application
+          pnpm run build
+          
+          # Run database migrations
+          npx prisma migrate deploy
+          
+          # Restart the application with PM2
+          pm2 restart schoolos-backend || pm2 start dist/src/main.js --name schoolos-backend
+          
+          # Save PM2 configuration
+          pm2 save
+          
+          echo "Deployment completed successfully!"

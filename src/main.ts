@@ -1,16 +1,38 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+
+import { AppModule } from './app.module';
 import { StrategyEnum } from './components/auth/strategies';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+  const corsOptions: CorsOptions = {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
-  });
+  };
+
+  if (process.env.NODE_ENV === 'production') {
+    // Allow all subdomains of schos.ng in production
+    corsOptions.origin = (origin, callback) => {
+      if (!origin || origin.endsWith('.schos.ng') || origin === 'https://schos.ng') {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    };
+  } else {
+    // Allow localhost in development
+    corsOptions.origin = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ];
+  }
+
+  app.enableCors(corsOptions);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

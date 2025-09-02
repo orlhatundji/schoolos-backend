@@ -17,17 +17,31 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
         
-    - name: Install pnpm
-      run: npm install -g pnpm
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+        
+    - name: Get pnpm store directory
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+        
+    - name: Setup pnpm cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
       
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       
     - name: Build application
-      run: pnpm run build
-      
+      run:  NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
+
     - name: Deploy to Lightsail
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -45,7 +59,7 @@ jobs:
           pnpm install --frozen-lockfile
           
           # Build the application
-          pnpm run build
+          NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
           
           # Run database migrations
           npx prisma migrate deploy

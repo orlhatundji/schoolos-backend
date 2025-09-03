@@ -63,7 +63,7 @@ export class UsersService extends BaseService {
     return this.userRepository.findById(id);
   }
 
-  update(
+  async update(
     id: string,
     updateObj: Partial<
       Pick<User, 'password' | 'firstName' | 'lastName' | 'email' | 'mustUpdatePassword'>
@@ -73,6 +73,15 @@ export class UsersService extends BaseService {
       { id },
       {
         ...updateObj,
+      },
+    );
+  }
+
+  async updateLastLoginAt(id: string) {
+    return this.userRepository.update(
+      { id },
+      {
+        lastLoginAt: new Date(),
       },
     );
   }

@@ -144,7 +144,9 @@ export class StudentPaymentsRepository {
         ...(data.status && { status: data.status }),
         ...(data.paidAt !== undefined && { paidAt: data.paidAt ? new Date(data.paidAt) : null }),
         ...(data.waivedBy && { waivedBy: data.waivedBy }),
-        ...(data.waivedAt !== undefined && { waivedAt: data.waivedAt ? new Date(data.waivedAt) : null }),
+        ...(data.waivedAt !== undefined && {
+          waivedAt: data.waivedAt ? new Date(data.waivedAt) : null,
+        }),
         ...(data.waiverReason && { waiverReason: data.waiverReason }),
       },
       include: {
@@ -193,13 +195,16 @@ export class StudentPaymentsRepository {
     const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.paidAmount), 0);
     const totalPending = totalAmount - totalPaid;
 
-    const statusCounts = payments.reduce((acc, payment) => {
-      acc[payment.status] = (acc[payment.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const statusCounts = payments.reduce(
+      (acc, payment) => {
+        acc[payment.status] = (acc[payment.status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     const overdueCount = payments.filter(
-      payment => payment.status === 'PENDING' && payment.dueDate < new Date(),
+      (payment) => payment.status === 'PENDING' && payment.dueDate < new Date(),
     ).length;
 
     return {

@@ -298,5 +298,6 @@ export const DashboardSummarySwagger = () =>
   ApiResponse({
     status: HttpStatus.OK,
     type: DashboardSummaryResult,
-    description: 'Get comprehensive dashboard summary with aggregated statistics for all major resources including students, teachers, classrooms, subjects, departments, levels, admins, attendance, payments, and recent activities',
+    description:
+      'Get comprehensive dashboard summary with aggregated statistics for all major resources including students, teachers, classrooms, subjects, departments, levels, admins, attendance, payments, and recent activities',
   });

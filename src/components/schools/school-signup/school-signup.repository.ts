@@ -69,4 +69,4 @@ export class SchoolSignupRepository extends Repository<
       take: params?.take,
     }) as Promise<SchoolSignupRequestWithReviewer[]>;
   }
-} 
+}

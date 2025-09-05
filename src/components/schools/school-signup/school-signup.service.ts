@@ -1,6 +1,10 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SchoolSignupRepository } from './school-signup.repository';
-import { CreateSchoolSignupDto, UpdateSchoolSignupStatusDto, GetSchoolSignupRequestsDto } from './dto';
+import {
+  CreateSchoolSignupDto,
+  UpdateSchoolSignupStatusDto,
+  GetSchoolSignupRequestsDto,
+} from './dto';
 import { SchoolSignupRequestWithReviewer } from './types/school-signup';
 import { SchoolsService } from '../schools.service';
 import { SchoolSignupMessages } from './results/messages';
@@ -55,9 +59,11 @@ export class SchoolSignupService {
     return signupRequest;
   }
 
-  async getAllSignupRequests(filters?: GetSchoolSignupRequestsDto): Promise<SchoolSignupRequestWithReviewer[]> {
+  async getAllSignupRequests(
+    filters?: GetSchoolSignupRequestsDto,
+  ): Promise<SchoolSignupRequestWithReviewer[]> {
     const where: any = {};
-    
+
     // Apply status filter if provided
     if (filters?.status) {
       where.status = filters.status;

@@ -5,7 +5,8 @@ export const SchoolSignupMessages = {
     SIGNUP_REQUEST_UPDATED: 'School signup request updated successfully',
     SIGNUP_REQUEST_APPROVED: 'School signup request approved successfully',
     SIGNUP_REQUEST_REJECTED: 'School signup request rejected successfully',
-    SCHOOL_ACCOUNT_CREATED: 'School account created successfully. Admin credentials sent to the contact person.',
+    SCHOOL_ACCOUNT_CREATED:
+      'School account created successfully. Admin credentials sent to the contact person.',
   },
   FAILURE: {
     SCHOOL_CODE_EXISTS: 'School code already exists',
@@ -15,4 +16,4 @@ export const SchoolSignupMessages = {
     SCHOOL_CREATION_FAILED: 'Failed to create school account',
     ADMIN_CREATION_FAILED: 'Failed to create admin account',
   },
-}; 
+};

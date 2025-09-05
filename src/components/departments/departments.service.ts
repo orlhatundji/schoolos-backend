@@ -79,7 +79,11 @@ export class DepartmentsService {
     return department;
   }
 
-  async updateDepartment(userId: string, departmentId: string, updateDepartmentDto: UpdateDepartmentDto) {
+  async updateDepartment(
+    userId: string,
+    departmentId: string,
+    updateDepartmentDto: UpdateDepartmentDto,
+  ) {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -306,7 +310,9 @@ export class DepartmentsService {
     });
 
     if (headOfDepartment) {
-      throw new BadRequestException('Cannot delete department. It has associated head of department. Please reassign or remove all associated head of department first.');
+      throw new BadRequestException(
+        'Cannot delete department. It has associated head of department. Please reassign or remove all associated head of department first.',
+      );
     }
 
     // Check if department has associated subjects
@@ -315,7 +321,9 @@ export class DepartmentsService {
     });
 
     if (subjects) {
-      throw new BadRequestException('Cannot delete department. It has associated subjects. Please reassign or remove all associated subjects first.');
+      throw new BadRequestException(
+        'Cannot delete department. It has associated subjects. Please reassign or remove all associated subjects first.',
+      );
     }
 
     await this.prisma.department.delete({

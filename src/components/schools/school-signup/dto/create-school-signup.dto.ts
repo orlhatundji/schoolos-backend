@@ -49,9 +49,9 @@ export class SchoolAddressDto {
 }
 
 export class SchoolDetailsDto {
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Type of school',
-    enum: ['PRIMARY', 'SECONDARY', 'MIXED']
+    enum: ['PRIMARY', 'SECONDARY', 'MIXED'],
   })
   @IsEnum(['PRIMARY', 'SECONDARY', 'MIXED'])
   type: 'PRIMARY' | 'SECONDARY' | 'MIXED';
@@ -96,4 +96,4 @@ export class CreateSchoolSignupDto {
   @ValidateNested()
   @Type(() => SchoolDetailsDto)
   schoolDetails: SchoolDetailsDto;
-} 
+}

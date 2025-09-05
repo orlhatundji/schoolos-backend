@@ -11,19 +11,8 @@ import { MailModule } from '../../utils/mail/mail.module';
 import { RolesManagerModule } from '../roles-manager';
 
 @Module({
-  imports: [
-    PrismaModule,
-    UsersModule,
-    CounterModule,
-    MailModule,
-    RolesManagerModule,
-  ],
-  providers: [
-    SchoolsRepository,
-    SchoolsService,
-    SchoolSignupRepository,
-    SchoolSignupService,
-  ],
+  imports: [PrismaModule, UsersModule, CounterModule, MailModule, RolesManagerModule],
+  providers: [SchoolsRepository, SchoolsService, SchoolSignupRepository, SchoolSignupService],
   controllers: [SchoolSignupController],
   exports: [SchoolsService, SchoolSignupService],
 })

@@ -11,7 +11,10 @@ export class PaymentStructuresService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async createPaymentStructure(userId: string, createPaymentStructureDto: CreatePaymentStructureDto) {
+  async createPaymentStructure(
+    userId: string,
+    createPaymentStructureDto: CreatePaymentStructureDto,
+  ) {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -69,7 +72,11 @@ export class PaymentStructuresService {
     return paymentStructure;
   }
 
-  async updatePaymentStructure(userId: string, id: string, updatePaymentStructureDto: UpdatePaymentStructureDto) {
+  async updatePaymentStructure(
+    userId: string,
+    id: string,
+    updatePaymentStructureDto: UpdatePaymentStructureDto,
+  ) {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -81,14 +88,21 @@ export class PaymentStructuresService {
     }
 
     // Verify the payment structure belongs to the user's school
-    const existingPaymentStructure = await this.paymentStructuresRepository.findOne(id, user.schoolId);
+    const existingPaymentStructure = await this.paymentStructuresRepository.findOne(
+      id,
+      user.schoolId,
+    );
 
     if (!existingPaymentStructure) {
       throw new NotFoundException('Payment structure not found or access denied');
     }
 
     // Validate scope fields if provided
-    if (Object.keys(updatePaymentStructureDto).some(key => ['academicSessionId', 'termId', 'levelId', 'classArmId'].includes(key))) {
+    if (
+      Object.keys(updatePaymentStructureDto).some((key) =>
+        ['academicSessionId', 'termId', 'levelId', 'classArmId'].includes(key),
+      )
+    ) {
       await this.validateScopeFields(updatePaymentStructureDto, user.schoolId);
     }
 
@@ -113,7 +127,10 @@ export class PaymentStructuresService {
     }
 
     // Verify the payment structure belongs to the user's school
-    const existingPaymentStructure = await this.paymentStructuresRepository.findOne(id, user.schoolId);
+    const existingPaymentStructure = await this.paymentStructuresRepository.findOne(
+      id,
+      user.schoolId,
+    );
 
     if (!existingPaymentStructure) {
       throw new NotFoundException('Payment structure not found or access denied');
@@ -150,7 +167,10 @@ export class PaymentStructuresService {
     }
 
     // Get the payment structure
-    const paymentStructure = await this.paymentStructuresRepository.findOne(paymentStructureId, user.schoolId);
+    const paymentStructure = await this.paymentStructuresRepository.findOne(
+      paymentStructureId,
+      user.schoolId,
+    );
 
     if (!paymentStructure) {
       throw new NotFoundException('Payment structure not found or access denied');
@@ -208,7 +228,9 @@ export class PaymentStructuresService {
       });
 
       if (!academicSession) {
-        throw new BadRequestException('Academic session not found or does not belong to this school');
+        throw new BadRequestException(
+          'Academic session not found or does not belong to this school',
+        );
       }
     }
 

@@ -26,12 +26,17 @@ export class UsersService extends BaseService {
   async save(createUserDto: CreateUserDto) {
     await this.throwIfUserExists(createUserDto);
 
-    const { password, email, ...others } = createUserDto;
+    const { password, email, dateOfBirth, ...others } = createUserDto;
     const hashedPassword = await this.hasher.hash(password);
+    
+    // Convert dateOfBirth string to Date object if provided
+    const dateOfBirthDate = dateOfBirth ? new Date(dateOfBirth) : undefined;
+    
     const createdUser = await this.userRepository.create({
       ...others,
       email,
       password: hashedPassword,
+      dateOfBirth: dateOfBirthDate,
     });
     return createdUser;
   }

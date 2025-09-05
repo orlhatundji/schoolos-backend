@@ -70,7 +70,7 @@ export class StudentsService extends BaseService {
       type: UserType.STUDENT,
       schoolId: schoolId,
       mustUpdatePassword: true, // Force password change on first login
-      dateOfBirth: userData.dateOfBirth || new Date().toISOString(), // Provide default if not set
+      dateOfBirth: userData.dateOfBirth || new Date().toISOString().split('T')[0], // Provide default date string if not set
       email:
         userData.email ||
         `${userData.firstName.toLowerCase()}.${userData.lastName.toLowerCase()}@${schoolId}.student`, // Generate email if not provided

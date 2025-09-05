@@ -33,6 +33,9 @@ async function bootstrap() {
 
   app.enableCors(corsOptions);
 
+  // Set global API prefix for consistency
+  app.setGlobalPrefix('api');
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

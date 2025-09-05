@@ -41,9 +41,9 @@ export class SubjectInfoResult {
   @ApiProperty({ description: 'Department name', nullable: true })
   department: string | null;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Subject category',
-    enum: SubjectCategory
+    enum: SubjectCategory,
   })
   category: SubjectCategory;
 
@@ -53,9 +53,9 @@ export class SubjectInfoResult {
   @ApiProperty({ description: 'Number of students taking this subject' })
   studentCount: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Subject status',
-    enum: ['active', 'inactive']
+    enum: ['active', 'inactive'],
   })
   status: 'active' | 'inactive';
 }

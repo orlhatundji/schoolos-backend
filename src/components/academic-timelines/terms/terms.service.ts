@@ -48,7 +48,9 @@ export class TermsService extends BaseService {
     // Check if any subject terms have student enrollments
     for (const subjectTerm of subjectTerms) {
       if (subjectTerm.subjectTermStudents.length > 0) {
-        throw new BadRequestException('Cannot delete term. It has associated student enrollments. Please remove all student enrollments first.');
+        throw new BadRequestException(
+          'Cannot delete term. It has associated student enrollments. Please remove all student enrollments first.',
+        );
       }
     }
 

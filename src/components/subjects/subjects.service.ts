@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
@@ -22,9 +23,11 @@ export class SubjectsService {
       data: {
         name: createSubjectDto.name,
         category: createSubjectDto.category as any,
-        department: createSubjectDto.departmentId ? {
-          connect: { id: createSubjectDto.departmentId },
-        } : undefined,
+        department: createSubjectDto.departmentId
+          ? {
+              connect: { id: createSubjectDto.departmentId },
+            }
+          : undefined,
         school: {
           connect: { id: user.schoolId },
         },
@@ -65,7 +68,7 @@ export class SubjectsService {
       data: {
         ...(updateSubjectDto.name && { name: updateSubjectDto.name }),
         ...(updateSubjectDto.category && { category: updateSubjectDto.category as any }),
-        ...(updateSubjectDto.departmentId && { 
+        ...(updateSubjectDto.departmentId && {
           department: {
             connect: { id: updateSubjectDto.departmentId },
           },
@@ -112,9 +115,13 @@ export class SubjectsService {
 
     if (subjectUsage) {
       if (subjectUsage.subjectTermStudents.length > 0) {
-        throw new BadRequestException('Cannot delete subject. It has associated student enrollments. Please remove all student enrollments first.');
+        throw new BadRequestException(
+          'Cannot delete subject. It has associated student enrollments. Please remove all student enrollments first.',
+        );
       }
-      throw new BadRequestException('Cannot delete subject. It is being used in curriculum or assessments.');
+      throw new BadRequestException(
+        'Cannot delete subject. It is being used in curriculum or assessments.',
+      );
     }
 
     await this.prisma.subject.delete({

@@ -8,6 +8,7 @@ import {
   Delete,
   HttpStatus,
   UseGuards,
+  Put,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -49,13 +50,71 @@ export class UsersController {
     return [];
   }
 
+  @Put(':id')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: UserResult,
+    description: 'User updated successfully',
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid update data',
+  })
+  @CheckPolicies(new ManageUserPolicyHandler())
+  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const updatedUser = await this.usersService.update(id, updateUserDto);
+    return UserResult.from(updatedUser, {
+      status: HttpStatus.OK,
+      message: 'User updated successfully',
+    });
+  }
+
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: UserResult,
+    description: 'User partially updated successfully',
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid update data',
+  })
+  @CheckPolicies(new ManageUserPolicyHandler())
+  async partialUpdate(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    const updatedUser = await this.usersService.update(id, updateUserDto);
+    return UserResult.from(updatedUser, {
+      status: HttpStatus.OK,
+      message: 'User partially updated successfully',
+    });
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'User deleted successfully',
+  })
+  @CheckPolicies(new ManageUserPolicyHandler())
+  async remove(@Param('id') id: string) {
+    await this.usersService.remove(id);
+    return { success: true, message: 'User deleted successfully' };
+  }
+
+  @Put('by-student/:studentId')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: UserResult,
+    description: 'User updated successfully via student ID',
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid update data or student not found',
+  })
+  @CheckPolicies(new ManageUserPolicyHandler())
+  async updateByStudentId(
+    @Param('studentId') studentId: string, 
+    @Body() updateUserDto: UpdateUserDto
+  ) {
+    const updatedUser = await this.usersService.updateByStudentId(studentId, updateUserDto);
+    return UserResult.from(updatedUser, {
+      status: HttpStatus.OK,
+      message: 'User updated successfully',
+    });
   }
 }

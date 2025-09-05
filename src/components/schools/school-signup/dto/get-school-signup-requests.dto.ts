@@ -23,4 +23,4 @@ export class GetSchoolSignupRequestsDto {
   @IsOptional()
   @Transform(({ value }) => parseInt(value))
   limit?: number;
-} 
+}

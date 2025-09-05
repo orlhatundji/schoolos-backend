@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -42,14 +37,16 @@ export class ActivityLogInterceptor implements NestInterceptor {
       tap(async (result) => {
         try {
           const args = this.getMethodArgs(context);
-          
-          const entityId = typeof logOptions.entityId === 'function' 
-            ? logOptions.entityId(args) 
-            : logOptions.entityId;
 
-          const description = typeof logOptions.description === 'function'
-            ? logOptions.description(args)
-            : logOptions.description;
+          const entityId =
+            typeof logOptions.entityId === 'function'
+              ? logOptions.entityId(args)
+              : logOptions.entityId;
+
+          const description =
+            typeof logOptions.description === 'function'
+              ? logOptions.description(args)
+              : logOptions.description;
 
           const details = logOptions.details ? logOptions.details(args, result) : undefined;
 

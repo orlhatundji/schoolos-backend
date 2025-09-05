@@ -2,7 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 
 import { BaseService } from '../../common/base-service';
 import { PasswordHasher } from '../../utils/hasher';
+import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { UserMessages } from './results';
 import { User } from './types';
 import { UsersRepository } from './users.repository';
@@ -12,6 +14,7 @@ export class UsersService extends BaseService {
   constructor(
     private readonly userRepository: UsersRepository,
     private readonly hasher: PasswordHasher,
+    private readonly prisma: PrismaService,
   ) {
     super(UsersService.name);
   }
@@ -65,15 +68,46 @@ export class UsersService extends BaseService {
 
   async update(
     id: string,
-    updateObj: Partial<
-      Pick<User, 'password' | 'firstName' | 'lastName' | 'email' | 'mustUpdatePassword'>
-    >,
+    updateObj: UpdateUserDto,
   ) {
+    // Check if user exists
+    const existingUser = await this.userRepository.findById(id);
+    if (!existingUser) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Check for email/phone conflicts if updating those fields
+    if (updateObj.email || updateObj.phone) {
+      const whereClause = {
+        OR: [
+          updateObj.email ? { email: updateObj.email } : undefined,
+          updateObj.phone ? { phone: updateObj.phone } : undefined,
+        ].filter(Boolean),
+        id: { not: id }, // Exclude current user
+        schoolId: existingUser.schoolId, // Same school scope
+      };
+
+      const conflictingUser = await this.userRepository.findOne({ where: whereClause });
+      if (conflictingUser) {
+        throw new BadRequestException('Email or phone number already exists in this school');
+      }
+    }
+
+    // Hash password if provided
+    const updateData: any = { ...updateObj };
+    
+    if (updateObj.password) {
+      updateData.password = await this.hasher.hash(updateObj.password);
+    }
+    
+    // Convert dateOfBirth string to Date if provided
+    if (updateObj.dateOfBirth) {
+      updateData.dateOfBirth = new Date(updateObj.dateOfBirth);
+    }
+
     return this.userRepository.update(
       { id },
-      {
-        ...updateObj,
-      },
+      updateData,
     );
   }
 
@@ -86,7 +120,22 @@ export class UsersService extends BaseService {
     );
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async remove(id: string) {
+    return this.userRepository.delete({ id });
+  }
+
+  async updateByStudentId(studentId: string, updateObj: UpdateUserDto) {
+    // First, find the student to get the userId
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      select: { userId: true },
+    });
+
+    if (!student) {
+      throw new BadRequestException('Student not found');
+    }
+
+    // Now update the user using the userId
+    return this.update(student.userId, updateObj);
   }
 }

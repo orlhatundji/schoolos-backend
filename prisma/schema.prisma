@@ -93,6 +93,14 @@ enum PaymentCategory {
   OTHER
 }
 
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  GRADUATED
+  TRANSFERRED
+}
+
 // --- Address Management ---
 
 /**
@@ -540,11 +548,38 @@ model Student {
   studentAttendances    StudentAttendance[]
   studentPayments       StudentPayment[]
   classArmAsCaptain     ClassArm?              @relation("ClassArmCaptain") // Direct class captain relation
+  status                StudentStatus          @default(ACTIVE)
+  statusHistory         StudentStatusHistory[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?
 
   @@map("students")
+}
+
+/**
+ * StudentStatusHistory
+ * --------------------
+ * Tracks the history of student status changes for audit purposes.
+ * Each record represents a status transition with metadata about the change.
+ */
+model StudentStatusHistory {
+  id             String        @id @default(uuid())
+  studentId      String
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  previousStatus StudentStatus
+  newStatus      StudentStatus
+  reason         String?
+  effectiveDate  DateTime
+  notes          String?
+  changedBy      String        // User ID who made the change
+  changedAt      DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([studentId])
+  @@index([changedAt])
+  @@map("student_status_history")
 }
 
 // --- Academic Management ---

@@ -9,24 +9,29 @@ import { UpdateUserPasswordDto } from './dto';
 export class AdminService {
   constructor(private readonly resetPasswordService: ResetPasswordService) {}
 
-  create(createAdminDto: CreateAdminDto) {
-    return 'This action adds a new admin';
+  async create(createAdminDto: CreateAdminDto) {
+    // TODO: Implement admin creation logic
+    throw new Error('Admin creation not implemented yet');
   }
 
-  findAll() {
-    return `This action returns all admin`;
+  async findAll() {
+    // TODO: Implement admin listing logic
+    throw new Error('Admin listing not implemented yet');
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} admin`;
+  async findOne(id: number) {
+    // TODO: Implement admin retrieval logic
+    throw new Error(`Admin retrieval not implemented yet for ID: ${id}`);
   }
 
-  update(id: number, updateAdminDto: UpdateAdminDto) {
-    return `This action updates a #${id} admin`;
+  async update(id: number, updateAdminDto: UpdateAdminDto) {
+    // TODO: Implement admin update logic
+    throw new Error(`Admin update not implemented yet for ID: ${id}`);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} admin`;
+  async remove(id: number) {
+    // TODO: Implement admin removal logic
+    throw new Error(`Admin removal not implemented yet for ID: ${id}`);
   }
 
   async resetUserPassword(dto: UpdateUserPasswordDto): Promise<ResetPasswordByAdminResult> {

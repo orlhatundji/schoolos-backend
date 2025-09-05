@@ -62,7 +62,7 @@ export class CreateUserDto {
   @ApiProperty()
   @IsOptional()
   @IsUrl()
-  avatarUrl: string;
+  avatarUrl?: string;
 
   @ApiProperty()
   @IsOptional()

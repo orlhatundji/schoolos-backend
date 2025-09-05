@@ -106,9 +106,7 @@ export class BffAdminLevelService {
     });
 
     if (existingLevel) {
-      throw new ConflictException(
-        `Level with name '${createLevelDto.name}' already exists`,
-      );
+      throw new ConflictException(`Level with name '${createLevelDto.name}' already exists`);
     }
 
     // Check if level with same code already exists
@@ -123,9 +121,7 @@ export class BffAdminLevelService {
     });
 
     if (existingCode) {
-      throw new ConflictException(
-        `Level with code '${createLevelDto.code}' already exists`,
-      );
+      throw new ConflictException(`Level with code '${createLevelDto.code}' already exists`);
     }
 
     // Create the level
@@ -187,9 +183,7 @@ export class BffAdminLevelService {
       });
 
       if (nameConflict) {
-        throw new ConflictException(
-          `Level with name '${updateLevelDto.name}' already exists`,
-        );
+        throw new ConflictException(`Level with name '${updateLevelDto.name}' already exists`);
       }
     }
 
@@ -207,9 +201,7 @@ export class BffAdminLevelService {
       });
 
       if (codeConflict) {
-        throw new ConflictException(
-          `Level with code '${updateLevelDto.code}' already exists`,
-        );
+        throw new ConflictException(`Level with code '${updateLevelDto.code}' already exists`);
       }
     }
 

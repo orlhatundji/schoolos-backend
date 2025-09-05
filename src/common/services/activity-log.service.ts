@@ -46,7 +46,7 @@ export class ActivityLogService {
       });
 
       const userName = user ? `${user.firstName} ${user.lastName}` : undefined;
-      
+
       // Generate descriptive notification message
       const notificationMessage = this.generateNotificationMessage(
         data.action,

@@ -108,7 +108,10 @@ export class DropdownDataResult {
   @ApiProperty({ type: [DepartmentDropdownItemResult], description: 'List of departments' })
   departments: DepartmentDropdownItemResult[];
 
-  @ApiProperty({ type: [AcademicSessionDropdownItemResult], description: 'List of academic sessions' })
+  @ApiProperty({
+    type: [AcademicSessionDropdownItemResult],
+    description: 'List of academic sessions',
+  })
   academicSessions: AcademicSessionDropdownItemResult[];
 
   @ApiProperty({ type: [LevelDropdownItemResult], description: 'List of levels' })

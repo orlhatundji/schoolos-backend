@@ -101,6 +101,9 @@ export class BffAdminAdminService {
         return {
           id: adminUser.id,
           name: `${adminUser.firstName} ${adminUser.lastName}`,
+          email: adminUser.email || '',
+          phone: adminUser.phone,
+          avatar: adminUser.avatarUrl,
           role: adminUser.admin?.isSuper ? 'Super Admin' : 'Admin',
           department: null, // Admins don't belong to departments
           status,
@@ -115,6 +118,9 @@ export class BffAdminAdminService {
         return {
           id: hodUser.id,
           name: `${hodUser.firstName} ${hodUser.lastName}`,
+          email: hodUser.email || '',
+          phone: hodUser.phone,
+          avatar: hodUser.avatarUrl,
           role: 'HOD',
           department: hodDepartment ? `${hodDepartment.name} (${hodDepartment.code})` : null,
           status: 'active' as const,

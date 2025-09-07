@@ -277,6 +277,9 @@ export interface AdminStats {
 export interface AdminInfo {
   id: string;
   name: string;
+  email: string;
+  phone: string | null;
+  avatar: string | null;
   role: string;
   department: string | null;
   status: 'active' | 'inactive' | 'suspended';

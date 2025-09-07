@@ -12,5 +12,4 @@ export interface LogActivityOptions {
 
 export const LOG_ACTIVITY_KEY = 'logActivity';
 
-export const LogActivity = (options: LogActivityOptions) =>
-  SetMetadata(LOG_ACTIVITY_KEY, options);
+export const LogActivity = (options: LogActivityOptions) => SetMetadata(LOG_ACTIVITY_KEY, options);

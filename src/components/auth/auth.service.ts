@@ -36,6 +36,10 @@ export class AuthService extends BaseService {
     }
 
     const tokens: AuthTokens = await this._validate(password, student.user);
+
+    // Update last login timestamp
+    await this.userService.updateLastLoginAt(student.user.id);
+
     return { tokens, student };
   }
 
@@ -51,6 +55,10 @@ export class AuthService extends BaseService {
     }
 
     const tokens: AuthTokens = await this._validate(password, user);
+
+    // Update last login timestamp
+    await this.userService.updateLastLoginAt(user.id);
+
     return { tokens, user };
   }
 

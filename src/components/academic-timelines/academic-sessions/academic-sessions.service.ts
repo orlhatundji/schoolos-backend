@@ -16,7 +16,10 @@ export class AcademicSessionsService extends BaseService {
     super(AcademicSessionsService.name);
   }
 
-  async createAcademicSession(userId: string, dto: CreateAcademicSessionDto): Promise<AcademicSession> {
+  async createAcademicSession(
+    userId: string,
+    dto: CreateAcademicSessionDto,
+  ): Promise<AcademicSession> {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -24,7 +27,9 @@ export class AcademicSessionsService extends BaseService {
     });
 
     if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school. Only school users can create academic sessions.');
+      throw new BadRequestException(
+        'User not associated with a school. Only school users can create academic sessions.',
+      );
     }
 
     // Add schoolId to the DTO
@@ -44,11 +49,13 @@ export class AcademicSessionsService extends BaseService {
     });
 
     if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school. Only school users can view academic sessions.');
+      throw new BadRequestException(
+        'User not associated with a school. Only school users can view academic sessions.',
+      );
     }
 
     const academicSession = await this.academicSessionsRepository.findOne({
-      where: { 
+      where: {
         id,
         schoolId: user.schoolId,
       },
@@ -69,7 +76,9 @@ export class AcademicSessionsService extends BaseService {
     });
 
     if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school. Only school users can view academic sessions.');
+      throw new BadRequestException(
+        'User not associated with a school. Only school users can view academic sessions.',
+      );
     }
 
     return this.academicSessionsRepository.findAll({
@@ -88,7 +97,7 @@ export class AcademicSessionsService extends BaseService {
 
   async deleteAcademicSession(userId: string, id: string): Promise<AcademicSession> {
     await this.getAcademicSessionById(userId, id);
-    
+
     // Check if academic session has associated subject terms with student enrollments
     const subjectTerms = await this.prisma.subjectTerm.findMany({
       where: { academicSessionId: id },
@@ -100,7 +109,9 @@ export class AcademicSessionsService extends BaseService {
     // Check if any subject terms have student enrollments
     for (const subjectTerm of subjectTerms) {
       if (subjectTerm.subjectTermStudents.length > 0) {
-        throw new BadRequestException('Cannot delete academic session. It has associated student enrollments. Please remove all student enrollments first.');
+        throw new BadRequestException(
+          'Cannot delete academic session. It has associated student enrollments. Please remove all student enrollments first.',
+        );
       }
     }
 

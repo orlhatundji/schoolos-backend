@@ -48,6 +48,4 @@ export class CreateAcademicSessionDto {
   @IsBoolean()
   @IsOptional()
   isCurrent?: boolean;
-
-
 }

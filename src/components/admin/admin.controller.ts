@@ -26,27 +26,27 @@ import { UpdateUserPasswordDto } from './dto';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
-  @Post()
+  @Post('create')
   create(@Body() createAdminDto: CreateAdminDto) {
     return this.adminService.create(createAdminDto);
   }
 
-  @Get()
+  @Get('list')
   findAll() {
     return this.adminService.findAll();
   }
 
-  @Get(':id')
+  @Get('details/:id')
   findOne(@Param('id') id: string) {
     return this.adminService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Patch('update/:id')
   update(@Param('id') id: string, @Body() updateAdminDto: UpdateAdminDto) {
     return this.adminService.update(+id, updateAdminDto);
   }
 
-  @Delete(':id')
+  @Delete('delete/:id')
   remove(@Param('id') id: string) {
     return this.adminService.remove(+id);
   }

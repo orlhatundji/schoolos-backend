@@ -93,6 +93,14 @@ enum PaymentCategory {
   OTHER
 }
 
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  GRADUATED
+  TRANSFERRED
+}
+
 // --- Address Management ---
 
 /**
@@ -172,6 +180,7 @@ model School {
   assessments      Assessment[]
   paymentStructures PaymentStructure[]
   userActivities    UserActivity[]
+  bulkImportJobs    BulkImportJob[]
 
   @@map("schools")
 }
@@ -396,6 +405,7 @@ model User {
   admin    Admin?
   systemAdmin SystemAdmin?
   activities UserActivity[]
+  bulkImportJobs BulkImportJob[]
 
   // School-scoped uniqueness constraints
   @@unique([email, schoolId])
@@ -540,11 +550,38 @@ model Student {
   studentAttendances    StudentAttendance[]
   studentPayments       StudentPayment[]
   classArmAsCaptain     ClassArm?              @relation("ClassArmCaptain") // Direct class captain relation
+  status                StudentStatus          @default(ACTIVE)
+  statusHistory         StudentStatusHistory[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?
 
   @@map("students")
+}
+
+/**
+ * StudentStatusHistory
+ * --------------------
+ * Tracks the history of student status changes for audit purposes.
+ * Each record represents a status transition with metadata about the change.
+ */
+model StudentStatusHistory {
+  id             String        @id @default(uuid())
+  studentId      String
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  previousStatus StudentStatus
+  newStatus      StudentStatus
+  reason         String?
+  effectiveDate  DateTime
+  notes          String?
+  changedBy      String        // User ID who made the change
+  changedAt      DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([studentId])
+  @@index([changedAt])
+  @@map("student_status_history")
 }
 
 // --- Academic Management ---
@@ -1040,4 +1077,56 @@ model UserActivity {
   @@index([severity])
   @@index([category])
   @@map("user_activities")
+}
+
+enum BulkImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model BulkImportJob {
+  id                String            @id @default(cuid())
+  schoolId          String
+  userId            String
+  fileName          String
+  fileSize          Int
+  totalRecords      Int
+  processedRecords  Int               @default(0)
+  successfulRecords Int               @default(0)
+  failedRecords     Int               @default(0)
+  status            BulkImportStatus  @default(PENDING)
+  options           Json?
+  errors            Json              @default("[]")
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  school            School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  importErrors      BulkImportError[]
+
+  @@index([schoolId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("bulk_import_jobs")
+}
+
+model BulkImportError {
+  id            String          @id @default(cuid())
+  jobId         String
+  rowNumber     Int
+  fieldName     String?
+  errorMessage  String
+  fieldValue    String?
+  createdAt     DateTime        @default(now())
+
+  job           BulkImportJob   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([rowNumber])
+  @@map("bulk_import_errors")
 }

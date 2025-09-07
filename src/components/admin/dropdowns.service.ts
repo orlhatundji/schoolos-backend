@@ -45,14 +45,7 @@ export class DropdownsService {
     };
 
     // Fetch all data in parallel for better performance
-    const [
-      teachers,
-      departments,
-      academicSessions,
-      levels,
-      terms,
-      subjects,
-    ] = await Promise.all([
+    const [teachers, departments, academicSessions, levels, terms, subjects] = await Promise.all([
       // Teachers
       this.prisma.teacher.findMany({
         where: teacherWhere,
@@ -70,10 +63,7 @@ export class DropdownsService {
             },
           },
         },
-        orderBy: [
-          { user: { firstName: 'asc' } },
-          { user: { lastName: 'asc' } },
-        ],
+        orderBy: [{ user: { firstName: 'asc' } }, { user: { lastName: 'asc' } }],
       }),
 
       // Departments
@@ -119,10 +109,7 @@ export class DropdownsService {
             },
           },
         },
-        orderBy: [
-          { academicSession: { academicYear: 'desc' } },
-          { name: 'asc' },
-        ],
+        orderBy: [{ academicSession: { academicYear: 'desc' } }, { name: 'asc' }],
       }),
 
       // Subjects

@@ -43,9 +43,9 @@ export class DepartmentInfoResult {
   @ApiProperty({ description: 'Number of teachers in this department' })
   teachersCount: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Department status',
-    enum: ['active', 'archived']
+    enum: ['active', 'archived'],
   })
   status: 'active' | 'archived';
 

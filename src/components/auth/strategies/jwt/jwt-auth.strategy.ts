@@ -27,6 +27,7 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, StrategyEnum.JWT
       sub: user.id,
       email: user.email,
       type: user.type,
+      schoolId: user.schoolId,
     };
   }
 

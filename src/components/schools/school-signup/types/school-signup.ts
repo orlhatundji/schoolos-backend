@@ -47,4 +47,4 @@ export interface UpdateSchoolSignupStatusDto {
   action: 'approve' | 'reject';
   notes?: string;
   rejectionReason?: string;
-} 
+}

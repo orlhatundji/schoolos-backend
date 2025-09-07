@@ -1,3 +1,4 @@
+import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
@@ -7,11 +8,31 @@ import { StudentsRepository } from './students.repository';
 import { RolesManagerModule } from '../roles-manager';
 import { SchoolsModule } from '../schools';
 import { CounterModule } from '../../common/counter';
+import { PasswordGenerator } from '../../utils/password/password.generator';
+import { PasswordHasher } from '../../utils/hasher/hasher';
+import { BulkUploadController, BulkUploadService, TemplateService, StudentImportProcessor } from './bulk-upload';
 
 @Module({
-  imports: [UsersModule, PrismaModule, RolesManagerModule, CounterModule, SchoolsModule],
-  controllers: [StudentsController],
-  providers: [StudentsService, StudentsRepository],
-  exports: [StudentsService],
+  imports: [
+    UsersModule, 
+    PrismaModule, 
+    RolesManagerModule, 
+    CounterModule, 
+    SchoolsModule,
+    BullModule.registerQueue({
+      name: 'student-import',
+    }),
+  ],
+  controllers: [StudentsController, BulkUploadController],
+  providers: [
+    StudentsService, 
+    StudentsRepository, 
+    PasswordGenerator, 
+    PasswordHasher,
+    BulkUploadService,
+    TemplateService,
+    StudentImportProcessor,
+  ],
+  exports: [StudentsService, BulkUploadService],
 })
 export class StudentsModule {}

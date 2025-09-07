@@ -23,7 +23,7 @@ import {
   TeacherStatsResult,
 } from './results';
 
-@Controller('api/admin/teachers')
+@Controller('admin/teachers')
 @ApiTags('Admin - Teachers')
 @ApiBearerAuth(StrategyEnum.JWT)
 export class AdminTeacherController {

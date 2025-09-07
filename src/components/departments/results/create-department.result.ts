@@ -33,7 +33,9 @@ export class CreateDepartmentResult {
     this.id = data.id;
     this.name = data.name;
     this.code = data.code;
-    this.hodName = data.hod?.teacher?.user ? `${data.hod.teacher.user.firstName} ${data.hod.teacher.user.lastName}` : null;
+    this.hodName = data.hod?.teacher?.user
+      ? `${data.hod.teacher.user.firstName} ${data.hod.teacher.user.lastName}`
+      : null;
     this.hodId = data.hodId;
     this.schoolId = data.schoolId;
     this.createdAt = data.createdAt;

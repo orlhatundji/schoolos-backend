@@ -11,9 +11,9 @@ export class CreateSubjectResult {
   @ApiProperty({ description: 'Subject name' })
   name: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Subject category',
-    enum: SubjectCategory
+    enum: SubjectCategory,
   })
   category: SubjectCategory;
 

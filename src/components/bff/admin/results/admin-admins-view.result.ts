@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+
 import { AdminsViewData } from '../types';
 
 export class AdminStatsResult {
@@ -25,15 +26,24 @@ export class AdminInfoResult {
   @ApiProperty({ description: 'Admin full name' })
   name: string;
 
+  @ApiProperty({ description: 'Admin email address' })
+  email: string;
+
+  @ApiProperty({ description: 'Admin phone number', nullable: true })
+  phone: string | null;
+
+  @ApiProperty({ description: 'Admin avatar URL', nullable: true })
+  avatar: string | null;
+
   @ApiProperty({ description: 'Admin role' })
   role: string;
 
   @ApiProperty({ description: 'Department (null for admins)', nullable: true })
   department: string | null;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Admin status',
-    enum: ['active', 'inactive', 'suspended']
+    enum: ['active', 'inactive', 'suspended'],
   })
   status: 'active' | 'inactive' | 'suspended';
 

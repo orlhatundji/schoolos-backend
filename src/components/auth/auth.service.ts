@@ -1,18 +1,19 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { User, UserType } from '@prisma/client';
+
 import { BaseService } from '../../common/base-service';
-import { UsersService } from '../users/users.service';
-import { JwtAuthService } from './strategies/jwt/jwt-auth.service';
-import { LoginDto } from './dto/login.dto';
-import { AuthMessages } from './results';
 import { PasswordHasher } from '../../utils/hasher';
-import { AuthTokens } from './strategies/jwt/types';
-import { LoginStudentDto } from './dto/login-student.dto';
 import { StudentsService } from '../students/students.service';
 import { Student } from '../students/types';
 import { TeachersService } from '../teachers/teachers.service';
 import { Teacher } from '../teachers/types';
+import { UsersService } from '../users/users.service';
+import { LoginStudentDto } from './dto/login-student.dto';
+import { LoginDto } from './dto/login.dto';
 import { TokensService } from './modules/refresh-token/tokens.service';
+import { AuthMessages } from './results';
+import { JwtAuthService } from './strategies/jwt/jwt-auth.service';
+import { AuthTokens } from './strategies/jwt/types';
 
 @Injectable()
 export class AuthService extends BaseService {
@@ -46,7 +47,9 @@ export class AuthService extends BaseService {
     return { tokens, student };
   }
 
-  async login(dto: LoginDto): Promise<{ tokens: AuthTokens; user?: User; student?: Student; teacher?: Teacher }> {
+  async login(
+    dto: LoginDto,
+  ): Promise<{ tokens: AuthTokens; user?: User; student?: Student; teacher?: Teacher }> {
     const { email, password } = dto;
     const user = await this.userService.findByEmail(email);
     if (!user) {

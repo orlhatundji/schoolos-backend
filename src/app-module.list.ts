@@ -15,6 +15,7 @@ import { TerminusModule } from '@nestjs/terminus';
 import { SchoolsModule } from './components/schools/schools.module';
 import { UsersModule } from './components/users/users.module';
 import { BffAdminModule } from './components/bff/admin/bff-admin.module';
+import { TeacherModule } from './components/bff/teacher/teacher.module';
 import { SubjectsModule } from './components/subjects/subjects.module';
 import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
@@ -52,6 +53,7 @@ export const AppModuleList = [
   RolesManagerModule,
   AdminModule,
   BffAdminModule,
+  TeacherModule,
   SubjectsModule,
   DepartmentsModule,
   LevelsModule,

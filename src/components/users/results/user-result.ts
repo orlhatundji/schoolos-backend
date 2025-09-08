@@ -1,7 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseResultWithData, ResultOptions } from '../../../common/results';
 import { User } from '../types';
-import { UserType } from '@prisma/client';
+import { UserType, School } from '@prisma/client';
 
 export class UserEntity implements Omit<User, 'password'> {
   @ApiProperty()
@@ -36,6 +36,9 @@ export class UserEntity implements Omit<User, 'password'> {
 
   @ApiProperty()
   schoolId: string;
+
+  @ApiPropertyOptional()
+  school?: School;
 
   @ApiProperty()
   addressId: string | null;

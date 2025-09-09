@@ -7,7 +7,9 @@ import {
   TeacherSubjectInfo, 
   RecentActivity, 
   UpcomingEvent,
-  TeacherProfile
+  TeacherProfile,
+  ClassDetails,
+  ClassStudentInfo
 } from './types';
 
 @Injectable()
@@ -128,31 +130,37 @@ export class TeacherService {
     };
   }
 
-  // Get teacher's classes
+  // Get teacher's classes (only classes where teacher is the class teacher)
   async getTeacherClasses(userId: string): Promise<TeacherClassInfo[]> {
     const teacher = await this.getTeacherWithRelations(userId);
     
-    const allClasses = [
-      ...teacher.classArmSubjectTeachers.map((cast) => cast.classArm),
-      ...teacher.classArmTeachers.map((cat) => cat.classArm),
-      ...teacher.classArmsAsTeacher,
-    ];
-
-    const uniqueClasses = allClasses.filter(
-      (classArm, index, self) => index === self.findIndex((c) => c.id === classArm.id),
-    );
-
-    return uniqueClasses.map((classArm) => ({
+    // Only return classes where the teacher is the actual class teacher
+    return teacher.classArmsAsTeacher.map((classArm) => ({
       id: classArm.id,
       name: classArm.name,
       level: classArm.level.name,
-      subject: teacher.classArmSubjectTeachers
-        .find((cast) => cast.classArmId === classArm.id)
-        ?.subject.name || 'Class Teacher',
+      subject: 'Class Teacher', // Always "Class Teacher" since this endpoint only returns class teacher assignments
       studentsCount: classArm.students.length,
       nextClassTime: this.getNextClassTime(classArm.id),
       location: (classArm as any).location || undefined,
-      isClassTeacher: teacher.classArmsAsTeacher.some((cat) => cat.id === classArm.id),
+      isClassTeacher: true, // Always true since this endpoint only returns class teacher assignments
+    }));
+  }
+
+  // Get teacher's subject assignments (classes where teacher teaches specific subjects)
+  async getTeacherSubjectAssignments(userId: string): Promise<TeacherClassInfo[]> {
+    const teacher = await this.getTeacherWithRelations(userId);
+    
+    // Return classes where the teacher teaches specific subjects
+    return teacher.classArmSubjectTeachers.map((cast) => ({
+      id: cast.classArm.id,
+      name: cast.classArm.name,
+      level: cast.classArm.level.name,
+      subject: cast.subject.name,
+      studentsCount: cast.classArm.students.length,
+      nextClassTime: this.getNextClassTime(cast.classArm.id),
+      location: (cast.classArm as any).location || undefined,
+      isClassTeacher: teacher.classArmsAsTeacher.some((cat) => cat.id === cast.classArm.id),
     }));
   }
 
@@ -343,6 +351,185 @@ export class TeacherService {
       pending: 3,
       completed: 12,
     };
+  }
+
+  // Get class details for class teachers
+  async getClassDetails(userId: string, level: string, classArm: string): Promise<ClassDetails> {
+    const teacher = await this.getTeacherWithRelations(userId);
+    
+    // Find the specific class arm
+    const classArmData = await this.prisma.classArm.findFirst({
+      where: {
+        name: classArm,
+        level: {
+          name: level,
+        },
+        schoolId: teacher.user.schoolId,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+        department: true,
+        classTeacher: {
+          include: {
+            user: true,
+          },
+        },
+        captain: {
+          include: {
+            user: true,
+          },
+        },
+        students: {
+          include: {
+            user: true,
+          },
+        },
+        studentAttendances: {
+          where: {
+            date: {
+              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+            },
+          },
+        },
+      },
+    });
+
+    if (!classArmData) {
+      throw new Error('Class not found');
+    }
+
+    // Verify the teacher is the class teacher for this class
+    if (classArmData.classTeacherId !== teacher.id) {
+      throw new Error('You are not the class teacher for this class');
+    }
+
+    // Calculate statistics
+    const students = classArmData.students;
+    const maleStudents = students.filter(s => s.user.gender === 'MALE').length;
+    const femaleStudents = students.filter(s => s.user.gender === 'FEMALE').length;
+    
+    // Calculate average age
+    const currentYear = new Date().getFullYear();
+    const totalAge = students.reduce((sum, student) => {
+      if (student.user.dateOfBirth) {
+        const birthYear = new Date(student.user.dateOfBirth).getFullYear();
+        return sum + (currentYear - birthYear);
+      }
+      return sum;
+    }, 0);
+    const averageAge = students.length > 0 ? Math.round(totalAge / students.length) : 0;
+
+    // Calculate attendance rate
+    const totalAttendanceRecords = classArmData.studentAttendances.length;
+    const presentRecords = classArmData.studentAttendances.filter(
+      attendance => attendance.status === 'PRESENT'
+    ).length;
+    const attendanceRate = totalAttendanceRecords > 0 
+      ? Math.round((presentRecords / totalAttendanceRecords) * 100) 
+      : 0;
+
+    // Get recent activities (mock data for now)
+    const recentActivities = [
+      {
+        id: '1',
+        type: 'attendance',
+        title: 'Daily attendance marked',
+        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: '2',
+        type: 'assessment',
+        title: 'Mathematics test conducted',
+        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+
+    return {
+      id: classArmData.id,
+      name: classArmData.name,
+      level: classArmData.level.name,
+      department: classArmData.department?.name,
+      classTeacher: {
+        id: classArmData.classTeacher.id,
+        name: `${classArmData.classTeacher.user.firstName} ${classArmData.classTeacher.user.lastName}`,
+        email: classArmData.classTeacher.user.email || '',
+      },
+      captain: classArmData.captain ? {
+        id: classArmData.captain.id,
+        name: `${classArmData.captain.user.firstName} ${classArmData.captain.user.lastName}`,
+        studentNo: classArmData.captain.studentNo,
+      } : undefined,
+      stats: {
+        totalStudents: students.length,
+        maleStudents,
+        femaleStudents,
+        averageAge,
+        attendanceRate,
+        averageScore: 78.5, // Mock data - would calculate from actual assessments
+      },
+      recentActivities,
+    };
+  }
+
+  // Get students in a specific class for class teachers
+  async getClassStudents(userId: string, level: string, classArm: string): Promise<ClassStudentInfo[]> {
+    const teacher = await this.getTeacherWithRelations(userId);
+    
+    // Find the specific class arm
+    const classArmData = await this.prisma.classArm.findFirst({
+      where: {
+        name: classArm,
+        level: {
+          name: level,
+        },
+        schoolId: teacher.user.schoolId,
+        deletedAt: null,
+      },
+      include: {
+        students: {
+          include: {
+            user: true,
+            guardian: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!classArmData) {
+      throw new Error('Class not found');
+    }
+
+    // Verify the teacher is the class teacher for this class
+    if (classArmData.classTeacherId !== teacher.id) {
+      throw new Error('You are not the class teacher for this class');
+    }
+
+    return classArmData.students.map(student => {
+      return {
+        id: student.id,
+        studentNo: student.studentNo,
+        firstName: student.user.firstName,
+        lastName: student.user.lastName,
+        fullName: `${student.user.firstName} ${student.user.lastName}`,
+        email: student.user.email || undefined,
+        gender: student.user.gender,
+        dateOfBirth: student.user.dateOfBirth?.toISOString(),
+        stateOfOrigin: student.user.stateOfOrigin || undefined,
+        guardianName: student.guardian ? 
+          `${student.guardian.user.firstName} ${student.guardian.user.lastName}` : 
+          undefined,
+        guardianPhone: student.guardian?.user.phone || undefined,
+        guardianEmail: student.guardian?.user.email || undefined,
+        admissionDate: student.admissionDate.toISOString(),
+        status: student.status,
+        avatarUrl: student.user.avatarUrl || undefined,
+      };
+    });
   }
 
   private getNextClassTime(classId: string): string | undefined {

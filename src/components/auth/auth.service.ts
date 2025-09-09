@@ -65,7 +65,6 @@ export class AuthService extends BaseService {
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);
 
-
     // Return appropriate data based on user type
     if (user.type === UserType.TEACHER) {
       const teacher = await this.teachersService.getTeacherByUserId(user.id);

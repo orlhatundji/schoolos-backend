@@ -16,12 +16,12 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '23'
         
     - name: Setup pnpm
       uses: pnpm/action-setup@v2
       with:
-        version: 8
+        version: 9
         
     - name: Get pnpm store directory
       shell: bash
@@ -38,6 +38,9 @@ jobs:
       
     - name: Install dependencies
       run: pnpm install --no-frozen-lockfile
+      
+    - name: Generate Prisma client
+      run: pnpm run db-generate
       
     - name: Build application
       run:  NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
@@ -57,6 +60,9 @@ jobs:
           
           # Install dependencies
           pnpm install --no-frozen-lockfile
+          
+          # Generate Prisma client
+          pnpm run db-generate
           
           # Build the application
           NODE_OPTIONS="--max-old-space-size=2048" pnpm run build

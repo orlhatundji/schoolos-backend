@@ -284,6 +284,19 @@ export class StudentsService extends BaseService {
     return this.studentsRepository.findOneByStudentNo(studentNo);
   }
 
+  getStudentByUserId(userId: string): Promise<Student> {
+    return this.studentsRepository.findOne({
+      where: { userId },
+      include: { 
+        user: {
+          include: {
+            school: true,
+          },
+        },
+      },
+    });
+  }
+
   findAll() {
     return this.studentsRepository.findAll();
   }

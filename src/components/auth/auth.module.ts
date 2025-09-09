@@ -5,6 +5,7 @@ import { PasswordHasher } from '../../utils/hasher';
 import { Encryptor } from '../../utils/encryptor';
 import { UsersModule } from '../users/users.module';
 import { StudentsModule } from '../students/students.module';
+import { TeachersModule } from '../teachers/teachers.module';
 import { AuthController } from './auth.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { TokensService } from './modules/refresh-token/tokens.service';
@@ -18,7 +19,7 @@ import { MailModule } from '../../utils/mail/mail.module';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 
 @Module({
-  imports: [JwtAuthModule, UsersModule, StudentsModule, PrismaModule, MailModule, ConfigModule],
+  imports: [JwtAuthModule, UsersModule, StudentsModule, TeachersModule, PrismaModule, MailModule, ConfigModule],
   providers: [
     AuthService,
     PasswordHasher,

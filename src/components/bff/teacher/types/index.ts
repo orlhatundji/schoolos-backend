@@ -51,6 +51,57 @@ export interface TeacherClassInfo {
   isClassTeacher: boolean;
 }
 
+// Class details for class teachers
+export interface ClassDetails {
+  id: string;
+  name: string;
+  level: string;
+  department?: string;
+  classTeacher: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  captain?: {
+    id: string;
+    name: string;
+    studentNo: string;
+  };
+  stats: {
+    totalStudents: number;
+    maleStudents: number;
+    femaleStudents: number;
+    averageAge: number;
+    attendanceRate: number;
+    averageScore: number;
+  };
+  recentActivities: {
+    id: string;
+    type: string;
+    title: string;
+    date: string;
+  }[];
+}
+
+// Student information for class teachers
+export interface ClassStudentInfo {
+  id: string;
+  studentNo: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email?: string;
+  gender: string;
+  dateOfBirth?: string;
+  stateOfOrigin?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  admissionDate: string;
+  status: string;
+  avatarUrl?: string;
+}
+
 // Subject information
 export interface TeacherSubjectInfo {
   id: string;

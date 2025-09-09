@@ -4,3 +4,5 @@ export * from './teacher-subjects.result';
 export * from './teacher-activities.result';
 export * from './teacher-events.result';
 export * from './teacher-profile.result';
+export * from './class-details.result';
+export * from './class-students.result';

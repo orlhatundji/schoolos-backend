@@ -65,7 +65,6 @@ export class AuthService extends BaseService {
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);
 
-
     // Return appropriate data based on user type
     if (user.type === UserType.TEACHER) {
       const teacher = await this.teachersService.getTeacherByUserId(user.id);
@@ -78,12 +77,10 @@ export class AuthService extends BaseService {
         return { tokens, student };
       }
     }
-      
+
     // Fallback to regular user data
     return { tokens, user };
   }
-
-   
 
   private async _validate(password: string, user: User) {
     const isValidPassword = await this.hasher.compare(password, user.password);

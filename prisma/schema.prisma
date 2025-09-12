@@ -178,6 +178,7 @@ model School {
   departments      Department[]
   classArms        ClassArm[]
   assessments      Assessment[]
+  assessmentStructures AssessmentStructure[]
   paymentStructures PaymentStructure[]
   userActivities    UserActivity[]
   bulkImportJobs    BulkImportJob[]
@@ -692,6 +693,31 @@ model CurriculumItemRating {
   deletedAt        DateTime?
 
   @@map("curriculum_item_ratings")
+}
+
+/**
+ * AssessmentStructure
+ * -------------------
+ * Defines the standard assessment structure for a school (e.g., Test 1 (20%), Test 2 (20%), Exam (60%)).
+ * Each school can customize their assessment structure, but it must total 100%.
+ * This provides consistency across all subjects and students in the school.
+ */
+model AssessmentStructure {
+  id          String    @id @default(uuid())
+  schoolId    String
+  school      School    @relation(fields: [schoolId], references: [id])
+  name        String    // e.g., "Test 1", "Test 2", "Exam"
+  description String?   // Optional description
+  maxScore    Int       // Maximum score for this assessment type (must total 100 across all types)
+  isExam      Boolean   @default(false) // Whether this is an exam or regular assessment
+  order       Int       // Display order for UI
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([schoolId, name])
+  @@map("assessment_structures")
 }
 
 /**

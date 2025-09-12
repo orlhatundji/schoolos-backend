@@ -287,7 +287,7 @@ export class StudentsService extends BaseService {
   getStudentByUserId(userId: string): Promise<Student> {
     return this.studentsRepository.findOne({
       where: { userId },
-      include: { 
+      include: {
         user: {
           include: {
             school: true,

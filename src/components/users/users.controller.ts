@@ -108,8 +108,8 @@ export class UsersController {
   })
   @CheckPolicies(new ManageUserPolicyHandler())
   async updateByStudentId(
-    @Param('studentId') studentId: string, 
-    @Body() updateUserDto: UpdateUserDto
+    @Param('studentId') studentId: string,
+    @Body() updateUserDto: UpdateUserDto,
   ) {
     const updatedUser = await this.usersService.updateByStudentId(studentId, updateUserDto);
     return UserResult.from(updatedUser, {

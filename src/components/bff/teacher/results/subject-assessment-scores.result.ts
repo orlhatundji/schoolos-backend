@@ -8,6 +8,15 @@ export class SubjectAssessmentScoresResult {
       id: string;
       name: string;
     };
+    academicSession: {
+      id: string;
+      name: string;
+      isCurrent: boolean;
+    };
+    currentTerm: {
+      id: string;
+      name: string;
+    };
     students: {
       id: string;
       studentNo: string;

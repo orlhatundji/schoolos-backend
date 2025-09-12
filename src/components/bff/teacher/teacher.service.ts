@@ -727,8 +727,11 @@ export class TeacherService {
         );
 
         const totalScore = assessments.reduce((sum, assessment) => sum + assessment.score, 0);
+        const totalMaxScore = assessments.reduce((sum, assessment) => sum + assessment.maxScore, 0);
         const averageScore =
           assessments.length > 0 ? Math.round(totalScore / assessments.length) : 0;
+        const totalPercentage =
+          totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
 
         return {
           id: student.id,
@@ -738,7 +741,7 @@ export class TeacherService {
           assessments,
           totalScore,
           averageScore,
-          grade: this.calculateGradeFromModel(averageScore, gradingModel?.model),
+          grade: this.calculateGradeFromModel(totalPercentage, gradingModel?.model),
         };
       }),
     );
@@ -761,6 +764,25 @@ export class TeacherService {
           : 0,
     };
 
+    // Get current academic session and term information
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: {
+        isCurrent: true,
+        schoolId: teacher.user.schoolId,
+      },
+      include: {
+        terms: {
+          where: {
+            deletedAt: null,
+            isCurrent: true,
+          },
+        },
+      },
+    });
+
+    // Get current term using the isCurrent field
+    const currentTerm = currentSession?.terms?.[0];
+
     return {
       subjectId: subjectTeacher.subject.id,
       subjectName: subjectTeacher.subject.name,
@@ -768,8 +790,17 @@ export class TeacherService {
         id: subjectTeacher.teacher.id,
         name: `${subjectTeacher.teacher.user.firstName} ${subjectTeacher.teacher.user.lastName}`,
       },
-      students: studentsWithScores,
+      academicSession: {
+        id: currentSession?.id,
+        name: currentSession?.academicYear,
+        isCurrent: currentSession?.isCurrent,
+      },
+      currentTerm: {
+        id: currentTerm?.id,
+        name: currentTerm?.name,
+      },
       classStats,
+      students: studentsWithScores,
     };
   }
 

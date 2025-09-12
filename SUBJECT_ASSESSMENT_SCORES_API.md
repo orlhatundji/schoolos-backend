@@ -45,6 +45,16 @@ GET /api/teacher/subject-assessment-scores?level=JSS3&classArm=A&subjectName=Mat
       "id": "teacher-456",
       "name": "John Doe"
     },
+    "academicSession": {
+      "id": "session-2024-2025",
+      "name": "2024/2025 Academic Session",
+      "isCurrent": true
+    },
+    "currentTerm": {
+      "id": "term-first",
+      "name": "First Term",
+      "order": 1
+    },
     "students": [
              {
                "id": "student-789",
@@ -100,8 +110,17 @@ GET /api/teacher/subject-assessment-scores?level=JSS3&classArm=A&subjectName=Mat
 
 #### Subject Information
 - `subjectName`: Name of the subject (e.g., Mathematics, English)
-- `subjectName`: Name of the subject
 - `teacher`: Information about the teacher assigned to this subject
+
+#### Academic Context
+- `academicSession`: Current academic session information
+  - `id`: Academic session ID
+  - `name`: Academic session name (e.g., "2024/2025 Academic Session")
+  - `isCurrent`: Whether this is the current academic session
+- `currentTerm`: Current term information
+  - `id`: Term ID
+  - `name`: Term name (e.g., "First Term", "Second Term", "Third Term")
+  - `order`: Term order (1, 2, 3)
 
 #### Student Assessment Data
 - `id`: Student ID

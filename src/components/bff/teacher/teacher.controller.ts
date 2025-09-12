@@ -254,9 +254,7 @@ export class TeacherController {
     return new TeacherProfileResult(profile);
   }
 
-
   // Student Assessment Score Management Endpoints
-
   @Post('student-assessment-scores')
   @ApiOperation({ summary: 'Create a new student assessment score' })
   @ApiResponse({ status: 201, description: 'Assessment score created successfully' })

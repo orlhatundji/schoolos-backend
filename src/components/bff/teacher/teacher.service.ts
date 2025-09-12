@@ -139,6 +139,7 @@ export class TeacherService {
   }
 
   // Get teacher's classes (only classes where teacher is the class teacher)
+  // Get teacher's classes (only classes where teacher is the class teacher)
   async getTeacherClasses(userId: string): Promise<TeacherClassInfo[]> {
     const teacher = await this.getTeacherWithRelations(userId);
 

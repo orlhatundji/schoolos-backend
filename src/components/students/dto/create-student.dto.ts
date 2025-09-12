@@ -1,5 +1,21 @@
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsDate, IsOptional, IsString, IsUUID, ValidateNested, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface, IsEnum, IsEmail, IsMobilePhone, IsUrl, IsDateString } from 'class-validator';
+import {
+  IsArray,
+  IsDate,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateNested,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  IsEnum,
+  IsEmail,
+  IsMobilePhone,
+  IsUrl,
+  IsDateString,
+} from 'class-validator';
 
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -10,20 +26,22 @@ import { CreateUserDto } from '../../users/dto';
 export class EmergencyContactValidator implements ValidatorConstraintInterface {
   validate(value: any, args: ValidationArguments) {
     if (!value) return true; // Optional field
-    
+
     // Allow array of strings (phone numbers)
     if (Array.isArray(value)) {
-      return value.every(item => typeof item === 'string' && item.length > 0);
+      return value.every((item) => typeof item === 'string' && item.length > 0);
     }
-    
+
     // Allow object with required fields
     if (typeof value === 'object' && value !== null) {
-      return typeof value.name === 'string' && 
-             typeof value.phone === 'string' && 
-             value.name.length > 0 && 
-             value.phone.length > 0;
+      return (
+        typeof value.name === 'string' &&
+        typeof value.phone === 'string' &&
+        value.name.length > 0 &&
+        value.phone.length > 0
+      );
     }
-    
+
     return false;
   }
 
@@ -137,12 +155,13 @@ export class MedicalInfoDto {
   @IsOptional()
   medicalConditions?: string[];
 
-  @ApiProperty({ 
-    description: 'Emergency contact information - can be object with full details or array of phone numbers',
+  @ApiProperty({
+    description:
+      'Emergency contact information - can be object with full details or array of phone numbers',
     oneOf: [
       { $ref: '#/components/schemas/EmergencyContactDto' },
-      { type: 'array', items: { type: 'string' } }
-    ]
+      { type: 'array', items: { type: 'string' } },
+    ],
   })
   @IsOptional()
   @Validate(EmergencyContactValidator)

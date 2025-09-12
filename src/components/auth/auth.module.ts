@@ -19,7 +19,15 @@ import { MailModule } from '../../utils/mail/mail.module';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 
 @Module({
-  imports: [JwtAuthModule, UsersModule, StudentsModule, TeachersModule, PrismaModule, MailModule, ConfigModule],
+  imports: [
+    JwtAuthModule,
+    UsersModule,
+    StudentsModule,
+    TeachersModule,
+    PrismaModule,
+    MailModule,
+    ConfigModule,
+  ],
   providers: [
     AuthService,
     PasswordHasher,

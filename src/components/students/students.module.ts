@@ -10,14 +10,19 @@ import { SchoolsModule } from '../schools';
 import { CounterModule } from '../../common/counter';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { PasswordHasher } from '../../utils/hasher/hasher';
-import { BulkUploadController, BulkUploadService, TemplateService, StudentImportProcessor } from './bulk-upload';
+import {
+  BulkUploadController,
+  BulkUploadService,
+  TemplateService,
+  StudentImportProcessor,
+} from './bulk-upload';
 
 @Module({
   imports: [
-    UsersModule, 
-    PrismaModule, 
-    RolesManagerModule, 
-    CounterModule, 
+    UsersModule,
+    PrismaModule,
+    RolesManagerModule,
+    CounterModule,
     SchoolsModule,
     BullModule.registerQueue({
       name: 'student-import',
@@ -25,9 +30,9 @@ import { BulkUploadController, BulkUploadService, TemplateService, StudentImport
   ],
   controllers: [StudentsController, BulkUploadController],
   providers: [
-    StudentsService, 
-    StudentsRepository, 
-    PasswordGenerator, 
+    StudentsService,
+    StudentsRepository,
+    PasswordGenerator,
     PasswordHasher,
     BulkUploadService,
     TemplateService,

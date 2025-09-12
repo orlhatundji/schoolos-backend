@@ -39,15 +39,19 @@ export class StudentImportProcessor extends WorkerHost {
         this.logger.log(`Processing batch ${i + 1}/${batches.length} with ${batch.length} records`);
 
         const batchResults = await this.processBatch(batch, schoolId, jobId, options);
-        
+
         totalProcessed += batch.length;
-        totalSuccessful += batchResults.filter(r => r.success).length;
-        totalFailed += batchResults.filter(r => !r.success).length;
-        allErrors.push(...batchResults.filter(r => !r.success).map(r => ({
-          row: records.indexOf(r.record) + 1,
-          error: r.error,
-          record: r.record,
-        })));
+        totalSuccessful += batchResults.filter((r) => r.success).length;
+        totalFailed += batchResults.filter((r) => !r.success).length;
+        allErrors.push(
+          ...batchResults
+            .filter((r) => !r.success)
+            .map((r) => ({
+              row: records.indexOf(r.record) + 1,
+              error: r.error,
+              record: r.record,
+            })),
+        );
 
         // Update job progress
         await this.updateJobProgress(jobId, {
@@ -68,7 +72,7 @@ export class StudentImportProcessor extends WorkerHost {
 
         // Small delay between batches to prevent overwhelming the database
         if (i < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
       }
 
@@ -80,7 +84,9 @@ export class StudentImportProcessor extends WorkerHost {
         errors: allErrors,
       });
 
-      this.logger.log(`Completed bulk import job ${jobId}: ${totalSuccessful} successful, ${totalFailed} failed`);
+      this.logger.log(
+        `Completed bulk import job ${jobId}: ${totalSuccessful} successful, ${totalFailed} failed`,
+      );
 
       return {
         jobId,
@@ -91,7 +97,7 @@ export class StudentImportProcessor extends WorkerHost {
       };
     } catch (error) {
       this.logger.error(`Error in bulk import job ${jobId}:`, error);
-      
+
       // Mark job as failed
       await this.updateJobStatus(jobId, 'FAILED', {
         errors: [{ error: error.message, details: error.stack }],
@@ -159,10 +165,10 @@ export class StudentImportProcessor extends WorkerHost {
 
         // Transform record to match CreateStudentDto structure
         const createStudentDto = this.transformRecordToCreateStudentDto(record);
-        
+
         // Create student
         const student = await this.studentsService.create(createStudentDto, schoolId);
-        
+
         results.push({
           success: true,
           student,
@@ -318,7 +324,9 @@ export class StudentImportProcessor extends WorkerHost {
 
   private isValidDate(dateString: string): boolean {
     const date = new Date(dateString);
-    return date instanceof Date && !isNaN(date.getTime()) && !!dateString.match(/^\d{4}-\d{2}-\d{2}$/);
+    return (
+      date instanceof Date && !isNaN(date.getTime()) && !!dateString.match(/^\d{4}-\d{2}-\d{2}$/)
+    );
   }
 
   private transformRecordToCreateStudentDto(record: any): any {
@@ -335,7 +343,13 @@ export class StudentImportProcessor extends WorkerHost {
 
     // Build guardianInformation object if any guardian fields are provided
     let guardianInformation = undefined;
-    if (guardianFirstName || guardianLastName || guardianEmail || guardianPhone || guardianRelationship) {
+    if (
+      guardianFirstName ||
+      guardianLastName ||
+      guardianEmail ||
+      guardianPhone ||
+      guardianRelationship
+    ) {
       guardianInformation = {
         firstName: guardianFirstName,
         lastName: guardianLastName,
@@ -343,9 +357,9 @@ export class StudentImportProcessor extends WorkerHost {
         phone: guardianPhone,
         relationship: guardianRelationship,
       };
-      
+
       // Remove undefined values
-      Object.keys(guardianInformation).forEach(key => {
+      Object.keys(guardianInformation).forEach((key) => {
         if (guardianInformation[key] === undefined) {
           delete guardianInformation[key];
         }
@@ -367,7 +381,7 @@ export class StudentImportProcessor extends WorkerHost {
 
   private async mapClassNameToId(className: string, schoolId: string): Promise<string | null> {
     if (!className) return null;
-    
+
     try {
       // Find all class arms for this school to search through
       const classArms = await this.prisma.classArm.findMany({
@@ -381,7 +395,7 @@ export class StudentImportProcessor extends WorkerHost {
       });
 
       // Look for exact match with format "Level Name Class Name"
-      const matchingClass = classArms.find(ca => {
+      const matchingClass = classArms.find((ca) => {
         const fullName = `${ca.level.name} ${ca.name}`;
         return fullName.toLowerCase() === className.toLowerCase();
       });

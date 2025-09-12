@@ -22,6 +22,9 @@ export class TermEntity implements Term {
   @ApiProperty()
   deletedAt: Date | null;
 
+  @ApiProperty()
+  isCurrent: boolean;
+
   public static from(term: Term): TermEntity {
     return Object.assign(new TermEntity(), term);
   }

@@ -29,7 +29,14 @@ export class AuthResult extends BaseResultWithData {
   @ApiProperty({ type: () => AuthResultData })
   public data: AuthResultData;
 
-  public static from({ user, student, teacher, tokens, message, status }: IAuthResultInput): AuthResult {
+  public static from({
+    user,
+    student,
+    teacher,
+    tokens,
+    message,
+    status,
+  }: IAuthResultInput): AuthResult {
     if (!user && !student && !teacher) {
       throw new Error('User, student, or teacher must be provided');
     }

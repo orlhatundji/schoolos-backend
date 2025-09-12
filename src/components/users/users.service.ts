@@ -28,10 +28,10 @@ export class UsersService extends BaseService {
 
     const { password, email, dateOfBirth, ...others } = createUserDto;
     const hashedPassword = await this.hasher.hash(password);
-    
+
     // Convert dateOfBirth string to Date object if provided
     const dateOfBirthDate = dateOfBirth ? new Date(dateOfBirth) : undefined;
-    
+
     const createdUser = await this.userRepository.create({
       ...others,
       email,
@@ -71,10 +71,7 @@ export class UsersService extends BaseService {
     return this.userRepository.findById(id);
   }
 
-  async update(
-    id: string,
-    updateObj: UpdateUserDto,
-  ) {
+  async update(id: string, updateObj: UpdateUserDto) {
     // Check if user exists
     const existingUser = await this.userRepository.findById(id);
     if (!existingUser) {
@@ -100,20 +97,17 @@ export class UsersService extends BaseService {
 
     // Hash password if provided
     const updateData: any = { ...updateObj };
-    
+
     if (updateObj.password) {
       updateData.password = await this.hasher.hash(updateObj.password);
     }
-    
+
     // Convert dateOfBirth string to Date if provided
     if (updateObj.dateOfBirth) {
       updateData.dateOfBirth = new Date(updateObj.dateOfBirth);
     }
 
-    return this.userRepository.update(
-      { id },
-      updateData,
-    );
+    return this.userRepository.update({ id }, updateData);
   }
 
   async updateLastLoginAt(id: string) {

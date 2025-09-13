@@ -330,6 +330,7 @@ GET /api/teacher/subject-assessment-scores?level=JSS3&classArm=A&subjectName=Mat
 }
 ```
 
+
 ### DELETE /api/teacher/student-assessment-scores/:id
 
 **Description**: Delete a student assessment score (soft delete)

@@ -1,22 +1,23 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Query,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
+  Patch,
+  Post,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiQuery, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
 import { LogActivity } from '../../../common/decorators/log-activity.decorator';
 import { ActivityLogInterceptor } from '../../../common/interceptors/activity-log.interceptor';
 import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
+import { CreateStudentAssessmentScoreDto, UpdateStudentAssessmentScoreDto } from './dto';
 import {
   ClassDetailsResult,
   ClassStudentsResult,
@@ -29,7 +30,6 @@ import {
   TeacherSubjectsResult,
 } from './results';
 import { TeacherService } from './teacher.service';
-import { CreateStudentAssessmentScoreDto, UpdateStudentAssessmentScoreDto } from './dto';
 import { TeacherDashboardSwagger } from './teacher.swagger';
 
 @Controller('teacher')

@@ -35,7 +35,9 @@ export class BulkUploadService extends BaseService {
       // 1. Validate file
       const fileValidation = await this.validateFile(file);
       if (!fileValidation.isValid) {
-        throw new BadRequestException(`File validation failed: ${fileValidation.errors.join(', ')}`);
+        throw new BadRequestException(
+          `File validation failed: ${fileValidation.errors.join(', ')}`,
+        );
       }
 
       // 2. Parse file content
@@ -47,10 +49,24 @@ export class BulkUploadService extends BaseService {
 
       // 3. Create job record
       const jobId = this.generateJobId();
-      const job = await this.createJobRecord(jobId, schoolId, userId, file, parseResult.records.length, options);
+      const job = await this.createJobRecord(
+        jobId,
+        schoolId,
+        userId,
+        file,
+        parseResult.records.length,
+        options,
+      );
 
       // 4. Queue processing job
-      await this.queueProcessingJob(jobId, schoolId, userId, file.originalname, parseResult.records, options);
+      await this.queueProcessingJob(
+        jobId,
+        schoolId,
+        userId,
+        file.originalname,
+        parseResult.records,
+        options,
+      );
 
       return {
         jobId,
@@ -80,7 +96,8 @@ export class BulkUploadService extends BaseService {
       throw new BadRequestException('Job not found');
     }
 
-    const percentage = job.totalRecords > 0 ? Math.round((job.processedRecords / job.totalRecords) * 100) : 0;
+    const percentage =
+      job.totalRecords > 0 ? Math.round((job.processedRecords / job.totalRecords) * 100) : 0;
 
     return {
       jobId: job.id,
@@ -117,7 +134,9 @@ export class BulkUploadService extends BaseService {
     // Check file size (10MB limit)
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      errors.push(`File size (${Math.round(file.size / 1024 / 1024)}MB) exceeds maximum allowed size (10MB)`);
+      errors.push(
+        `File size (${Math.round(file.size / 1024 / 1024)}MB) exceeds maximum allowed size (10MB)`,
+      );
     }
 
     // Check file type
@@ -132,7 +151,9 @@ export class BulkUploadService extends BaseService {
 
     // Check file extension
     const allowedExtensions = ['.csv', '.xls', '.xlsx'];
-    const fileExtension = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
+    const fileExtension = file.originalname
+      .toLowerCase()
+      .substring(file.originalname.lastIndexOf('.'));
     if (!allowedExtensions.includes(fileExtension)) {
       errors.push(`Invalid file extension. Allowed extensions: ${allowedExtensions.join(', ')}`);
     }
@@ -177,13 +198,17 @@ export class BulkUploadService extends BaseService {
         .pipe(csv())
         .on('data', (row) => {
           rowNumber++;
-          
+
           // Skip empty rows (rows where all fields are empty or undefined)
-          const isEmptyRow = !row || Object.values(row).every(value => value === undefined || value === null || value === '');
+          const isEmptyRow =
+            !row ||
+            Object.values(row).every(
+              (value) => value === undefined || value === null || value === '',
+            );
           if (isEmptyRow) {
             return;
           }
-          
+
           try {
             const record = this.transformCsvRowToStudentRecord(row, rowNumber);
             if (record) {
@@ -220,13 +245,14 @@ export class BulkUploadService extends BaseService {
       // Skip header row
       for (let i = 1; i < jsonData.length; i++) {
         const row = jsonData[i] as any[];
-        
+
         // Skip empty rows (rows where all cells are empty or undefined)
-        const isEmptyRow = !row || row.every(cell => cell === undefined || cell === null || cell === '');
+        const isEmptyRow =
+          !row || row.every((cell) => cell === undefined || cell === null || cell === '');
         if (isEmptyRow) {
           continue;
         }
-        
+
         try {
           const record = this.transformExcelRowToStudentRecord(row, i + 1);
           if (record) {
@@ -256,7 +282,7 @@ export class BulkUploadService extends BaseService {
     // Support both className (new) and classArmId (legacy) for backward compatibility
     const className = row.className || row['Class Name'] || row['class_name'];
     const classArmId = row.classArmId || row['Class Arm ID'] || row['class_arm_id'];
-    
+
     const record: StudentRecordDto = {
       firstName: row.firstName || row['First Name'] || row['first_name'],
       lastName: row.lastName || row['Last Name'] || row['last_name'],
@@ -267,11 +293,18 @@ export class BulkUploadService extends BaseService {
       email: row.email || row['Email'] || row['EMAIL'],
       phone: (row.phone || row['Phone'] || row['PHONE'])?.toString(),
       admissionDate: row.admissionDate || row['Admission Date'] || row['admission_date'],
-      guardianFirstName: row.guardianFirstName || row['Guardian First Name'] || row['guardian_first_name'],
-      guardianLastName: row.guardianLastName || row['Guardian Last Name'] || row['guardian_last_name'],
+      guardianFirstName:
+        row.guardianFirstName || row['Guardian First Name'] || row['guardian_first_name'],
+      guardianLastName:
+        row.guardianLastName || row['Guardian Last Name'] || row['guardian_last_name'],
       guardianEmail: row.guardianEmail || row['Guardian Email'] || row['guardian_email'],
-      guardianPhone: (row.guardianPhone || row['Guardian Phone'] || row['guardian_phone'])?.toString(),
-      guardianRelationship: row.guardianRelationship || row['Guardian Relationship'] || row['guardian_relationship'],
+      guardianPhone: (
+        row.guardianPhone ||
+        row['Guardian Phone'] ||
+        row['guardian_phone']
+      )?.toString(),
+      guardianRelationship:
+        row.guardianRelationship || row['Guardian Relationship'] || row['guardian_relationship'],
     };
 
     // Validate required fields with detailed error messages
@@ -279,7 +312,8 @@ export class BulkUploadService extends BaseService {
     if (!record.firstName) missingFields.push('firstName');
     if (!record.lastName) missingFields.push('lastName');
     if (!record.gender) missingFields.push('gender');
-    if ((!record.classArmId || record.classArmId === 'PLACEHOLDER') && !record.className) missingFields.push('className or classArmId');
+    if ((!record.classArmId || record.classArmId === 'PLACEHOLDER') && !record.className)
+      missingFields.push('className or classArmId');
 
     if (missingFields.length > 0) {
       throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
@@ -306,7 +340,9 @@ export class BulkUploadService extends BaseService {
     }
 
     if (record.admissionDate && !this.isValidDate(record.admissionDate)) {
-      throw new Error(`Invalid admission date format: ${record.admissionDate}. Use YYYY-MM-DD format`);
+      throw new Error(
+        `Invalid admission date format: ${record.admissionDate}. Use YYYY-MM-DD format`,
+      );
     }
 
     return record;
@@ -336,7 +372,8 @@ export class BulkUploadService extends BaseService {
     if (!record.firstName) missingFields.push('firstName');
     if (!record.lastName) missingFields.push('lastName');
     if (!record.gender) missingFields.push('gender');
-    if ((!record.classArmId || record.classArmId === 'PLACEHOLDER') && !record.className) missingFields.push('className or classArmId');
+    if ((!record.classArmId || record.classArmId === 'PLACEHOLDER') && !record.className)
+      missingFields.push('className or classArmId');
 
     if (missingFields.length > 0) {
       throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
@@ -363,7 +400,9 @@ export class BulkUploadService extends BaseService {
     }
 
     if (record.admissionDate && !this.isValidDate(record.admissionDate)) {
-      throw new Error(`Invalid admission date format: ${record.admissionDate}. Use YYYY-MM-DD format`);
+      throw new Error(
+        `Invalid admission date format: ${record.admissionDate}. Use YYYY-MM-DD format`,
+      );
     }
 
     return record;
@@ -455,16 +494,16 @@ export class BulkUploadService extends BaseService {
 
   private isValidPhone(phone: string): boolean {
     if (!phone || typeof phone !== 'string') return false;
-    
+
     // Remove all non-digit characters except + at the beginning
     const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
-    
+
     // More flexible phone validation:
     // - Must start with + (optional) followed by digits
     // - Must be between 7 and 15 digits total (international standard)
     // - Can start with country code
     const phoneRegex = /^[\+]?[1-9]\d{6,14}$/;
-    
+
     return phoneRegex.test(cleanPhone);
   }
 
@@ -472,14 +511,14 @@ export class BulkUploadService extends BaseService {
     if (!dateString || typeof dateString !== 'string') return false;
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(dateString)) return false;
-    
+
     const date = new Date(dateString);
     return date instanceof Date && !isNaN(date.getTime());
   }
 
   private convertExcelDate(value: any): string | undefined {
     if (!value) return undefined;
-    
+
     // If it's already a string in YYYY-MM-DD format, return as is
     if (typeof value === 'string') {
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -487,31 +526,31 @@ export class BulkUploadService extends BaseService {
         return value;
       }
     }
-    
+
     // If it's a number (Excel serial date), convert it
     if (typeof value === 'number') {
       // Excel serial date: days since 1900-01-01 (with leap year bug)
       // JavaScript Date: milliseconds since 1970-01-01
       const excelEpoch = new Date(1900, 0, 1); // January 1, 1900
       const jsDate = new Date(excelEpoch.getTime() + (value - 2) * 24 * 60 * 60 * 1000);
-      
+
       // Format as YYYY-MM-DD
       const year = jsDate.getFullYear();
       const month = String(jsDate.getMonth() + 1).padStart(2, '0');
       const day = String(jsDate.getDate()).padStart(2, '0');
-      
+
       return `${year}-${month}-${day}`;
     }
-    
+
     // If it's a Date object, format it
     if (value instanceof Date) {
       const year = value.getFullYear();
       const month = String(value.getMonth() + 1).padStart(2, '0');
       const day = String(value.getDate()).padStart(2, '0');
-      
+
       return `${year}-${month}-${day}`;
     }
-    
+
     // If it's a string that's not in YYYY-MM-DD format, try to parse it
     if (typeof value === 'string') {
       const parsedDate = new Date(value);
@@ -519,11 +558,11 @@ export class BulkUploadService extends BaseService {
         const year = parsedDate.getFullYear();
         const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
         const day = String(parsedDate.getDate()).padStart(2, '0');
-        
+
         return `${year}-${month}-${day}`;
       }
     }
-    
+
     return undefined;
   }
 
@@ -538,12 +577,17 @@ export class BulkUploadService extends BaseService {
       other: [] as any[],
     };
 
-    errors.forEach(error => {
+    errors.forEach((error) => {
       const errorMsg = error.error.toLowerCase();
       if (errorMsg.includes('missing required fields')) {
         errorGroups.missingFields.push(error);
       } else if (errorMsg.includes('invalid') || errorMsg.includes('format')) {
-        if (errorMsg.includes('email') || errorMsg.includes('phone') || errorMsg.includes('date') || errorMsg.includes('gender')) {
+        if (
+          errorMsg.includes('email') ||
+          errorMsg.includes('phone') ||
+          errorMsg.includes('date') ||
+          errorMsg.includes('gender')
+        ) {
           errorGroups.formatErrors.push(error);
         } else {
           errorGroups.invalidValues.push(error);
@@ -558,7 +602,7 @@ export class BulkUploadService extends BaseService {
     // Missing fields section
     if (errorGroups.missingFields.length > 0) {
       summary += `🔴 MISSING REQUIRED FIELDS (${errorGroups.missingFields.length} rows):\n`;
-      errorGroups.missingFields.forEach(error => {
+      errorGroups.missingFields.forEach((error) => {
         summary += `   • Row ${error.row}: ${error.error}\n`;
       });
       summary += `   💡 Solution: Ensure all required fields (firstName, lastName, gender, classArmId) are filled in these rows.\n\n`;
@@ -567,7 +611,7 @@ export class BulkUploadService extends BaseService {
     // Format errors section
     if (errorGroups.formatErrors.length > 0) {
       summary += `🔴 FORMAT ERRORS (${errorGroups.formatErrors.length} rows):\n`;
-      errorGroups.formatErrors.forEach(error => {
+      errorGroups.formatErrors.forEach((error) => {
         summary += `   • Row ${error.row}: ${error.error}\n`;
       });
       summary += `   💡 Solution: Check the format requirements:\n`;
@@ -580,7 +624,7 @@ export class BulkUploadService extends BaseService {
     // Invalid values section
     if (errorGroups.invalidValues.length > 0) {
       summary += `🔴 INVALID VALUES (${errorGroups.invalidValues.length} rows):\n`;
-      errorGroups.invalidValues.forEach(error => {
+      errorGroups.invalidValues.forEach((error) => {
         summary += `   • Row ${error.row}: ${error.error}\n`;
       });
       summary += `   💡 Solution: Check the values in these rows and ensure they meet the requirements.\n\n`;
@@ -589,7 +633,7 @@ export class BulkUploadService extends BaseService {
     // Other errors section
     if (errorGroups.other.length > 0) {
       summary += `🔴 OTHER ERRORS (${errorGroups.other.length} rows):\n`;
-      errorGroups.other.forEach(error => {
+      errorGroups.other.forEach((error) => {
         summary += `   • Row ${error.row}: ${error.error}\n`;
       });
       summary += `\n`;
@@ -607,7 +651,7 @@ export class BulkUploadService extends BaseService {
 
   private async mapClassNameToId(className: string, schoolId: string): Promise<string | null> {
     if (!className) return null;
-    
+
     try {
       // Try to find class by name pattern: "Level Name Class Name" (e.g., "Grade 1 A")
       const classArm = await this.prisma.classArm.findFirst({
@@ -634,7 +678,7 @@ export class BulkUploadService extends BaseService {
       });
 
       // Look for exact match with format "Level Name Class Name"
-      const matchingClass = classArms.find(ca => {
+      const matchingClass = classArms.find((ca) => {
         const fullName = `${ca.level.name} ${ca.name}`;
         return fullName.toLowerCase() === className.toLowerCase();
       });

@@ -267,6 +267,7 @@ async function main() {
         data: {
           name,
           academicSessionId: session.id,
+          isCurrent: session.isCurrent && name === 'First Term', // Mark first term of current session as current
         },
       });
       terms.push(term);
@@ -288,6 +289,7 @@ async function main() {
 
   console.log('Creating class arms...');
   const classArms = [];
+  const currentSessionForClassArms = sessions.find((s) => s.isCurrent);
   for (const level of levels) {
     for (const arm of ['A', 'B', 'C']) {
       const dept = faker.helpers.arrayElement(departments);
@@ -297,7 +299,7 @@ async function main() {
           levelId: level.id,
           departmentId: dept.id,
           schoolId: school.id,
-          academicSessionId: faker.helpers.arrayElement(sessions).id,
+          academicSessionId: currentSessionForClassArms.id, // Always use current session for class arms
         },
       });
       classArms.push(classArm);
@@ -342,13 +344,27 @@ async function main() {
   // Subjects + Curriculum
   const subjects = [];
   const subjectTerms = [];
+
+  // Define predictable subject names for easier testing
+  const subjectNames = {
+    Science: ['Mathematics', 'Physics', 'Chemistry', 'Biology'],
+    Arts: ['English Language', 'Literature', 'History', 'Geography'],
+    Commercial: ['Economics', 'Accounting', 'Business Studies', 'Commerce'],
+  };
+
   for (const dept of departments) {
-    for (let i = 0; i < 3; i++) {
-      const name = `${faker.word.adjective()} ${faker.word.noun()}`;
+    const deptSubjects = subjectNames[dept.name] || [
+      `${dept.name} Subject 1`,
+      `${dept.name} Subject 2`,
+      `${dept.name} Subject 3`,
+    ];
+
+    for (const subjectName of deptSubjects) {
       const subject = await prisma.subject.create({
         data: {
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          category: faker.helpers.arrayElement(['CORE', 'GENERAL', 'VOCATIONAL']),
+          name: subjectName,
+          category:
+            dept.name === 'Science' ? 'CORE' : dept.name === 'Arts' ? 'GENERAL' : 'VOCATIONAL',
           schoolId: school.id,
           departmentId: dept.id,
         },
@@ -589,17 +605,16 @@ async function main() {
   }
 
   console.log('Creating subject assessments for students...');
-  // Subject assessments - Optimized to create less data
-  // Only create assessments for current session and a subset of students
+  // Subject assessments - Create comprehensive data for all students and subjects
   const currentSession = sessions.find((s) => s.isCurrent);
   const currentSessionTerms = terms.filter((t) => t.academicSessionId === currentSession?.id);
   const currentSubjectTerms = subjectTerms.filter((st) =>
     currentSessionTerms.some((term) => term.id === st.termId),
   );
 
-  // Only create assessments for first 5 students and first 3 subjects to reduce data
-  const studentsForAssessments = students.slice(0, 5);
-  const subjectsForAssessments = currentSubjectTerms.slice(0, 3);
+  // Create assessments for ALL students and ALL subjects in current session
+  const studentsForAssessments = students; // All students
+  const subjectsForAssessments = currentSubjectTerms; // All subjects in current session
 
   for (const student of studentsForAssessments) {
     for (const subjectTerm of subjectsForAssessments) {
@@ -736,7 +751,10 @@ async function main() {
   }
 
   console.log(
-    `✅ Created assessments for ${studentsForAssessments.length} students and ${subjectsForAssessments.length} subjects`,
+    `✅ Created comprehensive assessments for ${studentsForAssessments.length} students and ${subjectsForAssessments.length} subjects`,
+  );
+  console.log(
+    `📊 Total assessment records created: ${studentsForAssessments.length * subjectsForAssessments.length * 4} (4 assessments per student-subject combination)`,
   );
 
   console.log('Creating payment structures...');

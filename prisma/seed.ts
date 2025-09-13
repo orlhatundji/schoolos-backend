@@ -626,25 +626,6 @@ async function main() {
         },
       });
 
-<<<<<<< Updated upstream
-      const assessments = [
-        {
-          name: 'PRACTICAL',
-          score: faker.number.int({ min: 5, max: 20 }),
-          isExam: false,
-        },
-        {
-          name: 'MID TERM TEST',
-          score: faker.number.int({ min: 10, max: 30 }),
-          isExam: false,
-        },
-        {
-          name: 'FINAL EXAMINATION',
-          score: faker.number.int({ min: 30, max: 60 }),
-          isExam: true,
-        },
-      ];
-=======
       // Get the subject name from the original subjects array
       const subject = subjects.find((s) => s.id === subjectTerm.subjectId);
       const subjectName = subject ? subject.name.toLowerCase() : 'unknown';
@@ -727,7 +708,6 @@ async function main() {
           },
         ];
       }
->>>>>>> Stashed changes
 
       const created = await Promise.all(
         assessments.map((a) =>

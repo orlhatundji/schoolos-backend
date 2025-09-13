@@ -611,6 +611,7 @@ async function main() {
         },
       });
 
+<<<<<<< Updated upstream
       const assessments = [
         {
           name: 'PRACTICAL',
@@ -628,6 +629,90 @@ async function main() {
           isExam: true,
         },
       ];
+=======
+      // Get the subject name from the original subjects array
+      const subject = subjects.find((s) => s.id === subjectTerm.subjectId);
+      const subjectName = subject ? subject.name.toLowerCase() : 'unknown';
+      let assessments = [];
+
+      if (
+        subjectName.includes('mathematics') ||
+        subjectName.includes('physics') ||
+        subjectName.includes('chemistry')
+      ) {
+        // Science subjects get practical assessments
+        assessments = [
+          {
+            name: 'Assignment 1',
+            score: faker.number.int({ min: 8, max: 15 }),
+            isExam: false,
+          },
+          {
+            name: 'Practical Test',
+            score: faker.number.int({ min: 10, max: 20 }),
+            isExam: false,
+          },
+          {
+            name: 'Mid Term Test',
+            score: faker.number.int({ min: 15, max: 25 }),
+            isExam: false,
+          },
+          {
+            name: 'Final Examination',
+            score: faker.number.int({ min: 30, max: 50 }),
+            isExam: true,
+          },
+        ];
+      } else if (subjectName.includes('english') || subjectName.includes('literature')) {
+        // Language subjects get different assessment types
+        assessments = [
+          {
+            name: 'Essay Assignment',
+            score: faker.number.int({ min: 10, max: 18 }),
+            isExam: false,
+          },
+          {
+            name: 'Oral Test',
+            score: faker.number.int({ min: 8, max: 15 }),
+            isExam: false,
+          },
+          {
+            name: 'Mid Term Test',
+            score: faker.number.int({ min: 12, max: 22 }),
+            isExam: false,
+          },
+          {
+            name: 'Final Examination',
+            score: faker.number.int({ min: 25, max: 45 }),
+            isExam: true,
+          },
+        ];
+      } else {
+        // Other subjects get standard assessments
+        assessments = [
+          {
+            name: 'Assignment 1',
+            score: faker.number.int({ min: 8, max: 15 }),
+            isExam: false,
+          },
+          {
+            name: 'Quiz',
+            score: faker.number.int({ min: 5, max: 12 }),
+            isExam: false,
+          },
+          {
+            name: 'Mid Term Test',
+            score: faker.number.int({ min: 15, max: 25 }),
+            isExam: false,
+          },
+          {
+            name: 'Final Examination',
+            score: faker.number.int({ min: 30, max: 50 }),
+            isExam: true,
+          },
+        ];
+      }
+>>>>>>> Stashed changes
 
       const created = await Promise.all(
         assessments.map((a) =>

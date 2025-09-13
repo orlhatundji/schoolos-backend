@@ -1,16 +1,16 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../../../prisma';
 import {
-  TeacherDashboardData,
-  TeacherClassInfo,
-  TeacherSubjectInfo,
-  RecentActivity,
-  UpcomingEvent,
-  TeacherProfile,
   ClassDetails,
   ClassStudentInfo,
+  RecentActivity,
   SubjectAssessmentScores,
+  TeacherClassInfo,
+  TeacherDashboardData,
+  TeacherProfile,
+  TeacherSubjectInfo,
+  UpcomingEvent,
 } from './types';
 
 @Injectable()

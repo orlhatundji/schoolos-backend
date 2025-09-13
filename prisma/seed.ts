@@ -8,6 +8,10 @@ import { ActivityLogService } from '../src/common/services/activity-log.service'
 import { UserTypes } from '../src/components/users/constants';
 import { PasswordHasher } from '../src/utils/hasher';
 import { getNextUserEntityNoFormatted } from '../src/utils/misc';
+import {
+  getDefaultAssessmentStructure,
+  getAssessmentStructureForSeeding,
+} from '../src/utils/assessment-structure';
 
 const prisma = new PrismaClient();
 const passwordHasher = new PasswordHasher();
@@ -626,88 +630,13 @@ async function main() {
         },
       });
 
-      // Get the subject name from the original subjects array
-      const subject = subjects.find((s) => s.id === subjectTerm.subjectId);
-      const subjectName = subject ? subject.name.toLowerCase() : 'unknown';
-      let assessments = [];
-
-      if (
-        subjectName.includes('mathematics') ||
-        subjectName.includes('physics') ||
-        subjectName.includes('chemistry')
-      ) {
-        // Science subjects get practical assessments
-        assessments = [
-          {
-            name: 'Assignment 1',
-            score: faker.number.int({ min: 8, max: 15 }),
-            isExam: false,
-          },
-          {
-            name: 'Practical Test',
-            score: faker.number.int({ min: 10, max: 20 }),
-            isExam: false,
-          },
-          {
-            name: 'Mid Term Test',
-            score: faker.number.int({ min: 15, max: 25 }),
-            isExam: false,
-          },
-          {
-            name: 'Final Examination',
-            score: faker.number.int({ min: 30, max: 50 }),
-            isExam: true,
-          },
-        ];
-      } else if (subjectName.includes('english') || subjectName.includes('literature')) {
-        // Language subjects get different assessment types
-        assessments = [
-          {
-            name: 'Essay Assignment',
-            score: faker.number.int({ min: 10, max: 18 }),
-            isExam: false,
-          },
-          {
-            name: 'Oral Test',
-            score: faker.number.int({ min: 8, max: 15 }),
-            isExam: false,
-          },
-          {
-            name: 'Mid Term Test',
-            score: faker.number.int({ min: 12, max: 22 }),
-            isExam: false,
-          },
-          {
-            name: 'Final Examination',
-            score: faker.number.int({ min: 25, max: 45 }),
-            isExam: true,
-          },
-        ];
-      } else {
-        // Other subjects get standard assessments
-        assessments = [
-          {
-            name: 'Assignment 1',
-            score: faker.number.int({ min: 8, max: 15 }),
-            isExam: false,
-          },
-          {
-            name: 'Quiz',
-            score: faker.number.int({ min: 5, max: 12 }),
-            isExam: false,
-          },
-          {
-            name: 'Mid Term Test',
-            score: faker.number.int({ min: 15, max: 25 }),
-            isExam: false,
-          },
-          {
-            name: 'Final Examination',
-            score: faker.number.int({ min: 30, max: 50 }),
-            isExam: true,
-          },
-        ];
-      }
+      // Use default assessment structure: Test 1, Test 2, Exam
+      const assessmentStructure = getAssessmentStructureForSeeding();
+      const assessments = assessmentStructure.map((assessment) => ({
+        name: assessment.name,
+        score: faker.number.int(assessment.scoreRange),
+        isExam: assessment.isExam,
+      }));
 
       const created = await Promise.all(
         assessments.map((a) =>
@@ -734,8 +663,30 @@ async function main() {
     `✅ Created comprehensive assessments for ${studentsForAssessments.length} students and ${subjectsForAssessments.length} subjects`,
   );
   console.log(
-    `📊 Total assessment records created: ${studentsForAssessments.length * subjectsForAssessments.length * 4} (4 assessments per student-subject combination)`,
+    `📊 Total assessment records created: ${studentsForAssessments.length * subjectsForAssessments.length * 3} (3 assessments per student-subject combination: Test 1, Test 2, Exam)`,
   );
+
+  console.log('Creating default assessment structure...');
+  // Create default assessment structure for the school using utility
+  const defaultAssessmentStructures = getDefaultAssessmentStructure();
+
+  const assessmentStructures = [];
+  for (const structureData of defaultAssessmentStructures) {
+    const assessmentStructure = await prisma.assessmentStructure.create({
+      data: {
+        name: structureData.name,
+        description: structureData.description,
+        maxScore: structureData.maxScore,
+        isExam: structureData.isExam,
+        order: structureData.order,
+        schoolId: school.id,
+        isActive: true,
+      },
+    });
+    assessmentStructures.push(assessmentStructure);
+  }
+
+  console.log(`✅ Created ${assessmentStructures.length} default assessment structures`);
 
   console.log('Creating payment structures...');
   // Payment Structures

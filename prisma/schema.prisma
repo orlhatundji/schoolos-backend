@@ -781,6 +781,7 @@ model SubjectTermStudentAssessment {
   updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
 
+  @@unique([subjectTermStudentId, name, deletedAt], name: "unique_assessment_per_student_term")
   @@map("subject_term_student_assessments")
 }
 

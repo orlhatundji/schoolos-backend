@@ -7,3 +7,4 @@ export * from './teacher-profile.result';
 export * from './class-details.result';
 export * from './class-students.result';
 export * from './subject-assessment-scores.result';
+export * from './bulk-student-assessment-score-result';

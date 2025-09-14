@@ -3,10 +3,16 @@ import { AssessmentRepository } from './assessments.repository';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { UpdateAssessmentDto } from './dto/update-assessment.dto';
 import { AssessmentMessages } from './results/messages';
+import { ExcelBulkUploadService } from './services/excel-bulk-upload.service';
+import { GenerateTemplateDto } from './dto/generate-template.dto';
+import { BulkUploadResultDto } from './dto/bulk-upload-result.dto';
 
 @Injectable()
 export class AssessmentService {
-  constructor(private readonly assessmentRepository: AssessmentRepository) {}
+  constructor(
+    private readonly assessmentRepository: AssessmentRepository,
+    private readonly excelBulkUploadService: ExcelBulkUploadService,
+  ) {}
 
   async create(createAssessmentDto: CreateAssessmentDto) {
     await this.validateMaxScore(createAssessmentDto.schoolId, createAssessmentDto.maxScore);
@@ -38,6 +44,36 @@ export class AssessmentService {
   async remove(id: string) {
     await this.findOne(id);
     return this.assessmentRepository.delete({ id });
+  }
+
+  /**
+   * Generate Excel template for bulk assessment score upload
+   */
+  async generateTemplate(
+    schoolId: string,
+    teacherId: string,
+    generateTemplateDto: GenerateTemplateDto,
+  ): Promise<Buffer> {
+    return this.excelBulkUploadService.generateTemplate(
+      schoolId,
+      generateTemplateDto.subjectName,
+      generateTemplateDto.termName,
+      generateTemplateDto.sessionName,
+      generateTemplateDto.levelName,
+      generateTemplateDto.classArmName,
+      teacherId,
+    );
+  }
+
+  /**
+   * Process uploaded Excel file for bulk assessment score upload
+   */
+  async processBulkUpload(
+    fileBuffer: Buffer,
+    schoolId: string,
+    teacherId: string,
+  ): Promise<BulkUploadResultDto> {
+    return this.excelBulkUploadService.processUpload(fileBuffer, schoolId, teacherId);
   }
 
   /**

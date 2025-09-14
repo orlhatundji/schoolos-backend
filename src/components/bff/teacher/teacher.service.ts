@@ -12,6 +12,10 @@ import {
   TeacherSubjectInfo,
   UpcomingEvent,
 } from './types';
+import { BulkCreateStudentAssessmentScoreDto } from './dto/bulk-create-student-assessment-score.dto';
+import { BulkUpdateStudentAssessmentScoreDto } from './dto/bulk-update-student-assessment-score.dto';
+import { UpsertStudentAssessmentScoreDto } from './dto/upsert-student-assessment-score.dto';
+import { BulkStudentAssessmentScoreResult } from './results/bulk-student-assessment-score-result';
 
 @Injectable()
 export class TeacherService {
@@ -1235,5 +1239,230 @@ export class TeacherService {
         termName: existingAssessment.subjectTermStudent.subjectTerm.term.name,
       },
     };
+  }
+
+  async bulkCreateStudentAssessmentScores(
+    userId: string,
+    bulkCreateDto: BulkCreateStudentAssessmentScoreDto,
+  ): Promise<BulkStudentAssessmentScoreResult> {
+    const { assessmentScores } = bulkCreateDto;
+    const result: BulkStudentAssessmentScoreResult = {
+      success: [],
+      failed: [],
+    };
+
+    // Get teacher and verify authorization
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId },
+      include: { user: true },
+    });
+
+    if (!teacher) {
+      throw new Error('Teacher not found');
+    }
+
+    // Process each assessment score
+    for (const createDto of assessmentScores) {
+      try {
+        const assessmentScore = await this.createStudentAssessmentScore(userId, createDto);
+        result.success.push(assessmentScore);
+      } catch (error) {
+        result.failed.push({
+          assessmentScore: createDto,
+          error: error.message || 'Creation failed',
+        });
+      }
+    }
+
+    return result;
+  }
+
+  async bulkUpdateStudentAssessmentScores(
+    userId: string,
+    bulkUpdateDto: BulkUpdateStudentAssessmentScoreDto,
+  ): Promise<BulkStudentAssessmentScoreResult> {
+    const { assessmentScores } = bulkUpdateDto;
+    const result: BulkStudentAssessmentScoreResult = {
+      success: [],
+      failed: [],
+    };
+
+    // Get teacher and verify authorization
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId },
+      include: { user: true },
+    });
+
+    if (!teacher) {
+      throw new Error('Teacher not found');
+    }
+
+    // Process each assessment score update
+    for (const updateDto of assessmentScores) {
+      try {
+        const { id, ...updateData } = updateDto;
+        const assessmentScore = await this.updateStudentAssessmentScore(userId, id, updateData);
+        result.success.push(assessmentScore);
+      } catch (error) {
+        result.failed.push({
+          assessmentScore: updateDto,
+          error: error.message || 'Update failed',
+        });
+      }
+    }
+
+    return result;
+  }
+
+  async upsertStudentAssessmentScores(
+    userId: string,
+    upsertDto: UpsertStudentAssessmentScoreDto,
+  ): Promise<BulkStudentAssessmentScoreResult> {
+    const { assessmentScores, subjectName, termName, assessmentName } = upsertDto;
+    const result: BulkStudentAssessmentScoreResult = {
+      success: [],
+      failed: [],
+    };
+
+    // Get teacher and verify authorization
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId },
+      include: { user: true },
+    });
+
+    if (!teacher) {
+      throw new Error('Teacher not found');
+    }
+
+    // Process each assessment score
+    for (const item of assessmentScores) {
+      try {
+        if (item.id) {
+          // Update existing assessment score
+          const { id, ...updateData } = item;
+          const assessmentScore = await this.updateStudentAssessmentScore(userId, id, updateData);
+          result.success.push(assessmentScore);
+        } else {
+          // Smart upsert: Check if assessment score already exists
+          if (!item.studentId) {
+            throw new Error('studentId is required for new assessment scores');
+          }
+          
+          // Validate required fields for new scores
+          if (!subjectName || !termName || !assessmentName) {
+            throw new Error('subjectName, termName, and assessmentName are required for new assessment scores (must be provided at top level)');
+          }
+
+          // Check if assessment score already exists for this student/subject/term/assessment
+          const existingAssessment = await this.findExistingAssessmentScore(
+            item.studentId,
+            subjectName,
+            termName,
+            assessmentName,
+            teacher.user.schoolId
+          );
+
+          if (existingAssessment) {
+            // Update existing assessment score
+            const updateData = {
+              score: item.score,
+              assessmentName: assessmentName,
+              isExam: item.isExam,
+            };
+            const assessmentScore = await this.updateStudentAssessmentScore(userId, existingAssessment.id, updateData);
+            result.success.push(assessmentScore);
+          } else {
+            // Create new assessment score
+            const createData = {
+              studentId: item.studentId,
+              subjectName: subjectName,
+              termName: termName,
+              assessmentName: assessmentName,
+              score: item.score,
+              isExam: item.isExam,
+            };
+            
+            try {
+              const assessmentScore = await this.createStudentAssessmentScore(userId, createData);
+              result.success.push(assessmentScore);
+            } catch (error) {
+              // Handle database constraint violation
+              if (error.code === 'P2002' && error.meta?.target?.includes('unique_assessment_per_student_term')) {
+                throw new Error('Assessment score already exists for this student. Use update instead of create.');
+              }
+              throw error;
+            }
+          }
+        }
+      } catch (error) {
+        result.failed.push({
+          assessmentScore: item,
+          error: error.message || 'Operation failed',
+        });
+      }
+    }
+
+    return result;
+  }
+
+  private async findExistingAssessmentScore(
+    studentId: string,
+    subjectName: string,
+    termName: string,
+    assessmentName: string,
+    schoolId: string,
+  ) {
+    // Find the subject term
+    const subjectTerm = await this.prisma.subjectTerm.findFirst({
+      where: {
+        subject: {
+          name: {
+            equals: subjectName,
+            mode: 'insensitive',
+          },
+          schoolId: schoolId,
+        },
+        term: {
+          name: {
+            equals: termName,
+            mode: 'insensitive',
+          },
+        },
+        academicSession: {
+          isCurrent: true,
+          schoolId: schoolId,
+        },
+      },
+    });
+
+    if (!subjectTerm) {
+      return null;
+    }
+
+    // Find the subject term student
+    const subjectTermStudent = await this.prisma.subjectTermStudent.findFirst({
+      where: {
+        studentId: studentId,
+        subjectTermId: subjectTerm.id,
+      },
+    });
+
+    if (!subjectTermStudent) {
+      return null;
+    }
+
+    // Find existing assessment score
+    const existingAssessment = await this.prisma.subjectTermStudentAssessment.findFirst({
+      where: {
+        subjectTermStudentId: subjectTermStudent.id,
+        name: {
+          equals: assessmentName,
+          mode: 'insensitive',
+        },
+        deletedAt: null,
+      },
+    });
+
+    return existingAssessment;
   }
 }

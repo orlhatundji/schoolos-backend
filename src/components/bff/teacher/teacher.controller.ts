@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
   UseInterceptors,
@@ -17,7 +18,13 @@ import { LogActivity } from '../../../common/decorators/log-activity.decorator';
 import { ActivityLogInterceptor } from '../../../common/interceptors/activity-log.interceptor';
 import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
-import { CreateStudentAssessmentScoreDto, UpdateStudentAssessmentScoreDto } from './dto';
+import { 
+  CreateStudentAssessmentScoreDto, 
+  UpdateStudentAssessmentScoreDto,
+  BulkCreateStudentAssessmentScoreDto,
+  BulkUpdateStudentAssessmentScoreDto,
+  UpsertStudentAssessmentScoreDto,
+} from './dto';
 import {
   ClassDetailsResult,
   ClassStudentsResult,
@@ -28,6 +35,7 @@ import {
   TeacherEventsResult,
   TeacherProfileResult,
   TeacherSubjectsResult,
+  BulkStudentAssessmentScoreResultClass,
 } from './results';
 import { TeacherService } from './teacher.service';
 import { TeacherDashboardSwagger } from './teacher.swagger';
@@ -329,5 +337,84 @@ export class TeacherController {
       message: result.message,
       data: result.deletedAssessment,
     };
+  }
+
+  // Bulk Student Assessment Score Management Endpoints
+  @Post('student-assessment-scores/batch')
+  @ApiOperation({ summary: 'Create multiple student assessment scores' })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Assessment scores creation completed',
+    type: BulkStudentAssessmentScoreResultClass,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to teach subjects' })
+  @LogActivity({
+    action: 'BULK_CREATE_STUDENT_ASSESSMENT_SCORES',
+    entityType: 'STUDENT_ASSESSMENT_SCORES',
+    description: 'Teacher created multiple student assessment scores',
+    category: 'TEACHER',
+  })
+  async bulkCreateStudentAssessmentScores(
+    @GetCurrentUserId() userId: string,
+    @Body() bulkCreateDto: BulkCreateStudentAssessmentScoreDto,
+  ) {
+    const result = await this.teacherService.bulkCreateStudentAssessmentScores(userId, bulkCreateDto);
+    return BulkStudentAssessmentScoreResultClass.from(result, {
+      status: 201,
+      message: `Creation completed. ${result.success.length} successful, ${result.failed.length} failed.`,
+    });
+  }
+
+  @Patch('student-assessment-scores/batch')
+  @ApiOperation({ summary: 'Update multiple student assessment scores' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Assessment scores update completed',
+    type: BulkStudentAssessmentScoreResultClass,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to modify assessment scores' })
+  @LogActivity({
+    action: 'BULK_UPDATE_STUDENT_ASSESSMENT_SCORES',
+    entityType: 'STUDENT_ASSESSMENT_SCORES',
+    description: 'Teacher updated multiple student assessment scores',
+    category: 'TEACHER',
+  })
+  async bulkUpdateStudentAssessmentScores(
+    @GetCurrentUserId() userId: string,
+    @Body() bulkUpdateDto: BulkUpdateStudentAssessmentScoreDto,
+  ) {
+    const result = await this.teacherService.bulkUpdateStudentAssessmentScores(userId, bulkUpdateDto);
+    return BulkStudentAssessmentScoreResultClass.from(result, {
+      status: 200,
+      message: `Update completed. ${result.success.length} successful, ${result.failed.length} failed.`,
+    });
+  }
+
+  @Put('student-assessment-scores/batch')
+  @ApiOperation({ summary: 'Create or update multiple student assessment scores' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Assessment scores upsert completed',
+    type: BulkStudentAssessmentScoreResultClass,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to manage assessment scores' })
+  @LogActivity({
+    action: 'UPSERT_STUDENT_ASSESSMENT_SCORES',
+    entityType: 'STUDENT_ASSESSMENT_SCORES',
+    description: 'Teacher created or updated multiple student assessment scores',
+    category: 'TEACHER',
+  })
+  async upsertStudentAssessmentScores(
+    @GetCurrentUserId() userId: string,
+    @Body() upsertDto: UpsertStudentAssessmentScoreDto,
+  ) {
+    const result = await this.teacherService.upsertStudentAssessmentScores(userId, upsertDto);
+    return BulkStudentAssessmentScoreResultClass.from(result, {
+      status: 200,
+      message: `Upsert completed. ${result.success.length} successful, ${result.failed.length} failed.`,
+    });
   }
 }

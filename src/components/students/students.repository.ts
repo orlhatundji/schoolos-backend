@@ -26,7 +26,13 @@ export class StudentsRepository extends Repository<
   findOneByStudentNo(studentNo: string): Promise<Student> {
     return this.findOne({
       where: { studentNo },
-      include: { user: true },
+      include: {
+        user: {
+          include: {
+            school: true,
+          },
+        },
+      },
     });
   }
 

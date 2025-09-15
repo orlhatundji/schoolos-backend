@@ -10,6 +10,7 @@ import { AssessmentStructuresModule } from './components/assessment-structures/a
 import { AssessmentsModule } from './components/assessments/assessments.module';
 import { AuthModule } from './components/auth/auth.module';
 import { BffAdminModule } from './components/bff/admin/bff-admin.module';
+import { StudentModule } from './components/bff/student/student.module';
 import { TeacherModule } from './components/bff/teacher/teacher.module';
 import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
@@ -57,6 +58,7 @@ export const AppModuleList = [
   AdminModule,
   BffAdminModule,
   TeacherModule,
+  StudentModule,
   SubjectsModule,
   DepartmentsModule,
   LevelsModule,

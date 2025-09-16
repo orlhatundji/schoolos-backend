@@ -1,5 +1,6 @@
-import { Controller, Get, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 
 import { GetCurrentUserId } from '../../../common/decorators';
 import { LogActivity } from '../../../common/decorators/log-activity.decorator';
@@ -8,13 +9,17 @@ import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
 import { StudentDashboardResult, StudentResultsResult } from './results';
 import { StudentService } from './student.service';
+import { PdfService } from '../../../shared/services';
 
 @Controller('student')
 @ApiTags('Student Portal')
 @ApiBearerAuth(StrategyEnum.JWT)
 @UseGuards(AccessTokenGuard)
 export class StudentController {
-  constructor(private readonly studentService: StudentService) {}
+  constructor(
+    private readonly studentService: StudentService,
+    private readonly pdfService: PdfService,
+  ) {}
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get student dashboard data' })
@@ -182,5 +187,75 @@ export class StudentController {
       message: 'Student subjects retrieved successfully',
       data: subjects,
     };
+  }
+
+  @Get('results/pdf')
+  @ApiOperation({ summary: 'Download student results as PDF' })
+  @ApiQuery({
+    name: 'academicSessionId',
+    required: false,
+    type: String,
+    description: 'Academic session ID to filter results',
+  })
+  @ApiQuery({
+    name: 'termId',
+    required: false,
+    type: String,
+    description: 'Term ID to filter results',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PDF file download',
+    content: {
+      'application/pdf': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'DOWNLOAD_STUDENT_RESULTS_PDF',
+    entityType: 'STUDENT_RESULTS_PDF',
+    description: 'Student downloaded results as PDF',
+    category: 'STUDENT',
+  })
+  async downloadResultsPDF(
+    @GetCurrentUserId() userId: string,
+    @Res() res: Response,
+    @Query('academicSessionId') academicSessionId?: string,
+    @Query('termId') termId?: string,
+  ) {
+    try {
+      // Get student results data
+      const resultsData = await this.studentService.getStudentResults(
+        userId,
+        academicSessionId,
+        termId,
+      );
+
+      // Generate PDF
+      const pdfBuffer = await this.pdfService.generateStudentResultPDF(resultsData);
+
+      // Set response headers for PDF download
+      const filename = `results_${resultsData.student.studentNo}_${resultsData.term.name.replace(/\s+/g, '_')}.pdf`;
+
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': pdfBuffer.length.toString(),
+      });
+
+      // Send PDF buffer
+      res.send(pdfBuffer);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate PDF',
+        error: error.message,
+      });
+    }
   }
 }

@@ -34,11 +34,13 @@ export interface StudentDashboardData {
   };
   recentActivities: {
     id: string;
-    type: 'ASSESSMENT' | 'ATTENDANCE' | 'RESULT';
+    type: 'ASSESSMENT' | 'ATTENDANCE' | 'RESULT' | 'PAYMENT';
     title: string;
     description: string;
     date: Date;
     subjectName?: string;
+    amount?: number;
+    currency?: string;
   }[];
   upcomingEvents: {
     id: string;
@@ -185,4 +187,56 @@ export interface StudentSubjectData {
   grade?: string;
   totalAssessments: number;
   completedAssessments: number;
+}
+
+export interface StudentPaymentData {
+  id: string;
+  studentId: string;
+  paymentStructureId: string;
+  amount: number;
+  currency: string;
+  status: 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'WAIVED';
+  dueDate: Date;
+  paidAmount: number;
+  paidAt?: Date;
+  notes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  paymentStructure: {
+    id: string;
+    name: string;
+    description?: string;
+    category: string;
+    frequency: string;
+  };
+}
+
+export interface StudentPaymentSummaryData {
+  totalOutstanding: number;
+  totalPaid: number;
+  overdueAmount: number;
+  pendingAmount: number;
+  totalPayments: number;
+  overdueCount: number;
+  pendingCount: number;
+  statusCounts: {
+    PENDING: number;
+    PAID: number;
+    PARTIAL: number;
+    OVERDUE: number;
+    WAIVED: number;
+  };
+}
+
+export interface StudentPaymentHistoryData {
+  id: string;
+  amount: number;
+  paidAmount: number;
+  status: 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE' | 'WAIVED';
+  dueDate: Date;
+  paidAt?: Date;
+  paymentStructure: {
+    name: string;
+    category: string;
+  };
 }

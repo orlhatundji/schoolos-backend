@@ -7,7 +7,9 @@ import { AppModule } from './app.module';
 import { StrategyEnum } from './components/auth/strategies';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    rawBody: true,
+  });
   const corsOptions: CorsOptions = {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
@@ -33,8 +35,10 @@ async function bootstrap() {
 
   app.enableCors(corsOptions);
 
-  // Set global API prefix for consistency
-  app.setGlobalPrefix('api');
+  // Set global API prefix for consistency, but exclude webhook routes
+  app.setGlobalPrefix('api', {
+    exclude: ['webhooks/paystack'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -45,10 +45,10 @@ export class PdfService {
         const doc = new PDFDocument({
           size: 'A4',
           margins: {
-            top: 50,
-            bottom: 50,
-            left: 50,
-            right: 50,
+            top: 40,
+            bottom: 40,
+            left: 40,
+            right: 40,
           },
         });
 
@@ -60,22 +60,19 @@ export class PdfService {
         });
 
         // Header with school details
-        this.addHeader(doc, resultsData);
-        
-        // Student information section
-        this.addStudentInfo(doc, resultsData);
-        
-        // Academic session and term info
-        this.addAcademicInfo(doc, resultsData);
-        
-        // Results table
+        this.addHeader(doc);
+
+        // Student and Academic information in 2-column layout
+        this.addStudentAndAcademicInfo(doc, resultsData);
+
+        // Results table with numbering
         this.addResultsTable(doc, resultsData);
-        
-        // Overall statistics
-        this.addOverallStats(doc, resultsData);
-        
+
+        // Remarks section only
+        this.addRemarks(doc);
+
         // Footer with signatures
-        this.addFooter(doc, resultsData);
+        this.addFooter(doc);
 
         doc.end();
       } catch (error) {
@@ -84,40 +81,47 @@ export class PdfService {
     });
   }
 
-  private addHeader(doc: any, resultsData: StudentResultData) {
+  private addHeader(doc: any) {
     // School name (centered, large, bold)
-    doc.fontSize(20)
-       .font('Helvetica-Bold')
-       .fillColor('black')
-       .text('BRIGHT FUTURE HIGH SCHOOL', { align: 'center' });
+    doc
+      .fontSize(20)
+      .font('Helvetica-Bold')
+      .fillColor('black')
+      .text('BRIGHT FUTURE HIGH SCHOOL', { align: 'center' });
 
     // School motto or address
-    doc.fontSize(10)
-       .font('Helvetica')
-       .text('Excellence in Education', { align: 'center' })
-       .text('Lagos, Nigeria', { align: 'center' })
-       .moveDown(1);
+    doc
+      .fontSize(10)
+      .font('Helvetica')
+      .text('Excellence in Education', { align: 'center' })
+      .text('Lagos, Nigeria', { align: 'center' })
+      .moveDown(1);
 
     // Report title
-    doc.fontSize(16)
-       .font('Helvetica-Bold')
-       .text('ACADEMIC REPORT CARD', { align: 'center' })
-       .moveDown(1);
+    doc
+      .fontSize(16)
+      .font('Helvetica-Bold')
+      .text('ACADEMIC REPORT CARD', { align: 'center' })
+      .moveDown(1);
 
     // Line separator
-    doc.strokeColor('black')
-       .lineWidth(1)
-       .moveTo(50, doc.y)
-       .lineTo(550, doc.y)
-       .stroke()
-       .moveDown(1);
+    doc.strokeColor('black').lineWidth(1).moveTo(50, doc.y).lineTo(550, doc.y).stroke().moveDown(1);
   }
 
-  private addStudentInfo(doc: any, resultsData: StudentResultData) {
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .text('STUDENT INFORMATION', { underline: true })
-       .moveDown(0.5);
+  private addStudentAndAcademicInfo(doc: any, resultsData: StudentResultData) {
+    const startY = doc.y;
+    const leftColumnX = 40;
+    const rightColumnX = 300;
+    const labelWidth = 120;
+    const valueWidth = 180;
+
+    // Student Information (Left Column)
+
+    doc
+      .fillColor('black')
+      .fontSize(13)
+      .font('Helvetica-Bold')
+      .text('Student Information', leftColumnX, startY, { underline: true });
 
     const studentInfo = [
       ['Student Name:', `${resultsData.student.fullName}`],
@@ -125,185 +129,257 @@ export class PdfService {
       ['Class:', `${resultsData.student.classArm.level.name} ${resultsData.student.classArm.name}`],
     ];
 
-    doc.fontSize(10)
-       .font('Helvetica');
+    doc.fillColor('black').fontSize(11).font('Helvetica');
 
+    let currentY = startY + 20;
     studentInfo.forEach(([label, value]) => {
-      doc.text(label, 50, doc.y, { width: 150, continued: true })
-         .font('Helvetica-Bold')
-         .text(value, { width: 200 });
-      doc.moveDown(0.3);
+      // Label
+      doc.text(label, leftColumnX, currentY, { width: labelWidth });
+      // Value
+      doc
+        .font('Helvetica-Bold')
+        .fillColor('black')
+        .text(value, leftColumnX + labelWidth + 5, currentY, { width: valueWidth });
+      doc.font('Helvetica').fillColor('black'); // Reset to normal font and color
+      currentY += 18;
     });
 
-    doc.moveDown(1);
-  }
+    // Academic Information (Right Column)
 
-  private addAcademicInfo(doc: any, resultsData: StudentResultData) {
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .text('ACADEMIC INFORMATION', { underline: true })
-       .moveDown(0.5);
+    doc
+      .fillColor('black')
+      .fontSize(13)
+      .font('Helvetica-Bold')
+      .text('Academic Information', rightColumnX, startY, { underline: true });
 
     const academicInfo = [
       ['Academic Session:', `${resultsData.academicSession.academicYear}`],
       ['Term:', `${resultsData.term.name}`],
-      ['Term Period:', `${this.formatDate(resultsData.term.startDate)} - ${this.formatDate(resultsData.term.endDate)}`],
+      [
+        'Term Period:',
+        `${this.formatDate(resultsData.term.startDate)} - ${this.formatDate(resultsData.term.endDate)}`,
+      ],
     ];
 
-    doc.fontSize(10)
-       .font('Helvetica');
+    doc.fillColor('black').fontSize(11).font('Helvetica');
 
+    currentY = startY + 20;
     academicInfo.forEach(([label, value]) => {
-      doc.text(label, 50, doc.y, { width: 150, continued: true })
-         .font('Helvetica-Bold')
-         .text(value, { width: 200 });
-      doc.moveDown(0.3);
+      // Label
+      doc.text(label, rightColumnX, currentY, { width: labelWidth });
+      // Value
+      doc
+        .font('Helvetica-Bold')
+        .fillColor('black')
+        .text(value, rightColumnX + labelWidth + 5, currentY, { width: valueWidth });
+      doc.font('Helvetica').fillColor('black'); // Reset to normal font and color
+      currentY += 18;
     });
 
-    doc.moveDown(1);
+    // Set document position to continue after both columns with proper spacing
+    const maxY = Math.max(
+      startY + 20 + studentInfo.length * 18,
+      startY + 20 + academicInfo.length * 18,
+    );
+    doc.y = maxY + 20;
   }
 
   private addResultsTable(doc: any, resultsData: StudentResultData) {
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .text('ACADEMIC RESULTS', { underline: true })
-       .moveDown(0.5);
-
-    // Table headers
+    // Table headers - expanded to full width
     const tableTop = doc.y;
-    const colWidths = [200, 60, 60, 60, 60, 40];
-    const colPositions = [50, 250, 310, 370, 430, 490];
+    const colWidths = [40, 200, 60, 60, 60, 60, 50];
+    const colPositions = [40, 80, 280, 340, 400, 460, 520];
 
-    // Header row
-    doc.fontSize(10)
-       .font('Helvetica-Bold')
-       .fillColor('white')
-       .rect(50, tableTop, 500, 25)
-       .fill('black')
-       .fillColor('white');
+    // Header row with gradient-like background
+    doc.fillColor('#2e7d32').rect(40, tableTop, 530, 30).fill();
 
-    const headers = ['Subject', 'Test 1', 'Test 2', 'Exam', 'Total', 'Grade'];
+    doc.fontSize(12).font('Helvetica-Bold').fillColor('white');
+
+    const headers = ['S/N', 'Subject', 'Test 1', 'Test 2', 'Exam', 'Total', 'Grade'];
     headers.forEach((header, index) => {
-      doc.text(header, colPositions[index], tableTop + 8, { width: colWidths[index], align: 'center' });
+      doc.text(header, colPositions[index], tableTop + 8, {
+        width: colWidths[index],
+        align: 'center',
+      });
     });
 
     // Data rows
-    let currentY = tableTop + 25;
+    let currentY = tableTop + 30;
     doc.fillColor('black');
 
     resultsData.subjects.forEach((subject, index) => {
-      // Alternate row colors
+      // Alternate row colors with better contrast
       if (index % 2 === 0) {
-        doc.fillColor('#f0f0f0')
-           .rect(50, currentY, 500, 20)
-           .fill();
+        doc.fillColor('#f1f8e9').rect(40, currentY, 530, 28).fill();
+      } else {
+        doc.fillColor('#e8f5e8').rect(40, currentY, 530, 28).fill();
       }
 
-      doc.fillColor('black')
-         .fontSize(9)
-         .font('Helvetica');
+      doc.fillColor('black').fontSize(11).font('Helvetica');
+
+      // Serial number
+      doc.text((index + 1).toString(), colPositions[0], currentY + 8, {
+        width: colWidths[0],
+        align: 'center',
+      });
 
       // Subject name
-      doc.text(subject.name, colPositions[0], currentY + 6, { width: colWidths[0] });
+      doc.text(subject.name, colPositions[1], currentY + 8, { width: colWidths[1] });
 
-      // Assessment scores
-      const test1 = subject.assessments.find(a => a.name === 'Test 1');
-      const test2 = subject.assessments.find(a => a.name === 'Test 2');
-      const exam = subject.assessments.find(a => a.name === 'Exam');
+      // Assessment scores with color coding
+      const test1 = subject.assessments.find((a) => a.name === 'Test 1');
+      const test2 = subject.assessments.find((a) => a.name === 'Test 2');
+      const exam = subject.assessments.find((a) => a.name === 'Exam');
 
-      doc.text(test1 ? test1.score.toString() : '-', colPositions[1], currentY + 6, { width: colWidths[1], align: 'center' });
-      doc.text(test2 ? test2.score.toString() : '-', colPositions[2], currentY + 6, { width: colWidths[2], align: 'center' });
-      doc.text(exam ? exam.score.toString() : '-', colPositions[3], currentY + 6, { width: colWidths[3], align: 'center' });
-      doc.text(subject.totalScore.toString(), colPositions[4], currentY + 6, { width: colWidths[4], align: 'center' });
-      
-      // Grade
-      doc.font('Helvetica-Bold')
-         .text(subject.grade || '-', colPositions[5], currentY + 6, { width: colWidths[5], align: 'center' });
+      // Color code scores based on performance
+      const getScoreColor = (score: number, maxScore: number) => {
+        const percentage = (score / maxScore) * 100;
+        if (percentage >= 80) return '#2e7d32'; // Green for excellent
+        if (percentage >= 60) return '#f57c00'; // Orange for good
+        return '#d32f2f'; // Red for poor
+      };
 
-      currentY += 20;
+      const test1Score = test1 ? test1.score : 0;
+      const test2Score = test2 ? test2.score : 0;
+      const examScore = exam ? exam.score : 0;
+
+      doc
+        .fillColor(getScoreColor(test1Score, 20))
+        .text(test1 ? test1.score.toString() : '-', colPositions[2], currentY + 8, {
+          width: colWidths[2],
+          align: 'center',
+        });
+
+      doc
+        .fillColor(getScoreColor(test2Score, 20))
+        .text(test2 ? test2.score.toString() : '-', colPositions[3], currentY + 8, {
+          width: colWidths[3],
+          align: 'center',
+        });
+
+      doc
+        .fillColor(getScoreColor(examScore, 60))
+        .text(exam ? exam.score.toString() : '-', colPositions[4], currentY + 8, {
+          width: colWidths[4],
+          align: 'center',
+        });
+
+      doc.fillColor('black').text(subject.totalScore.toString(), colPositions[5], currentY + 8, {
+        width: colWidths[5],
+        align: 'center',
+      });
+
+      // Grade with color coding
+      const gradeColor =
+        subject.grade === 'A'
+          ? '#2e7d32'
+          : subject.grade === 'B'
+            ? '#1976d2'
+            : subject.grade === 'C'
+              ? '#f57c00'
+              : subject.grade === 'D'
+                ? '#ff9800'
+                : '#d32f2f';
+
+      doc
+        .font('Helvetica-Bold')
+        .fillColor(gradeColor)
+        .text(subject.grade || '-', colPositions[6], currentY + 8, {
+          width: colWidths[6],
+          align: 'center',
+        });
+
+      currentY += 28;
     });
 
-    // Table border
-    doc.strokeColor('black')
-       .lineWidth(1)
-       .rect(50, tableTop, 500, currentY - tableTop)
-       .stroke();
+    // Table border with color
+    doc
+      .strokeColor('#2e7d32')
+      .lineWidth(2)
+      .rect(40, tableTop, 530, currentY - tableTop)
+      .stroke();
 
-    doc.y = currentY + 10;
+    doc.y = currentY + 15;
   }
 
-  private addOverallStats(doc: any, resultsData: StudentResultData) {
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .text('OVERALL PERFORMANCE', { underline: true })
-       .moveDown(0.5);
-
-    const stats = [
-      ['Total Subjects:', `${resultsData.overallStats.totalSubjects}`],
-      ['Total Score:', `${resultsData.overallStats.totalScore}`],
-      ['Average Score:', `${resultsData.overallStats.averageScore.toFixed(1)}`],
-      ['Overall Grade:', `${resultsData.overallStats.grade || 'N/A'}`],
-      ['Position in Class:', `${resultsData.overallStats.position || 'N/A'} of ${resultsData.overallStats.totalStudents}`],
-    ];
-
-    doc.fontSize(10)
-       .font('Helvetica');
-
-    stats.forEach(([label, value]) => {
-      doc.text(label, 50, doc.y, { width: 150, continued: true })
-         .font('Helvetica-Bold')
-         .text(value, { width: 200 });
-      doc.moveDown(0.3);
-    });
-
-    doc.moveDown(2);
-  }
-
-  private addFooter(doc: any, resultsData: StudentResultData) {
-    const footerY = 700; // Position footer near bottom of page
-
-    // Signature lines
-    doc.fontSize(10)
-       .font('Helvetica');
-
-    // Class Teacher
-    doc.text('Class Teacher:', 50, footerY)
-       .moveDown(2)
-       .text('_________________________', 50, doc.y)
-       .text('Signature & Date', 50, doc.y + 15, { width: 120, align: 'center' });
-
-    // HOD
-    doc.text('Head of Department:', 200, footerY)
-       .moveDown(2)
-       .text('_________________________', 200, doc.y)
-       .text('Signature & Date', 200, doc.y + 15, { width: 120, align: 'center' });
-
-    // Principal
-    doc.text('Principal:', 350, footerY)
-       .moveDown(2)
-       .text('_________________________', 350, doc.y)
-       .text('Signature & Date', 350, doc.y + 15, { width: 120, align: 'center' });
+  private addRemarks(doc: any) {
+    const startY = doc.y;
 
     // Remarks section
-    doc.moveDown(3)
-       .fontSize(10)
-       .font('Helvetica-Bold')
-       .text('REMARKS:', 50, doc.y)
-       .moveDown(0.5)
-       .font('Helvetica')
-       .text('This student has shown excellent academic performance this term. ', 50, doc.y)
-       .text('Continue to maintain this high standard of excellence.', 50, doc.y + 15);
 
-    // Footer line
-    doc.strokeColor('black')
-       .lineWidth(1)
-       .moveTo(50, 750)
-       .lineTo(550, 750)
-       .stroke();
+    doc
+      .fillColor('black')
+      .fontSize(12)
+      .font('Helvetica-Bold')
+      .text('Remarks:', 40, startY)
+      .moveDown(0.3)
+      .fillColor('black')
+      .fontSize(11)
+      .font('Helvetica')
+      .text(
+        'This student has shown excellent academic performance this term. Continue to maintain this high standard of excellence.',
+        40,
+        doc.y,
+        { width: 500 },
+      );
+
+    doc.y = startY + 45;
+  }
+
+  private addFooter(doc: any) {
+    const footerY = doc.y + 10;
+
+    // Signature section
+
+    // Signature lines
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#424242');
+
+    // Class Teacher
+    doc
+      .text('Class Teacher:', 40, footerY)
+      .fontSize(9)
+      .font('Helvetica')
+      .fillColor('black')
+      .text('_________________________', 40, footerY + 15)
+      .text('Signature & Date', 40, footerY + 30, { width: 150, align: 'center' });
+
+    // HOD
+    doc
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .fillColor('#424242')
+      .text('Head of Department:', 300, footerY)
+      .fontSize(9)
+      .font('Helvetica')
+      .fillColor('black')
+      .text('_________________________', 300, footerY + 15)
+      .text('Signature & Date', 200, footerY + 30, { width: 150, align: 'center' });
+
+    // Principal
+    doc
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .fillColor('#424242')
+      .text('Principal:', 360, footerY)
+      .fontSize(9)
+      .font('Helvetica')
+      .fillColor('black')
+      .text('_________________________', 360, footerY + 15)
+      .text('Signature & Date', 360, footerY + 30, { width: 150, align: 'center' });
+
+    // Footer line with color
+    doc
+      .strokeColor('#424242')
+      .lineWidth(2)
+      .moveTo(40, footerY + 45)
+      .lineTo(530, footerY + 45)
+      .stroke();
 
     // Generated date
-    doc.fontSize(8)
-       .text(`Generated on: ${new Date().toLocaleDateString()}`, 50, 760);
+    doc
+      .fontSize(9)
+      .fillColor('#666666')
+      .text(`Generated on: ${new Date().toLocaleDateString()}`, 40, footerY + 55);
   }
 
   private formatDate(date: Date): string {

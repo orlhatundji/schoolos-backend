@@ -211,35 +211,75 @@ export class StudentService extends BaseService {
       throw new Error('Student not found');
     }
 
-    // Get academic session and term
+    // Get academic session and term with proper validation
     let session = null;
     let term = null;
 
     if (academicSessionId) {
-      session = await this.prisma.academicSession.findUnique({
-        where: { id: academicSessionId },
+      session = await this.prisma.academicSession.findFirst({
+        where: {
+          id: academicSessionId,
+          schoolId: student.user.schoolId, // Ensure session belongs to student's school
+        },
       });
+
+      if (!session) {
+        throw new Error(
+          `Academic session with ID ${academicSessionId} not found or does not belong to this school`,
+        );
+      }
     } else {
+      // Try to find current session first, then fallback to most recent
       session = await this.prisma.academicSession.findFirst({
         where: { isCurrent: true, schoolId: student.user.schoolId },
       });
+
+      if (!session) {
+        session = await this.prisma.academicSession.findFirst({
+          where: { schoolId: student.user.schoolId },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      if (!session) {
+        throw new Error('No academic session found for this school');
+      }
     }
 
     if (termId) {
-      term = await this.prisma.term.findUnique({
-        where: { id: termId },
+      term = await this.prisma.term.findFirst({
+        where: {
+          id: termId,
+          academicSessionId: session.id, // Ensure term belongs to the session
+        },
       });
-    } else if (session) {
+
+      if (!term) {
+        throw new Error(
+          `Term with ID ${termId} not found or does not belong to the selected academic session`,
+        );
+      }
+    } else {
+      // Try to find current term first, then fallback to most recent
       term = await this.prisma.term.findFirst({
         where: {
           academicSessionId: session.id,
           isCurrent: true,
         },
       });
-    }
 
-    if (!session || !term) {
-      throw new Error('Academic session or term not found');
+      if (!term) {
+        term = await this.prisma.term.findFirst({
+          where: {
+            academicSessionId: session.id,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+
+      if (!term) {
+        throw new Error(`No terms found for academic session ${session.academicYear}`);
+      }
     }
 
     // Get subject term students with assessments
@@ -500,6 +540,97 @@ export class StudentService extends BaseService {
         endDate: endDate ? new Date(endDate) : new Date(),
       },
     };
+  }
+
+  async getStudentAcademicSessions(userId: string) {
+    const student = await this.prisma.student.findFirst({
+      where: { userId },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    // Get academic sessions where student was enrolled (through classArm or subjectTermStudent)
+    // Include associated terms where student was enrolled
+    const sessions = await this.prisma.academicSession.findMany({
+      where: {
+        schoolId: student.user.schoolId,
+        OR: [
+          // Sessions where student was in a class arm
+          {
+            classArms: {
+              some: {
+                students: {
+                  some: {
+                    id: student.id,
+                  },
+                },
+              },
+            },
+          },
+          // Sessions where student was enrolled in subjects
+          {
+            subjectTerms: {
+              some: {
+                subjectTermStudents: {
+                  some: {
+                    studentId: student.id,
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        academicYear: true,
+        startDate: true,
+        endDate: true,
+        isCurrent: true,
+        createdAt: true,
+        terms: {
+          where: {
+            subjectTerms: {
+              some: {
+                subjectTermStudents: {
+                  some: {
+                    studentId: student.id,
+                  },
+                },
+              },
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            isCurrent: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return sessions.map((session) => ({
+      id: session.id,
+      academicYear: session.academicYear,
+      startDate: session.startDate,
+      endDate: session.endDate,
+      isCurrent: session.isCurrent,
+      createdAt: session.createdAt,
+      terms: session.terms.map((term) => ({
+        id: term.id,
+        name: term.name,
+        isCurrent: term.isCurrent,
+        createdAt: term.createdAt,
+      })),
+    }));
   }
 
   async getStudentSubjects(

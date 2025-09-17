@@ -46,13 +46,15 @@ export class StudentController {
     name: 'academicSessionId',
     required: false,
     type: String,
-    description: 'Academic session ID to filter results',
+    description:
+      'Academic session ID to filter results. If not provided, uses current session or most recent session',
   })
   @ApiQuery({
     name: 'termId',
     required: false,
     type: String,
-    description: 'Term ID to filter results',
+    description:
+      'Term ID to filter results. If not provided, uses current term or most recent term within the selected session',
   })
   @ApiQuery({
     name: 'subjectId',
@@ -147,6 +149,30 @@ export class StudentController {
     };
   }
 
+  @Get('academic-sessions')
+  @ApiOperation({
+    summary: 'Get academic sessions with associated terms where student was enrolled',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Student academic sessions with terms retrieved successfully',
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_STUDENT_ACADEMIC_SESSIONS',
+    entityType: 'STUDENT_ACADEMIC_SESSIONS',
+    description: 'Student viewed enrolled academic sessions with terms',
+    category: 'STUDENT',
+  })
+  async getStudentAcademicSessions(@GetCurrentUserId() userId: string) {
+    const sessions = await this.studentService.getStudentAcademicSessions(userId);
+    return {
+      success: true,
+      message: 'Student academic sessions with terms retrieved successfully',
+      data: sessions,
+    };
+  }
+
   @Get('subjects')
   @ApiOperation({ summary: 'Get student enrolled subjects' })
   @ApiQuery({
@@ -195,13 +221,15 @@ export class StudentController {
     name: 'academicSessionId',
     required: false,
     type: String,
-    description: 'Academic session ID to filter results',
+    description:
+      'Academic session ID to filter results. If not provided, uses current session or most recent session',
   })
   @ApiQuery({
     name: 'termId',
     required: false,
     type: String,
-    description: 'Term ID to filter results',
+    description:
+      'Term ID to filter results. If not provided, uses current term or most recent term within the selected session',
   })
   @ApiResponse({
     status: 200,

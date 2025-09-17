@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 
@@ -10,6 +10,14 @@ import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.
 import { StudentDashboardResult, StudentResultsResult } from './results';
 import { StudentService } from './student.service';
 import { PdfService } from '../../../shared/services';
+import { 
+  InitiatePaymentDto, 
+  PaymentVerificationDto, 
+  PaystackPaymentResponseDto,
+  StudentPaymentResponseDto,
+  StudentPaymentSummaryDto,
+  StudentPaymentHistoryDto
+} from './dto/student-payment.dto';
 
 @Controller('student')
 @ApiTags('Student Portal')
@@ -285,5 +293,155 @@ export class StudentController {
         error: error.message,
       });
     }
+  }
+
+  // Payment endpoints
+  @Get('payments')
+  @ApiOperation({ summary: 'Get student payments' })
+  @ApiResponse({
+    status: 200,
+    description: 'Student payments retrieved successfully',
+    type: [StudentPaymentResponseDto],
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_STUDENT_PAYMENTS',
+    entityType: 'STUDENT_PAYMENTS',
+    description: 'Student viewed payments',
+    category: 'STUDENT',
+  })
+  async getStudentPayments(@GetCurrentUserId() userId: string) {
+    const payments = await this.studentService.getStudentPayments(userId);
+    return {
+      success: true,
+      message: 'Student payments retrieved successfully',
+      data: payments,
+    };
+  }
+
+  @Get('payments/summary')
+  @ApiOperation({ summary: 'Get student payment summary' })
+  @ApiResponse({
+    status: 200,
+    description: 'Student payment summary retrieved successfully',
+    type: StudentPaymentSummaryDto,
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_STUDENT_PAYMENT_SUMMARY',
+    entityType: 'STUDENT_PAYMENT_SUMMARY',
+    description: 'Student viewed payment summary',
+    category: 'STUDENT',
+  })
+  async getStudentPaymentSummary(@GetCurrentUserId() userId: string) {
+    const summary = await this.studentService.getStudentPaymentSummary(userId);
+    return {
+      success: true,
+      message: 'Student payment summary retrieved successfully',
+      data: summary,
+    };
+  }
+
+  @Get('payments/outstanding')
+  @ApiOperation({ summary: 'Get student outstanding payments' })
+  @ApiResponse({
+    status: 200,
+    description: 'Student outstanding payments retrieved successfully',
+    type: [StudentPaymentResponseDto],
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_STUDENT_OUTSTANDING_PAYMENTS',
+    entityType: 'STUDENT_OUTSTANDING_PAYMENTS',
+    description: 'Student viewed outstanding payments',
+    category: 'STUDENT',
+  })
+  async getOutstandingPayments(@GetCurrentUserId() userId: string) {
+    const payments = await this.studentService.getOutstandingPayments(userId);
+    return {
+      success: true,
+      message: 'Student outstanding payments retrieved successfully',
+      data: payments,
+    };
+  }
+
+  @Get('payments/history')
+  @ApiOperation({ summary: 'Get student payment history' })
+  @ApiResponse({
+    status: 200,
+    description: 'Student payment history retrieved successfully',
+    type: [StudentPaymentHistoryDto],
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_STUDENT_PAYMENT_HISTORY',
+    entityType: 'STUDENT_PAYMENT_HISTORY',
+    description: 'Student viewed payment history',
+    category: 'STUDENT',
+  })
+  async getStudentPaymentHistory(@GetCurrentUserId() userId: string) {
+    const history = await this.studentService.getStudentPaymentHistory(userId);
+    return {
+      success: true,
+      message: 'Student payment history retrieved successfully',
+      data: history,
+    };
+  }
+
+  @Post('payments/initiate')
+  @ApiOperation({ summary: 'Initiate payment for a student payment' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment initiated successfully',
+    type: PaystackPaymentResponseDto,
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'INITIATE_STUDENT_PAYMENT',
+    entityType: 'STUDENT_PAYMENT',
+    description: 'Student initiated payment',
+    category: 'STUDENT',
+  })
+  async initiatePayment(
+    @GetCurrentUserId() userId: string,
+    @Body() initiatePaymentDto: InitiatePaymentDto,
+  ) {
+    const paymentData = await this.studentService.initiatePayment(
+      userId,
+      initiatePaymentDto.paymentId,
+      initiatePaymentDto.amount,
+    );
+
+    return {
+      success: true,
+      message: 'Payment initiated successfully',
+      data: paymentData,
+    };
+  }
+
+  @Post('payments/verify')
+  @ApiOperation({ summary: 'Verify payment transaction' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verification completed',
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VERIFY_STUDENT_PAYMENT',
+    entityType: 'STUDENT_PAYMENT',
+    description: 'Student verified payment',
+    category: 'STUDENT',
+  })
+  async verifyPayment(
+    @GetCurrentUserId() userId: string,
+    @Body() verificationDto: PaymentVerificationDto,
+  ) {
+    const result = await this.studentService.verifyPayment(userId, verificationDto.reference);
+    
+    return {
+      success: result.success,
+      message: result.message,
+      data: result.payment,
+    };
   }
 }

@@ -29,6 +29,11 @@ const getConfiguration = () => ({
   },
   frontendBaseUrl: process.env.FRONTEND_BASE_URL,
   otpGeneratorKey: process.env.OTP_GENERATOR_KEY,
+  paystack: {
+    secretKey: process.env.PAYSTACK_SECRET_KEY,
+    publicKey: process.env.PAYSTACK_PUBLIC_KEY,
+    webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET,
+  },
 });
 
 export default getConfiguration;

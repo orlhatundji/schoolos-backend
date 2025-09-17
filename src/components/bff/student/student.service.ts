@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { PaystackService } from '../../../shared/services/paystack.service';
 import {
   StudentAttendanceData,
   StudentDashboardData,
+  StudentPaymentData,
+  StudentPaymentHistoryData,
+  StudentPaymentSummaryData,
   StudentProfileData,
   StudentResultsData,
   StudentSubjectData,
@@ -12,7 +16,10 @@ import {
 
 @Injectable()
 export class StudentService extends BaseService {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paystackService: PaystackService,
+  ) {
     super(StudentService.name);
   }
 
@@ -111,6 +118,65 @@ export class StudentService extends BaseService {
       subjectName: assessment.subjectTermStudent.subjectTerm.subject.name,
     }));
 
+    // Get recent payment activities (last 5)
+    const recentPaymentActivities = await this.prisma.userActivity.findMany({
+      where: {
+        userId: userId,
+        entityType: 'PAYMENT',
+        action: {
+          in: ['PAYMENT_COMPLETED', 'PAYMENT_FAILED', 'TRANSFER_SUCCESS', 'TRANSFER_FAILED'],
+        },
+      },
+      orderBy: { timestamp: 'desc' },
+      take: 5,
+    });
+
+    const paymentActivities = recentPaymentActivities.map((activity) => {
+      const details = activity.details as any;
+      const amount = details?.amount || 0;
+      const currency = details?.currency || 'NGN';
+      
+      let title = '';
+      let description = '';
+      
+      switch (activity.action) {
+        case 'PAYMENT_COMPLETED':
+          title = 'Payment Completed';
+          description = `Payment of ₦${amount.toLocaleString()} completed successfully`;
+          break;
+        case 'PAYMENT_FAILED':
+          title = 'Payment Failed';
+          description = `Payment of ₦${amount.toLocaleString()} failed`;
+          break;
+        case 'TRANSFER_SUCCESS':
+          title = 'Refund Processed';
+          description = `Refund of ₦${amount.toLocaleString()} processed successfully`;
+          break;
+        case 'TRANSFER_FAILED':
+          title = 'Refund Failed';
+          description = `Refund of ₦${amount.toLocaleString()} failed`;
+          break;
+        default:
+          title = 'Payment Activity';
+          description = activity.description || 'Payment activity recorded';
+      }
+
+      return {
+        id: activity.id,
+        type: 'PAYMENT' as const,
+        title,
+        description,
+        date: activity.timestamp,
+        amount,
+        currency,
+      };
+    });
+
+    // Combine and sort all activities by date (most recent first)
+    const allActivities = [...recentActivities, ...paymentActivities]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 10); // Take the 10 most recent activities
+
     // Get upcoming events (exams in the next 30 days)
     const upcomingExams = await this.prisma.subjectTermStudentAssessment.findMany({
       where: {
@@ -184,7 +250,7 @@ export class StudentService extends BaseService {
         attendanceRate: Math.round(attendanceRate * 100) / 100,
         totalAssessments,
       },
-      recentActivities,
+      recentActivities: allActivities,
       upcomingEvents,
     };
   }
@@ -750,5 +816,338 @@ export class StudentService extends BaseService {
     if (score >= 60) return 'C';
     if (score >= 50) return 'D';
     return 'F';
+  }
+
+  // Payment-related methods
+  async getStudentPayments(userId: string): Promise<StudentPaymentData[]> {
+    const student = await this.getStudentByUserId(userId);
+    
+    const payments = await this.prisma.studentPayment.findMany({
+      where: {
+        studentId: student.id,
+        deletedAt: null,
+      },
+      include: {
+        paymentStructure: true,
+      },
+      orderBy: {
+        dueDate: 'asc',
+      },
+    });
+
+    return payments.map(payment => ({
+      id: payment.id,
+      studentId: payment.studentId,
+      paymentStructureId: payment.paymentStructureId,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      status: payment.status as any,
+      dueDate: payment.dueDate,
+      paidAmount: Number(payment.paidAmount),
+      paidAt: payment.paidAt,
+      notes: payment.notes,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
+      paymentStructure: {
+        id: payment.paymentStructure.id,
+        name: payment.paymentStructure.name,
+        description: payment.paymentStructure.description,
+        category: payment.paymentStructure.category,
+        frequency: payment.paymentStructure.frequency,
+      },
+    }));
+  }
+
+  async getStudentPaymentSummary(userId: string): Promise<StudentPaymentSummaryData> {
+    const student = await this.getStudentByUserId(userId);
+    
+    const payments = await this.prisma.studentPayment.findMany({
+      where: {
+        studentId: student.id,
+        deletedAt: null,
+      },
+    });
+
+    const summary = payments.reduce(
+      (acc, payment) => {
+        const amount = Number(payment.amount);
+        const paidAmount = Number(payment.paidAmount);
+        const outstanding = amount - paidAmount;
+        const isOverdue = payment.dueDate < new Date() && payment.status !== 'PAID';
+
+        acc.totalPayments++;
+        acc.totalPaid += paidAmount;
+        acc.statusCounts[payment.status]++;
+
+        if (payment.status === 'PENDING' || payment.status === 'PARTIAL') {
+          acc.pendingAmount += outstanding;
+          acc.pendingCount++;
+        }
+
+        if (isOverdue && payment.status !== 'PAID') {
+          acc.overdueAmount += outstanding;
+          acc.overdueCount++;
+        }
+
+        acc.totalOutstanding += outstanding;
+
+        return acc;
+      },
+      {
+        totalOutstanding: 0,
+        totalPaid: 0,
+        overdueAmount: 0,
+        pendingAmount: 0,
+        totalPayments: 0,
+        overdueCount: 0,
+        pendingCount: 0,
+        statusCounts: {
+          PENDING: 0,
+          PAID: 0,
+          PARTIAL: 0,
+          OVERDUE: 0,
+          WAIVED: 0,
+        },
+      },
+    );
+
+    return summary;
+  }
+
+  async getStudentPaymentHistory(userId: string): Promise<StudentPaymentHistoryData[]> {
+    const student = await this.getStudentByUserId(userId);
+    
+    const payments = await this.prisma.studentPayment.findMany({
+      where: {
+        studentId: student.id,
+        deletedAt: null,
+        status: {
+          in: ['PAID', 'PARTIAL'],
+        },
+      },
+      include: {
+        paymentStructure: true,
+      },
+      orderBy: {
+        paidAt: 'desc',
+      },
+    });
+
+    return payments.map(payment => ({
+      id: payment.id,
+      amount: Number(payment.amount),
+      paidAmount: Number(payment.paidAmount),
+      status: payment.status as any,
+      dueDate: payment.dueDate,
+      paidAt: payment.paidAt,
+      paymentStructure: {
+        name: payment.paymentStructure.name,
+        category: payment.paymentStructure.category,
+      },
+    }));
+  }
+
+  async getOutstandingPayments(userId: string): Promise<StudentPaymentData[]> {
+    const student = await this.getStudentByUserId(userId);
+    
+    const payments = await this.prisma.studentPayment.findMany({
+      where: {
+        studentId: student.id,
+        deletedAt: null,
+        status: {
+          in: ['PENDING', 'PARTIAL', 'OVERDUE'],
+        },
+      },
+      include: {
+        paymentStructure: true,
+      },
+      orderBy: {
+        dueDate: 'asc',
+      },
+    });
+
+    return payments.map(payment => ({
+      id: payment.id,
+      studentId: payment.studentId,
+      paymentStructureId: payment.paymentStructureId,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      status: payment.status as any,
+      dueDate: payment.dueDate,
+      paidAmount: Number(payment.paidAmount),
+      paidAt: payment.paidAt,
+      notes: payment.notes,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
+      paymentStructure: {
+        id: payment.paymentStructure.id,
+        name: payment.paymentStructure.name,
+        description: payment.paymentStructure.description,
+        category: payment.paymentStructure.category,
+        frequency: payment.paymentStructure.frequency,
+      },
+    }));
+  }
+
+  async initiatePayment(userId: string, paymentId: string, amount?: number): Promise<{ authorization_url: string; access_code: string; reference: string }> {
+    const student = await this.getStudentByUserId(userId);
+    
+    // Get the payment record
+    const payment = await this.prisma.studentPayment.findFirst({
+      where: {
+        id: paymentId,
+        studentId: student.id,
+        deletedAt: null,
+        status: {
+          in: ['PENDING', 'PARTIAL', 'OVERDUE'],
+        },
+      },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found or not available for payment');
+    }
+
+    // Calculate payment amount
+    const paymentAmount = amount || (Number(payment.amount) - Number(payment.paidAmount));
+    
+    if (paymentAmount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than zero');
+    }
+
+    // Generate reference
+    const reference = this.paystackService.generateReference('STU_PAY');
+
+    // Initialize payment with Paystack
+    const paystackResponse = await this.paystackService.initializePayment({
+      amount: this.paystackService.convertToKobo(paymentAmount),
+      email: student.user.email || `${student.studentNo}@school.com`,
+      reference,
+      metadata: {
+        studentId: student.id,
+        paymentId: payment.id,
+        studentNo: student.studentNo,
+        paymentStructureId: payment.paymentStructureId,
+      },
+    });
+
+    // Store payment reference in database for verification
+    await this.prisma.studentPayment.update({
+      where: { id: paymentId },
+      data: {
+        notes: `Payment initiated with reference: ${reference}`,
+      },
+    });
+
+    return {
+      authorization_url: paystackResponse.data.authorization_url,
+      access_code: paystackResponse.data.access_code,
+      reference: paystackResponse.data.reference,
+    };
+  }
+
+  async verifyPayment(userId: string, reference: string): Promise<{ success: boolean; message: string; payment?: StudentPaymentData }> {
+    const student = await this.getStudentByUserId(userId);
+    
+    try {
+      // Verify payment with Paystack
+      const paystackResponse = await this.paystackService.verifyPayment(reference);
+      
+      if (paystackResponse.data.status !== 'success') {
+        return {
+          success: false,
+          message: 'Payment verification failed',
+        };
+      }
+
+      const paymentData = paystackResponse.data;
+      const amountPaid = this.paystackService.convertFromKobo(paymentData.amount);
+      
+      // Find the payment record
+      const payment = await this.prisma.studentPayment.findFirst({
+        where: {
+          studentId: student.id,
+          notes: {
+            contains: reference,
+          },
+          deletedAt: null,
+        },
+        include: {
+          paymentStructure: true,
+        },
+      });
+
+      if (!payment) {
+        return {
+          success: false,
+          message: 'Payment record not found',
+        };
+      }
+
+      // Update payment status
+      const newPaidAmount = Number(payment.paidAmount) + amountPaid;
+      const totalAmount = Number(payment.amount);
+      const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
+
+      const updatedPayment = await this.prisma.studentPayment.update({
+        where: { id: payment.id },
+        data: {
+          paidAmount: newPaidAmount,
+          status: newStatus,
+          paidAt: new Date(),
+          notes: `Payment verified via Paystack. Reference: ${reference}. Amount: ${amountPaid}`,
+        },
+        include: {
+          paymentStructure: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Payment verified successfully',
+        payment: {
+          id: updatedPayment.id,
+          studentId: updatedPayment.studentId,
+          paymentStructureId: updatedPayment.paymentStructureId,
+          amount: Number(updatedPayment.amount),
+          currency: updatedPayment.currency,
+          status: updatedPayment.status as any,
+          dueDate: updatedPayment.dueDate,
+          paidAmount: Number(updatedPayment.paidAmount),
+          paidAt: updatedPayment.paidAt,
+          notes: updatedPayment.notes,
+          createdAt: updatedPayment.createdAt,
+          updatedAt: updatedPayment.updatedAt,
+          paymentStructure: {
+            id: updatedPayment.paymentStructure.id,
+            name: updatedPayment.paymentStructure.name,
+            description: updatedPayment.paymentStructure.description,
+            category: updatedPayment.paymentStructure.category,
+            frequency: updatedPayment.paymentStructure.frequency,
+          },
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Payment verification failed: ${error.message}`, error.stack);
+      return {
+        success: false,
+        message: 'Payment verification failed',
+      };
+    }
+  }
+
+  private async getStudentByUserId(userId: string) {
+    const student = await this.prisma.student.findFirst({
+      where: { userId },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    return student;
   }
 }

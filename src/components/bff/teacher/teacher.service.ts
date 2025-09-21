@@ -16,6 +16,9 @@ import { BulkCreateStudentAssessmentScoreDto } from './dto/bulk-create-student-a
 import { BulkUpdateStudentAssessmentScoreDto } from './dto/bulk-update-student-assessment-score.dto';
 import { UpsertStudentAssessmentScoreDto } from './dto/upsert-student-assessment-score.dto';
 import { BulkStudentAssessmentScoreResult } from './results/bulk-student-assessment-score-result';
+import { MarkClassAttendanceDto } from './dto/mark-class-attendance.dto';
+import { MarkSubjectAttendanceDto } from './dto/mark-subject-attendance.dto';
+import { ClassAttendanceResult, SubjectAttendanceResult } from './results/attendance-result';
 
 @Injectable()
 export class TeacherService {
@@ -377,6 +380,36 @@ export class TeacherService {
     };
   }
 
+  // Get class arm ID for subject teachers (no authorization required)
+  async getClassArmId(userId: string, level: string, classArm: string): Promise<{ classArmId: string; classArmName: string; levelName: string }> {
+    const teacher = await this.getTeacherWithRelations(userId);
+
+    // Find the class arm by level and classArm name
+    const classArmData = await this.prisma.classArm.findFirst({
+      where: {
+        name: classArm,
+        level: {
+          name: level,
+        },
+        schoolId: teacher.user.schoolId,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+      },
+    });
+
+    if (!classArmData) {
+      throw new NotFoundException('Class arm not found');
+    }
+
+    return {
+      classArmId: classArmData.id,
+      classArmName: classArmData.name,
+      levelName: classArmData.level.name,
+    };
+  }
+
   // Get class details for class teachers
   async getClassDetails(userId: string, level: string, classArm: string): Promise<ClassDetails> {
     const teacher = await this.getTeacherWithRelations(userId);
@@ -444,13 +477,24 @@ export class TeacherService {
     }, 0);
     const averageAge = students.length > 0 ? Math.round(totalAge / students.length) : 0;
 
-    // Calculate attendance rate
-    const totalAttendanceRecords = classArmData.studentAttendances.length;
-    const presentRecords = classArmData.studentAttendances.filter(
+    // Calculate today's attendance rate
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    
+    const todayAttendanceRecords = classArmData.studentAttendances.filter(
+      (attendance) => {
+        const attendanceDate = new Date(attendance.date);
+        return attendanceDate >= startOfToday && attendanceDate <= endOfToday;
+      }
+    );
+    
+    const presentToday = todayAttendanceRecords.filter(
       (attendance) => attendance.status === 'PRESENT',
     ).length;
-    const attendanceRate =
-      totalAttendanceRecords > 0 ? Math.round((presentRecords / totalAttendanceRecords) * 100) : 0;
+    
+    const attendanceRate = students.length > 0 ? Math.round((presentToday / students.length) * 100) : 0;
+
 
     // Get recent activities (mock data for now)
     const recentActivities = [
@@ -1347,10 +1391,12 @@ export class TeacherService {
           if (!item.studentId) {
             throw new Error('studentId is required for new assessment scores');
           }
-          
+
           // Validate required fields for new scores
           if (!subjectName || !termName || !assessmentName) {
-            throw new Error('subjectName, termName, and assessmentName are required for new assessment scores (must be provided at top level)');
+            throw new Error(
+              'subjectName, termName, and assessmentName are required for new assessment scores (must be provided at top level)',
+            );
           }
 
           // Check if assessment score already exists for this student/subject/term/assessment
@@ -1359,7 +1405,7 @@ export class TeacherService {
             subjectName,
             termName,
             assessmentName,
-            teacher.user.schoolId
+            teacher.user.schoolId,
           );
 
           if (existingAssessment) {
@@ -1369,7 +1415,11 @@ export class TeacherService {
               assessmentName: assessmentName,
               isExam: item.isExam,
             };
-            const assessmentScore = await this.updateStudentAssessmentScore(userId, existingAssessment.id, updateData);
+            const assessmentScore = await this.updateStudentAssessmentScore(
+              userId,
+              existingAssessment.id,
+              updateData,
+            );
             result.success.push(assessmentScore);
           } else {
             // Create new assessment score
@@ -1381,14 +1431,19 @@ export class TeacherService {
               score: item.score,
               isExam: item.isExam,
             };
-            
+
             try {
               const assessmentScore = await this.createStudentAssessmentScore(userId, createData);
               result.success.push(assessmentScore);
             } catch (error) {
               // Handle database constraint violation
-              if (error.code === 'P2002' && error.meta?.target?.includes('unique_assessment_per_student_term')) {
-                throw new Error('Assessment score already exists for this student. Use update instead of create.');
+              if (
+                error.code === 'P2002' &&
+                error.meta?.target?.includes('unique_assessment_per_student_term')
+              ) {
+                throw new Error(
+                  'Assessment score already exists for this student. Use update instead of create.',
+                );
               }
               throw error;
             }
@@ -1464,5 +1519,548 @@ export class TeacherService {
     });
 
     return existingAssessment;
+  }
+
+  // Attendance Management Methods
+
+  /**
+   * Mark class attendance for students by class teacher
+   */
+  async markClassAttendance(
+    userId: string,
+    dto: MarkClassAttendanceDto,
+  ): Promise<ClassAttendanceResult> {
+    // Verify teacher exists and is active
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+      include: {
+        user: {
+          include: {
+            school: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    // Verify teacher is assigned as class teacher for this class arm
+    const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
+      where: {
+        teacherId: teacher.id,
+        classArmId: dto.classArmId,
+        deletedAt: null,
+      },
+    });
+
+    if (!classArmTeacher) {
+      throw new ForbiddenException('You are not authorized to mark attendance for this class');
+    }
+
+    // Verify class arm exists and get details
+    const classArm = await this.prisma.classArm.findFirst({
+      where: {
+        id: dto.classArmId,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+      },
+    });
+
+    if (!classArm) {
+      throw new NotFoundException('Class arm not found');
+    }
+
+    // Verify academic session and term exist
+    const academicSession = await this.prisma.academicSession.findFirst({
+      where: {
+        id: dto.academicSessionId,
+        schoolId: teacher.user.schoolId,
+        deletedAt: null,
+      },
+    });
+
+    if (!academicSession) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    const term = await this.prisma.term.findFirst({
+      where: {
+        id: dto.termId,
+        academicSessionId: dto.academicSessionId,
+        deletedAt: null,
+      },
+    });
+
+    if (!term) {
+      throw new NotFoundException('Term not found');
+    }
+
+    // Get students in the class arm
+    const students = await this.prisma.student.findMany({
+      where: {
+        classArmId: dto.classArmId,
+        deletedAt: null,
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    const attendanceDate = new Date(dto.date);
+
+    // Create or update attendance records
+    const attendanceRecords = [];
+    for (const studentAttendance of dto.studentAttendances) {
+      // Verify student exists in the class
+      const student = students.find((s) => s.id === studentAttendance.studentId);
+      if (!student) {
+        throw new NotFoundException(
+          `Student with ID ${studentAttendance.studentId} not found in this class`,
+        );
+      }
+
+      // Upsert attendance record
+      const attendanceRecord = await this.prisma.studentAttendance.upsert({
+        where: {
+          studentId_date: {
+            studentId: studentAttendance.studentId,
+            date: attendanceDate,
+          },
+        },
+        update: {
+          status: studentAttendance.status,
+          ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
+          classArmId: dto.classArmId,
+          academicSessionId: dto.academicSessionId,
+          termId: dto.termId,
+        },
+        create: {
+          studentId: studentAttendance.studentId,
+          date: attendanceDate,
+          status: studentAttendance.status,
+          ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
+          classArmId: dto.classArmId,
+          academicSessionId: dto.academicSessionId,
+          termId: dto.termId,
+        },
+      });
+
+      attendanceRecords.push({
+        studentId: student.id,
+        studentName: `${student.user.firstName} ${student.user.lastName}`,
+        studentNo: student.studentNo,
+        status: attendanceRecord.status,
+        remarks: studentAttendance.remarks,
+        date: attendanceRecord.date,
+      });
+    }
+
+    // Calculate statistics
+    const presentCount = attendanceRecords.filter((r) => r.status === 'PRESENT').length;
+    const absentCount = attendanceRecords.filter((r) => r.status === 'ABSENT').length;
+    const lateCount = attendanceRecords.filter((r) => r.status === 'LATE').length;
+    const excusedCount = attendanceRecords.filter((r) => r.status === 'EXCUSED').length;
+
+    return {
+      classArmId: dto.classArmId,
+      classArmName: classArm.name,
+      date: attendanceDate,
+      academicSessionId: dto.academicSessionId,
+      termId: dto.termId,
+      attendanceRecords,
+      totalStudents: attendanceRecords.length,
+      presentCount,
+      absentCount,
+      lateCount,
+      excusedCount,
+    };
+  }
+
+  /**
+   * Mark subject attendance for students by subject teacher
+   */
+  async markSubjectAttendance(
+    userId: string,
+    dto: MarkSubjectAttendanceDto,
+  ): Promise<SubjectAttendanceResult> {
+    // Verify teacher exists and is active
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+      include: {
+        user: {
+          include: {
+            school: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    // Verify teacher is assigned to teach this subject for this class arm
+    const classArmSubjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: {
+        teacherId: teacher.id,
+        subjectId: dto.subjectId,
+        classArmId: dto.classArmId,
+        deletedAt: null,
+      },
+    });
+
+    if (!classArmSubjectTeacher) {
+      throw new ForbiddenException(
+        'You are not authorized to mark attendance for this subject and class',
+      );
+    }
+
+    // Verify subject exists
+    const subject = await this.prisma.subject.findFirst({
+      where: {
+        id: dto.subjectId,
+        schoolId: teacher.user.schoolId,
+        deletedAt: null,
+      },
+    });
+
+    if (!subject) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    // Verify class arm exists and get details
+    const classArm = await this.prisma.classArm.findFirst({
+      where: {
+        id: dto.classArmId,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+      },
+    });
+
+    if (!classArm) {
+      throw new NotFoundException('Class arm not found');
+    }
+
+    // Verify academic session and term exist
+    const academicSession = await this.prisma.academicSession.findFirst({
+      where: {
+        id: dto.academicSessionId,
+        schoolId: teacher.user.schoolId,
+        deletedAt: null,
+      },
+    });
+
+    if (!academicSession) {
+      throw new NotFoundException('Academic session not found');
+    }
+
+    const term = await this.prisma.term.findFirst({
+      where: {
+        id: dto.termId,
+        academicSessionId: dto.academicSessionId,
+        deletedAt: null,
+      },
+    });
+
+    if (!term) {
+      throw new NotFoundException('Term not found');
+    }
+
+    // Get students in the class arm
+    const students = await this.prisma.student.findMany({
+      where: {
+        classArmId: dto.classArmId,
+        deletedAt: null,
+      },
+      include: {
+        user: true,
+      },
+    });
+
+    const attendanceDate = new Date(dto.date);
+
+    // Create or update attendance records
+    const attendanceRecords = [];
+    for (const studentAttendance of dto.studentAttendances) {
+      // Verify student exists in the class
+      const student = students.find((s) => s.id === studentAttendance.studentId);
+      if (!student) {
+        throw new NotFoundException(
+          `Student with ID ${studentAttendance.studentId} not found in this class`,
+        );
+      }
+
+      // Upsert attendance record
+      const attendanceRecord = await this.prisma.studentAttendance.upsert({
+        where: {
+          studentId_date: {
+            studentId: studentAttendance.studentId,
+            date: attendanceDate,
+          },
+        },
+        update: {
+          status: studentAttendance.status,
+          ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
+          classArmId: dto.classArmId,
+          academicSessionId: dto.academicSessionId,
+          termId: dto.termId,
+        },
+        create: {
+          studentId: studentAttendance.studentId,
+          date: attendanceDate,
+          status: studentAttendance.status,
+          ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
+          classArmId: dto.classArmId,
+          academicSessionId: dto.academicSessionId,
+          termId: dto.termId,
+        },
+      });
+
+      attendanceRecords.push({
+        studentId: student.id,
+        studentName: `${student.user.firstName} ${student.user.lastName}`,
+        studentNo: student.studentNo,
+        status: attendanceRecord.status,
+        remarks: studentAttendance.remarks,
+        date: attendanceRecord.date,
+      });
+    }
+
+    // Calculate statistics
+    const presentCount = attendanceRecords.filter((r) => r.status === 'PRESENT').length;
+    const absentCount = attendanceRecords.filter((r) => r.status === 'ABSENT').length;
+    const lateCount = attendanceRecords.filter((r) => r.status === 'LATE').length;
+    const excusedCount = attendanceRecords.filter((r) => r.status === 'EXCUSED').length;
+
+    return {
+      subjectId: dto.subjectId,
+      subjectName: subject.name,
+      classArmId: dto.classArmId,
+      classArmName: classArm.name,
+      date: attendanceDate,
+      academicSessionId: dto.academicSessionId,
+      termId: dto.termId,
+      attendanceRecords,
+      totalStudents: attendanceRecords.length,
+      presentCount,
+      absentCount,
+      lateCount,
+      excusedCount,
+    };
+  }
+
+  /**
+   * Get current academic session and term for the teacher's school
+   */
+  async getCurrentAcademicSession(userId: string) {
+    // Get teacher information
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        userId,
+        deletedAt: null,
+      },
+      include: {
+        user: {
+          include: {
+            school: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: {
+        schoolId: teacher.user.schoolId,
+        isCurrent: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!currentSession) {
+      throw new NotFoundException('No current academic session found');
+    }
+
+    // Get current term
+    const currentTerm = await this.prisma.term.findFirst({
+      where: {
+        academicSessionId: currentSession.id,
+        isCurrent: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!currentTerm) {
+      throw new NotFoundException('No current term found');
+    }
+
+    return {
+      currentSession: {
+        id: currentSession.id,
+        academicYear: currentSession.academicYear,
+        startDate: currentSession.startDate,
+        endDate: currentSession.endDate,
+        isCurrent: currentSession.isCurrent,
+      },
+      currentTerm: {
+        id: currentTerm.id,
+        name: currentTerm.name,
+        academicSessionId: currentTerm.academicSessionId,
+        isCurrent: currentTerm.isCurrent,
+      },
+    };
+  }
+
+  /**
+   * Check if attendance has been taken for a class on a specific date
+   */
+  async checkClassAttendanceStatus(userId: string, classArmId: string, date: string) {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+      include: { user: { include: { school: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    // Check if teacher is authorized to mark attendance for this class
+    // Allow both class teachers and subject teachers
+    const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    
+    const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    
+    if (!classArmTeacher && !subjectTeacher) {
+      throw new ForbiddenException('You are not authorized to mark attendance for this class');
+    }
+
+    const attendanceDate = new Date(date);
+    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate());
+    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+
+    // Check if any attendance records exist for this class on this date
+    const attendanceCount = await this.prisma.studentAttendance.count({
+      where: {
+        classArmId,
+        date: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        deletedAt: null,
+      },
+    });
+
+    return {
+      classArmId,
+      date: attendanceDate,
+      hasAttendanceBeenTaken: attendanceCount > 0,
+      attendanceCount,
+    };
+  }
+
+  /**
+   * Get existing attendance data for a class on a specific date
+   */
+  async getClassAttendanceData(userId: string, classArmId: string, date: string) {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+      include: { user: { include: { school: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    // Check if teacher is authorized to view attendance for this class
+    // Allow both class teachers and subject teachers
+    const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    
+    const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    
+    if (!classArmTeacher && !subjectTeacher) {
+      throw new ForbiddenException('You are not authorized to view attendance for this class');
+    }
+
+    const attendanceDate = new Date(date);
+    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate());
+    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+
+    // Get class arm information
+    const classArm = await this.prisma.classArm.findFirst({
+      where: { id: classArmId, deletedAt: null },
+      include: { level: true },
+    });
+    if (!classArm) throw new NotFoundException('Class arm not found');
+
+    // Get all students in the class
+    const students = await this.prisma.student.findMany({
+      where: { classArmId, deletedAt: null },
+      include: { user: true },
+    });
+
+    // Get attendance records for this date
+    const attendanceRecords = await this.prisma.studentAttendance.findMany({
+      where: {
+        classArmId,
+        date: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+        deletedAt: null,
+      },
+    });
+
+    // Create attendance data for all students
+    const attendanceData = students.map((student) => {
+      const attendanceRecord = attendanceRecords.find(record => record.studentId === student.id);
+      return {
+        studentId: student.id,
+        studentName: `${student.user.firstName} ${student.user.lastName}`,
+        studentNo: student.studentNo,
+        status: attendanceRecord?.status || 'ABSENT',
+        remarks: (attendanceRecord as any)?.remarks || '',
+        date: attendanceRecord?.date || attendanceDate,
+      };
+    });
+
+    // Calculate statistics
+    const presentCount = attendanceData.filter(record => record.status === 'PRESENT').length;
+    const absentCount = attendanceData.filter(record => record.status === 'ABSENT').length;
+    const lateCount = attendanceData.filter(record => record.status === 'LATE').length;
+    const excusedCount = attendanceData.filter(record => record.status === 'EXCUSED').length;
+    const totalStudents = attendanceData.length;
+    const attendancePercentage = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+
+
+    return {
+      classArmId,
+      classArmName: classArm.name,
+      date: attendanceDate,
+      attendanceData,
+      totalStudents,
+      presentCount,
+      absentCount,
+      lateCount,
+      excusedCount,
+      attendancePercentage,
+    };
   }
 }

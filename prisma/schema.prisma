@@ -825,6 +825,7 @@ model StudentAttendance {
   student           Student          @relation(fields: [studentId], references: [id])
   date              DateTime
   status            AttendanceStatus
+  remarks           String?
   classArmId        String
   classArm          ClassArm         @relation(fields: [classArmId], references: [id])
   academicSessionId String

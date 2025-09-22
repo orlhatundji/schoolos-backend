@@ -10,5 +10,6 @@ export const AssessmentStructureMessages = {
     ALREADY_EXISTS: 'Assessment structure with this name already exists',
     INVALID_TOTAL_SCORE: 'Total of all assessment structure maxScores cannot exceed 100',
     INVALID_SCORE_RANGE: 'maxScore must be between 1 and 100',
+    IN_USE: 'Cannot modify or delete assessment structure that is already being used in existing assessments',
   },
 } as const;

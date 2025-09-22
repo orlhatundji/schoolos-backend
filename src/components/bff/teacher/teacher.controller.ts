@@ -18,12 +18,14 @@ import { LogActivity } from '../../../common/decorators/log-activity.decorator';
 import { ActivityLogInterceptor } from '../../../common/interceptors/activity-log.interceptor';
 import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
-import { 
-  CreateStudentAssessmentScoreDto, 
+import {
+  CreateStudentAssessmentScoreDto,
   UpdateStudentAssessmentScoreDto,
   BulkCreateStudentAssessmentScoreDto,
   BulkUpdateStudentAssessmentScoreDto,
   UpsertStudentAssessmentScoreDto,
+  MarkClassAttendanceDto,
+  MarkSubjectAttendanceDto,
 } from './dto';
 import {
   ClassDetailsResult,
@@ -36,6 +38,8 @@ import {
   TeacherProfileResult,
   TeacherSubjectsResult,
   BulkStudentAssessmentScoreResultClass,
+  ClassAttendanceResultResponse,
+  SubjectAttendanceResultResponse,
 } from './results';
 import { TeacherService } from './teacher.service';
 import { TeacherDashboardSwagger } from './teacher.swagger';
@@ -139,6 +143,41 @@ export class TeacherController {
   ) {
     const classDetails = await this.teacherService.getClassDetails(userId, level, classArm);
     return new ClassDetailsResult(classDetails);
+  }
+
+  @Get('class-arm-id')
+  @ApiQuery({
+    name: 'level',
+    required: true,
+    type: String,
+    description: 'Level name (e.g., JSS1, JSS2, SS1)',
+  })
+  @ApiQuery({
+    name: 'classArm',
+    required: true,
+    type: String,
+    description: 'Class arm name (e.g., A, B, Alpha)',
+  })
+  @ApiOperation({ summary: 'Get class arm ID for subject teachers' })
+  @ApiResponse({
+    status: 200,
+    description: 'Class arm ID retrieved successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Class arm not found',
+  })
+  async getClassArmId(
+    @GetCurrentUserId() userId: string,
+    @Query('level') level: string,
+    @Query('classArm') classArm: string,
+  ) {
+    const classArmId = await this.teacherService.getClassArmId(userId, level, classArm);
+    return {
+      success: true,
+      message: 'Class arm ID retrieved successfully',
+      data: classArmId,
+    };
   }
 
   @Get('class-students')
@@ -342,8 +381,8 @@ export class TeacherController {
   // Bulk Student Assessment Score Management Endpoints
   @Post('student-assessment-scores/batch')
   @ApiOperation({ summary: 'Create multiple student assessment scores' })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Assessment scores creation completed',
     type: BulkStudentAssessmentScoreResultClass,
   })
@@ -359,7 +398,10 @@ export class TeacherController {
     @GetCurrentUserId() userId: string,
     @Body() bulkCreateDto: BulkCreateStudentAssessmentScoreDto,
   ) {
-    const result = await this.teacherService.bulkCreateStudentAssessmentScores(userId, bulkCreateDto);
+    const result = await this.teacherService.bulkCreateStudentAssessmentScores(
+      userId,
+      bulkCreateDto,
+    );
     return BulkStudentAssessmentScoreResultClass.from(result, {
       status: 201,
       message: `Creation completed. ${result.success.length} successful, ${result.failed.length} failed.`,
@@ -368,13 +410,16 @@ export class TeacherController {
 
   @Patch('student-assessment-scores/batch')
   @ApiOperation({ summary: 'Update multiple student assessment scores' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Assessment scores update completed',
     type: BulkStudentAssessmentScoreResultClass,
   })
   @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
-  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to modify assessment scores' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - not authorized to modify assessment scores',
+  })
   @LogActivity({
     action: 'BULK_UPDATE_STUDENT_ASSESSMENT_SCORES',
     entityType: 'STUDENT_ASSESSMENT_SCORES',
@@ -385,7 +430,10 @@ export class TeacherController {
     @GetCurrentUserId() userId: string,
     @Body() bulkUpdateDto: BulkUpdateStudentAssessmentScoreDto,
   ) {
-    const result = await this.teacherService.bulkUpdateStudentAssessmentScores(userId, bulkUpdateDto);
+    const result = await this.teacherService.bulkUpdateStudentAssessmentScores(
+      userId,
+      bulkUpdateDto,
+    );
     return BulkStudentAssessmentScoreResultClass.from(result, {
       status: 200,
       message: `Update completed. ${result.success.length} successful, ${result.failed.length} failed.`,
@@ -394,13 +442,16 @@ export class TeacherController {
 
   @Put('student-assessment-scores/batch')
   @ApiOperation({ summary: 'Create or update multiple student assessment scores' })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Assessment scores upsert completed',
     type: BulkStudentAssessmentScoreResultClass,
   })
   @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
-  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to manage assessment scores' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - not authorized to manage assessment scores',
+  })
   @LogActivity({
     action: 'UPSERT_STUDENT_ASSESSMENT_SCORES',
     entityType: 'STUDENT_ASSESSMENT_SCORES',
@@ -416,5 +467,135 @@ export class TeacherController {
       status: 200,
       message: `Upsert completed. ${result.success.length} successful, ${result.failed.length} failed.`,
     });
+  }
+
+  // Attendance Management Endpoints
+
+  @Post('attendance/class')
+  @ApiOperation({ summary: 'Mark class attendance by class teacher' })
+  @ApiResponse({
+    status: 201,
+    description: 'Class attendance marked successfully',
+    type: ClassAttendanceResultResponse,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - not authorized to mark attendance for this class',
+  })
+  @ApiResponse({ status: 404, description: 'Class arm, academic session, or term not found' })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'MARK_CLASS_ATTENDANCE',
+    entityType: 'STUDENT_ATTENDANCE',
+    description: 'Teacher marked class attendance',
+    category: 'TEACHER',
+  })
+  async markClassAttendance(
+    @GetCurrentUserId() userId: string,
+    @Body() markAttendanceDto: MarkClassAttendanceDto,
+  ) {
+    const result = await this.teacherService.markClassAttendance(userId, markAttendanceDto);
+    return ClassAttendanceResultResponse.from(result, {
+      status: 201,
+      message: 'Class attendance marked successfully',
+    });
+  }
+
+  @Post('attendance/subject')
+  @ApiOperation({ summary: 'Mark subject attendance by subject teacher' })
+  @ApiResponse({
+    status: 201,
+    description: 'Subject attendance marked successfully',
+    type: SubjectAttendanceResultResponse,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - not authorized to mark attendance for this subject and class',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Subject, class arm, academic session, or term not found',
+  })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'MARK_SUBJECT_ATTENDANCE',
+    entityType: 'STUDENT_ATTENDANCE',
+    description: 'Teacher marked subject attendance',
+    category: 'TEACHER',
+  })
+  async markSubjectAttendance(
+    @GetCurrentUserId() userId: string,
+    @Body() markAttendanceDto: MarkSubjectAttendanceDto,
+  ) {
+    const result = await this.teacherService.markSubjectAttendance(userId, markAttendanceDto);
+    return SubjectAttendanceResultResponse.from(result, {
+      status: 201,
+      message: 'Subject attendance marked successfully',
+    });
+  }
+
+  @Get('academic-session')
+  @ApiOperation({ summary: 'Get current academic session and term' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current academic session and term retrieved successfully',
+  })
+  async getCurrentAcademicSession(@GetCurrentUserId() userId: string) {
+    const result = await this.teacherService.getCurrentAcademicSession(userId);
+    return {
+      success: true,
+      message: 'Current academic session retrieved successfully',
+      data: result,
+    };
+  }
+
+  @Get('attendance/status')
+  @ApiOperation({ summary: 'Check if attendance has been taken for a class on a specific date' })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendance status retrieved successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - not authorized to check attendance for this class',
+  })
+  @ApiResponse({ status: 404, description: 'Class arm not found' })
+  async checkClassAttendanceStatus(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('date') date: string,
+  ) {
+    const result = await this.teacherService.checkClassAttendanceStatus(userId, classArmId, date);
+    return {
+      success: true,
+      message: 'Attendance status retrieved successfully',
+      data: result,
+    };
+  }
+
+  @Get('attendance/data')
+  @ApiOperation({ summary: 'Get existing attendance data for a class on a specific date' })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendance data retrieved successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - not authorized to view attendance for this class',
+  })
+  @ApiResponse({ status: 404, description: 'Class arm not found' })
+  async getClassAttendanceData(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('date') date: string,
+  ) {
+    const result = await this.teacherService.getClassAttendanceData(userId, classArmId, date);
+    return {
+      success: true,
+      message: 'Attendance data retrieved successfully',
+      data: result,
+    };
   }
 }

@@ -20,12 +20,29 @@ export class BffAdminClassroomService {
 
     const schoolId = user.schoolId;
 
-    // Get all class arms for the school with their students and teachers
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      throw new Error('No current academic session found');
+    }
+
+    // Get all class arms for the school with their students and teachers (filtered by current session)
     const classArms = await this.prisma.classArm.findMany({
-      where: { schoolId },
+      where: { 
+        schoolId,
+        academicSessionId: currentSession.id,
+        deletedAt: null,
+      },
       include: {
         level: true,
-        students: true,
+        students: {
+          where: {
+            deletedAt: null,
+          },
+        },
         classTeacher: {
           include: {
             user: true,

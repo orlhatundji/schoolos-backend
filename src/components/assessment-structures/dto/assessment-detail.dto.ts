@@ -1,24 +1,16 @@
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
-
 import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNumber, IsBoolean, IsOptional, Min, Max } from 'class-validator';
 
-export class CreateAssessmentStructureDto {
+export class AssessmentDetailDto {
   @ApiProperty({
-    description: 'Academic session ID this assessment structure belongs to',
-    example: 'uuid-string',
-  })
-  @IsUUID()
-  academicSessionId: string;
-
-  @ApiProperty({
-    description: 'Name of the assessment structure (e.g., "Test 1", "Test 2", "Exam")',
+    description: 'Name of the assessment (e.g., "Test 1", "Midterm Exam")',
     example: 'Test 1',
   })
   @IsString()
   name: string;
 
   @ApiProperty({
-    description: 'Optional description of the assessment structure',
+    description: 'Description of the assessment',
     example: 'First continuous assessment test',
     required: false,
   })
@@ -27,12 +19,12 @@ export class CreateAssessmentStructureDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Maximum score for this assessment type (must total 100 across all types)',
+    description: 'Maximum score as percentage (1-100)',
     example: 20,
     minimum: 1,
     maximum: 100,
   })
-  @IsInt()
+  @IsNumber()
   @Min(1)
   @Max(100)
   maxScore: number;
@@ -40,7 +32,6 @@ export class CreateAssessmentStructureDto {
   @ApiProperty({
     description: 'Whether this is an exam or regular assessment',
     example: false,
-    default: false,
   })
   @IsBoolean()
   isExam: boolean;
@@ -49,7 +40,6 @@ export class CreateAssessmentStructureDto {
     description: 'Display order for UI',
     example: 1,
   })
-  @IsInt()
-  @Min(1)
+  @IsNumber()
   order: number;
 }

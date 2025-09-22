@@ -3,6 +3,8 @@ import { AdminService } from './admin.service';
 import { AdminController } from './admin.controller';
 import { AdminTeacherController } from './admin-teacher.controller';
 import { AdminTeacherService } from './admin-teacher.service';
+import { AdminClassroomController } from './admin-classroom.controller';
+import { AdminClassroomService } from './admin-classroom.service';
 import { DropdownsController } from './admin-dropdowns.controller';
 import { DropdownsService } from './dropdowns.service';
 import { UsersModule } from '../users/users.module';
@@ -13,7 +15,7 @@ import { PasswordHasher } from '../../utils/hasher';
 
 @Module({
   imports: [UsersModule, AuthModule, PrismaModule],
-  controllers: [AdminController, AdminTeacherController, DropdownsController],
-  providers: [AdminService, AdminTeacherService, DropdownsService, Encryptor, PasswordHasher],
+  controllers: [AdminController, AdminTeacherController, AdminClassroomController, DropdownsController],
+  providers: [AdminService, AdminTeacherService, AdminClassroomService, DropdownsService, Encryptor, PasswordHasher],
 })
 export class AdminModule {}

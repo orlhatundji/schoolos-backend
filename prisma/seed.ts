@@ -670,6 +670,19 @@ async function main() {
   // Create default assessment structure for the school using utility
   const defaultAssessmentStructures = getDefaultAssessmentStructure();
 
+  // Get the current academic session for the school
+  const currentAcademicSession = await prisma.academicSession.findFirst({
+    where: {
+      schoolId: school.id,
+      isCurrent: true,
+    },
+  });
+
+  if (!currentAcademicSession) {
+    console.log('⚠️ No current academic session found, skipping assessment structure creation');
+    return;
+  }
+
   const assessmentStructures = [];
   for (const structureData of defaultAssessmentStructures) {
     const assessmentStructure = await prisma.assessmentStructure.create({
@@ -680,6 +693,7 @@ async function main() {
         isExam: structureData.isExam,
         order: structureData.order,
         schoolId: school.id,
+        academicSessionId: currentAcademicSession.id,
         isActive: true,
       },
     });

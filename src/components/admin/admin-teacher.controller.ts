@@ -70,6 +70,7 @@ export class AdminTeacherController {
     required: false,
     enum: ['FULL_TIME', 'PART_TIME', 'CONTRACT'],
   })
+  @ApiQuery({ name: 'academicSessionId', required: false, type: String })
   @ApiQuery({ name: 'departmentId', required: false, type: String })
   @ApiQuery({ name: 'subjectId', required: false, type: String })
   async getTeachers(
@@ -148,6 +149,6 @@ export class AdminTeacherController {
     @GetCurrentUserId() userId: string,
     @Param('teacherId') teacherId: string,
   ): Promise<void> {
-    return this.adminTeacherService.deleteTeacher(userId, teacherId);
+    await this.adminTeacherService.deleteTeacher(userId, teacherId);
   }
 }

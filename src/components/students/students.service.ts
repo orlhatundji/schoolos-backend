@@ -106,13 +106,10 @@ export class StudentsService extends BaseService {
     // These should be processed separately and stored in appropriate models
     // For now, we'll just log them for future implementation
     if (guardianInformation) {
-      console.log('Guardian information to be processed:', guardianInformation);
     }
     if (medicalInformation) {
-      console.log('Medical information to be processed:', medicalInformation);
     }
     if (address) {
-      console.log('Address information to be processed:', address);
     }
 
     return student;

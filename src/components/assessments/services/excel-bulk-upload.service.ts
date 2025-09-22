@@ -240,7 +240,6 @@ export class ExcelBulkUploadService {
 
       // If teacher exists in school, allow access (they can teach any subject in their school)
       // This is more flexible and allows teachers to work with subjects they're assigned to
-      console.log(`Allowing teacher ${teacher.id} to access subject ${subjectName} in ${levelName}${classArmName} - general school access`);
     }
 
     // Get all students in the class first
@@ -828,7 +827,6 @@ export class ExcelBulkUploadService {
     // If no specific record, allow access if teacher is in the same school
     // This is more flexible and allows teachers to work with subjects they're assigned to
     if (!teacherAccess) {
-      console.log(`Allowing teacher ${teacher.id} to access subject ${metadata.subjectName} in class ${metadata.classArmId} - general school access`);
     }
   }
 

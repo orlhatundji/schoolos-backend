@@ -43,12 +43,10 @@ export class BffAdminAdminService {
         deletedAt: null,
         teacher: {
           hod: {
-            some: {
+            deletedAt: null,
+            department: {
+              schoolId,
               deletedAt: null,
-              department: {
-                schoolId,
-                deletedAt: null,
-              },
             },
           },
         },
@@ -113,7 +111,7 @@ export class BffAdminAdminService {
       }),
       // HODs (teachers with administrative responsibilities)
       ...hodUsers.map((hodUser) => {
-        const hodDepartment = hodUser.teacher?.hod?.[0]?.department;
+        const hodDepartment = hodUser.teacher?.hod?.department;
 
         return {
           id: hodUser.id,

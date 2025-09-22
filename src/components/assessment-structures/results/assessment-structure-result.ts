@@ -7,6 +7,7 @@ import { BaseResultWithData } from '../../../common/results';
 export class AssessmentStructureEntity implements AssessmentStructure {
   @ApiProperty() id: string;
   @ApiProperty() schoolId: string;
+  @ApiProperty() academicSessionId: string;
   @ApiProperty() name: string;
   @ApiProperty() description: string | null;
   @ApiProperty() maxScore: number;

@@ -49,6 +49,11 @@ export class QueryTeachersDto {
   @IsOptional()
   employmentType?: EmploymentType;
 
+  @ApiPropertyOptional({ description: 'Filter by academic session' })
+  @IsUUID()
+  @IsOptional()
+  academicSessionId?: string;
+
   @ApiPropertyOptional({ description: 'Filter by department' })
   @IsUUID()
   @IsOptional()

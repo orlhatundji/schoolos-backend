@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -16,7 +17,7 @@ import { AccessTokenGuard } from '../auth/strategies/jwt/guards/access-token.gua
 import { CheckPolicies } from '../roles-manager/policies/check-policies.decorator';
 import { PoliciesGuard } from '../roles-manager/policies/policies.guard';
 import { AssessmentStructuresService } from './assessment-structures.service';
-import { CreateAssessmentStructureDto, UpdateAssessmentStructureDto } from './dto';
+import { CreateAssessmentStructureDto, UpdateAssessmentStructureDto, BulkUpdateAssessmentStructuresDto } from './dto';
 import {
   AssessmentStructureMessages,
   AssessmentStructureResult,
@@ -61,8 +62,11 @@ export class AssessmentStructuresController {
   @ApiResponse({ status: 200, description: 'Assessment structures retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async findAll(@GetCurrentUserId() userId: string) {
-    const assessmentStructures = await this.assessmentStructuresService.findAll(userId);
+  async findAll(
+    @GetCurrentUserId() userId: string,
+    @Query('academicSessionId') academicSessionId?: string,
+  ) {
+    const assessmentStructures = await this.assessmentStructuresService.findAll(userId, academicSessionId);
     return ManyAssessmentStructuresResult.from(assessmentStructures, {
       status: HttpStatus.OK,
       message: AssessmentStructureMessages.SUCCESS.FOUND,
@@ -124,6 +128,25 @@ export class AssessmentStructuresController {
     return {
       status: HttpStatus.OK,
       message: result.message,
+    };
+  }
+
+  @Post('bulk')
+  @CheckPolicies()
+  @ApiOperation({ summary: 'Bulk create or update assessment structures' })
+  @ApiResponse({ status: 200, description: 'Assessment structures processed successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - validation failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  async bulkUpdate(
+    @GetCurrentUserId() userId: string,
+    @Body() bulkUpdateDto: BulkUpdateAssessmentStructuresDto,
+  ) {
+    const result = await this.assessmentStructuresService.bulkUpdate(userId, bulkUpdateDto);
+    return {
+      status: HttpStatus.OK,
+      message: 'Bulk operation completed',
+      data: result,
     };
   }
 }

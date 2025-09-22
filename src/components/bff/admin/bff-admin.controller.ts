@@ -107,8 +107,11 @@ export class BffAdminController {
   @Get('teachers-view')
   @TeachersViewSwagger()
   @CheckPolicies(new ManageStudentPolicyHandler())
-  async getTeachersView(@GetCurrentUserId() userId: string) {
-    const data = await this.bffAdminService.getTeachersViewData(userId);
+  async getTeachersView(
+    @GetCurrentUserId() userId: string,
+    @Query('academicSessionId') academicSessionId?: string,
+  ) {
+    const data = await this.bffAdminService.getTeachersViewData(userId, academicSessionId);
     return new AdminTeachersViewResult(data);
   }
 
@@ -123,8 +126,11 @@ export class BffAdminController {
   @Get('students-view')
   @StudentsViewSwagger()
   @CheckPolicies(new ManageStudentPolicyHandler())
-  async getStudentsView(@GetCurrentUserId() userId: string) {
-    const data = await this.bffAdminService.getStudentsViewData(userId);
+  async getStudentsView(
+    @GetCurrentUserId() userId: string,
+    @Query('academicSessionId') academicSessionId?: string,
+  ) {
+    const data = await this.bffAdminService.getStudentsViewData(userId, academicSessionId);
     return new AdminStudentsViewResult(data);
   }
 

@@ -13,6 +13,7 @@ export class BffAdminStudentService {
     limit: number = 20,
     classroomId?: string,
     search?: string,
+    academicSessionId?: string,
   ): Promise<PaginatedStudentDetails> {
     // First, get the user's school ID
     const user = await this.prisma.user.findUnique({
@@ -25,6 +26,15 @@ export class BffAdminStudentService {
     }
 
     const schoolId = user.schoolId;
+
+    // Get the target academic session (either specified or current)
+    const targetSession = academicSessionId
+      ? await this.prisma.academicSession.findFirst({
+          where: { id: academicSessionId, schoolId },
+        })
+      : await this.prisma.academicSession.findFirst({
+          where: { schoolId, isCurrent: true },
+        });
 
     // Build where clause for filtering
     const whereClause: any = {
@@ -176,8 +186,18 @@ export class BffAdminStudentService {
         guardianName,
         guardianPhone,
         telephone: student.user.phone,
-        className: student.classArm ? student.classArm.name : 'N/A',
-        classLevel: student.classArm?.level ? student.classArm.level.name : 'N/A',
+        className:
+          student.classArm &&
+          student.classArm.academicSessionId === targetSession.id &&
+          !student.classArm.deletedAt
+            ? student.classArm.name
+            : 'Not assigned',
+        classLevel:
+          student.classArm &&
+          student.classArm.academicSessionId === targetSession.id &&
+          !student.classArm.deletedAt
+            ? student.classArm.level.name
+            : 'Not assigned',
         averageGrade: Math.round(averageGrade * 100) / 100,
         isPresent,
         attendanceRate: Math.round(attendanceRate * 100) / 100,
@@ -311,7 +331,7 @@ export class BffAdminStudentService {
     };
   }
 
-  async getStudentsViewData(userId: string): Promise<StudentsViewData> {
+  async getStudentsViewData(userId: string, academicSessionId?: string): Promise<StudentsViewData> {
     // First, get the user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -324,12 +344,26 @@ export class BffAdminStudentService {
 
     const schoolId = user.schoolId;
 
-    // Get all students for the school with their related data
+    // Get the target academic session (either specified or current)
+    const targetSession = academicSessionId
+      ? await this.prisma.academicSession.findFirst({
+          where: { id: academicSessionId, schoolId },
+        })
+      : await this.prisma.academicSession.findFirst({
+          where: { schoolId, isCurrent: true },
+        });
+
+    if (!targetSession) {
+      throw new Error('Academic session not found');
+    }
+
+    // Get all students for the school (not filtered by class arm assignment)
     const students = await this.prisma.student.findMany({
       where: {
         user: {
           schoolId,
         },
+        deletedAt: null,
       },
       include: {
         user: true,
@@ -341,14 +375,23 @@ export class BffAdminStudentService {
         classArm: {
           include: {
             level: true,
+            academicSession: true,
           },
         },
         subjectTermStudents: {
+          where: {
+            subjectTerm: {
+              academicSessionId: targetSession.id,
+            },
+          },
           include: {
             assessments: true,
           },
         },
         studentAttendances: {
+          where: {
+            academicSessionId: targetSession.id,
+          },
           orderBy: {
             createdAt: 'desc',
           },
@@ -433,8 +476,18 @@ export class BffAdminStudentService {
         guardianName,
         guardianPhone,
         telephone: student.user.phone,
-        className: student.classArm ? student.classArm.name : 'N/A',
-        classLevel: student.classArm?.level ? student.classArm.level.name : 'N/A',
+        className:
+          student.classArm &&
+          student.classArm.academicSessionId === targetSession.id &&
+          !student.classArm.deletedAt
+            ? student.classArm.name
+            : 'Not assigned',
+        classLevel:
+          student.classArm &&
+          student.classArm.academicSessionId === targetSession.id &&
+          !student.classArm.deletedAt
+            ? student.classArm.level.name
+            : 'Not assigned',
         averageGrade: Math.round(averageGrade * 100) / 100,
         isPresent,
         attendanceRate: Math.round(attendanceRate * 100) / 100,

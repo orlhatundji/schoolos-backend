@@ -25,51 +25,8 @@ export class TeacherService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getTeacherDashboardData(userId: string): Promise<TeacherDashboardData> {
-    // Get teacher information
-    const teacher = await this.prisma.teacher.findFirst({
-      where: {
-        userId,
-        deletedAt: null,
-      },
-      include: {
-        user: {
-          include: {
-            school: true,
-          },
-        },
-        classArmSubjectTeachers: {
-          include: {
-            subject: true,
-            classArm: {
-              include: {
-                level: true,
-                students: true,
-              },
-            },
-          },
-        },
-        classArmTeachers: {
-          include: {
-            classArm: {
-              include: {
-                level: true,
-                students: true,
-              },
-            },
-          },
-        },
-        classArmsAsTeacher: {
-          include: {
-            level: true,
-            students: true,
-          },
-        },
-      },
-    });
-
-    if (!teacher) {
-      throw new Error('Teacher not found');
-    }
+    // Get teacher information with current session filtering
+    const teacher = await this.getTeacherWithRelations(userId);
 
     const schoolId = teacher.user.schoolId;
 
@@ -281,30 +238,66 @@ export class TeacherService {
           },
         },
         classArmSubjectTeachers: {
+          where: {
+            deletedAt: null,
+            classArm: {
+              academicSession: {
+                isCurrent: true,
+              },
+              deletedAt: null,
+            },
+          },
           include: {
             subject: true,
             classArm: {
               include: {
                 level: true,
-                students: true,
+                students: {
+                  where: {
+                    deletedAt: null,
+                  },
+                },
               },
             },
           },
         },
         classArmTeachers: {
+          where: {
+            deletedAt: null,
+            classArm: {
+              academicSession: {
+                isCurrent: true,
+              },
+              deletedAt: null,
+            },
+          },
           include: {
             classArm: {
               include: {
                 level: true,
-                students: true,
+                students: {
+                  where: {
+                    deletedAt: null,
+                  },
+                },
               },
             },
           },
         },
         classArmsAsTeacher: {
+          where: {
+            academicSession: {
+              isCurrent: true,
+            },
+            deletedAt: null,
+          },
           include: {
             level: true,
-            students: true,
+            students: {
+              where: {
+                deletedAt: null,
+              },
+            },
           },
         },
       },
@@ -706,7 +699,9 @@ export class TeacherService {
     });
 
     if (!classArmData) {
-      throw new NotFoundException('Class not found');
+      throw new NotFoundException(
+        `Class ${level} ${classArm} not found in the current academic session. Please contact the administrator to set up class arms for the current session.`
+      );
     }
 
     // Verify the teacher is either the class teacher OR teaches this subject in this class

@@ -234,8 +234,17 @@ export class AdminTeacherService {
       throw new Error('User not found or not associated with a school');
     }
 
-    const { page = 1, limit = 10 } = queryDto;
+    const { page = 1, limit = 10, academicSessionId } = queryDto;
     const skip = (page - 1) * limit;
+
+    // Get target session (either specified or current)
+    const targetSession = academicSessionId 
+      ? await this.prisma.academicSession.findFirst({
+          where: { id: academicSessionId, schoolId: user.schoolId },
+        })
+      : await this.prisma.academicSession.findFirst({
+          where: { schoolId: user.schoolId, isCurrent: true },
+        });
 
     // Get total count
     const totalRecords = await this.prisma.teacher.count({
@@ -257,12 +266,47 @@ export class AdminTeacherService {
         user: true,
         department: true,
         classArmSubjectTeachers: {
-          include: { subject: true },
+          where: targetSession ? {
+            deletedAt: null,
+            classArm: {
+              academicSessionId: targetSession.id,
+              deletedAt: null,
+            },
+          } : undefined,
+          include: { 
+            subject: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
+          },
         },
         classArmTeachers: {
-          include: { classArm: true },
+          where: targetSession ? {
+            deletedAt: null,
+            classArm: {
+              academicSessionId: targetSession.id,
+              deletedAt: null,
+            },
+          } : undefined,
+          include: { 
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
+          },
         },
-        classArmsAsTeacher: true,
+        classArmsAsTeacher: {
+          where: targetSession ? {
+            academicSessionId: targetSession.id,
+            deletedAt: null,
+          } : undefined,
+          include: {
+            level: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -510,46 +554,6 @@ export class AdminTeacherService {
     }
   }
 
-  async deleteTeacher(userId: string, teacherId: string): Promise<void> {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new Error('User not found or not associated with a school');
-    }
-
-    // Check if teacher exists
-    const teacher = await this.prisma.teacher.findFirst({
-      where: {
-        id: teacherId,
-        user: { schoolId: user.schoolId, deletedAt: null },
-        deletedAt: null,
-      },
-      include: { user: true },
-    });
-
-    if (!teacher) {
-      throw new Error('Teacher not found');
-    }
-
-    // Soft delete in transaction
-    await this.prisma.$transaction(async (tx) => {
-      // Soft delete teacher
-      await tx.teacher.update({
-        where: { id: teacherId },
-        data: { deletedAt: new Date() },
-      });
-
-      // Soft delete user
-      await tx.user.update({
-        where: { id: teacher.userId },
-        data: { deletedAt: new Date() },
-      });
-    });
-  }
 
   async getTeacherStats(userId: string): Promise<TeacherStatsResult> {
     // Get user's school ID
@@ -714,5 +718,72 @@ export class AdminTeacherService {
       createdAt: teacher.createdAt.toISOString(),
       updatedAt: teacher.updatedAt.toISOString(),
     };
+  }
+
+  async deleteTeacher(userId: string, teacherId: string): Promise<{ message: string }> {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not associated with a school');
+    }
+
+    // Check if teacher exists and belongs to the school
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        id: teacherId,
+        user: {
+          schoolId: user.schoolId,
+        },
+        deletedAt: null,
+      },
+      include: {
+        classArmSubjectTeachers: {
+          where: { deletedAt: null },
+        },
+        classArmTeachers: {
+          where: { deletedAt: null },
+        },
+        classArmsAsTeacher: {
+          where: { deletedAt: null },
+        },
+        hod: {
+          where: { deletedAt: null },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found or access denied');
+    }
+
+    // Check if teacher has any active assignments
+    const hasSubjectAssignments = teacher.classArmSubjectTeachers.length > 0;
+    const hasClassAssignments = teacher.classArmTeachers.length > 0;
+    const hasClassTeacherRole = teacher.classArmsAsTeacher.length > 0;
+    const isHeadOfDepartment = teacher.hod !== null;
+
+    if (hasSubjectAssignments || hasClassAssignments || hasClassTeacherRole || isHeadOfDepartment) {
+      const reasons = [];
+      if (hasSubjectAssignments) reasons.push('subject assignments');
+      if (hasClassAssignments) reasons.push('class assignments');
+      if (hasClassTeacherRole) reasons.push('class teacher roles');
+      if (isHeadOfDepartment) reasons.push('head of department role');
+
+      throw new BadRequestException(
+        `Cannot delete teacher. They have active ${reasons.join(', ')}. Please remove all assignments first.`,
+      );
+    }
+
+    // Soft delete the teacher
+    await this.prisma.teacher.update({
+      where: { id: teacherId },
+      data: { deletedAt: new Date() },
+    });
+
+    return { message: 'Teacher deleted successfully' };
   }
 }

@@ -27,7 +27,16 @@ export class BffAdminSubjectService {
 
     const schoolId = user.schoolId;
 
-    // Get all subjects for the school with their related data
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      throw new Error('No current academic session found');
+    }
+
+    // Get all subjects for the school with their related data (filtered by current session)
     const subjects = await this.prisma.subject.findMany({
       where: {
         schoolId,
@@ -36,10 +45,21 @@ export class BffAdminSubjectService {
       include: {
         department: true,
         classArmSubjectTeachers: {
+          where: {
+            deletedAt: null,
+            classArm: {
+              academicSessionId: currentSession.id,
+              deletedAt: null,
+            },
+          },
           include: {
             classArm: {
               include: {
-                students: true,
+                students: {
+                  where: {
+                    deletedAt: null,
+                  },
+                },
               },
             },
           },

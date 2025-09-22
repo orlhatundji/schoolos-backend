@@ -32,13 +32,42 @@ export class AcademicSessionsService extends BaseService {
       );
     }
 
+    // If this session is being set as current, deactivate all other current sessions for this school
+    if (dto.isCurrent) {
+      await this.prisma.academicSession.updateMany({
+        where: {
+          schoolId: user.schoolId,
+          isCurrent: true,
+        },
+        data: {
+          isCurrent: false,
+        },
+      });
+    }
+
     // Add schoolId to the DTO
     const dataWithSchoolId = {
       ...dto,
       schoolId: user.schoolId,
     };
 
-    return this.academicSessionsRepository.create(dataWithSchoolId);
+    // Use a transaction to ensure both operations succeed or fail together
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Create the academic session
+      const newSession = await tx.academicSession.create({
+        data: dataWithSchoolId,
+      });
+
+      // Create assessment structure template for the new session
+      await this.createAssessmentStructureForNewSessionInTransaction(tx, user.schoolId, newSession.id);
+
+      // Create class arms for the new session
+      await this.createClassArmsForNewSessionInTransaction(tx, user.schoolId, newSession.id);
+
+      return newSession;
+    });
+
+    return result;
   }
 
   async getAcademicSessionById(userId: string, id: string): Promise<AcademicSession> {
@@ -92,11 +121,68 @@ export class AcademicSessionsService extends BaseService {
     data: UpdateAcademicSessionDto,
   ): Promise<AcademicSession> {
     await this.getAcademicSessionById(userId, id);
+    
+    // If this session is being set as current, deactivate all other current sessions for this school
+    if (data.isCurrent) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { schoolId: true },
+      });
+
+      if (user?.schoolId) {
+        await this.prisma.academicSession.updateMany({
+          where: {
+            schoolId: user.schoolId,
+            isCurrent: true,
+            id: { not: id }, // Don't update the current session
+          },
+          data: {
+            isCurrent: false,
+          },
+        });
+      }
+    }
+    
     return this.academicSessionsRepository.update({ id }, data);
   }
 
   async deleteAcademicSession(userId: string, id: string): Promise<AcademicSession> {
     await this.getAcademicSessionById(userId, id);
+
+    // Check if academic session has associated class arms
+    const classArms = await this.prisma.classArm.findMany({
+      where: { academicSessionId: id },
+      include: {
+        students: true,
+        classArmSubjectTeachers: true,
+        classArmTeachers: true,
+      },
+    });
+
+    if (classArms.length > 0) {
+      // Check if any class arms have students or teacher assignments
+      const hasStudents = classArms.some(classArm => classArm.students.length > 0);
+      const hasTeacherAssignments = classArms.some(classArm => 
+        classArm.classArmSubjectTeachers.length > 0 || classArm.classArmTeachers.length > 0
+      );
+
+      if (hasStudents) {
+        throw new BadRequestException(
+          'Cannot delete academic session. It has class arms with enrolled students. Please remove all students from class arms first.',
+        );
+      }
+
+      if (hasTeacherAssignments) {
+        throw new BadRequestException(
+          'Cannot delete academic session. It has class arms with teacher assignments. Please remove all teacher assignments first.',
+        );
+      }
+
+      // If class arms exist but have no students or teacher assignments, delete them first
+      await this.prisma.classArm.deleteMany({
+        where: { academicSessionId: id },
+      });
+    }
 
     // Check if academic session has associated subject terms with student enrollments
     const subjectTerms = await this.prisma.subjectTerm.findMany({
@@ -115,6 +201,315 @@ export class AcademicSessionsService extends BaseService {
       }
     }
 
+    // Delete associated assessment structure templates
+    await this.prisma.assessmentStructureTemplate.deleteMany({
+      where: { academicSessionId: id },
+    });
+
     return this.academicSessionsRepository.delete({ id });
+  }
+
+  async setCurrentSession(userId: string, id: string): Promise<AcademicSession> {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException(
+        'User not associated with a school. Only school users can set current sessions.',
+      );
+    }
+
+    // Verify the session belongs to the user's school
+    const session = await this.getAcademicSessionById(userId, id);
+
+    // Deactivate all other current sessions for this school
+    await this.prisma.academicSession.updateMany({
+      where: {
+        schoolId: user.schoolId,
+        isCurrent: true,
+        id: { not: id },
+      },
+      data: {
+        isCurrent: false,
+      },
+    });
+
+    // Set this session as current
+    return this.academicSessionsRepository.update({ id }, { isCurrent: true });
+  }
+
+  private async createAssessmentStructureForNewSessionInTransaction(tx: any, schoolId: string, academicSessionId: string) {
+    try {
+      // Check if school already has an assessment structure template for this session
+      const existingTemplate = await tx.assessmentStructureTemplate.findFirst({
+        where: {
+          schoolId,
+          academicSessionId,
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+
+      if (existingTemplate) {
+        return;
+      }
+
+      // Try to find the most recent session's template to copy from
+      // First, find the most recent academic session that has a template
+      const mostRecentSessionWithTemplate = await tx.academicSession.findFirst({
+        where: {
+          schoolId,
+          id: { not: academicSessionId },
+          assessmentStructureTemplates: {
+            some: {
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          assessmentStructureTemplates: {
+            where: {
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+        },
+      });
+
+      const previousTemplate = mostRecentSessionWithTemplate?.assessmentStructureTemplates[0];
+
+      if (previousTemplate) {
+        // Copy from previous session
+        const newTemplate = await tx.assessmentStructureTemplate.create({
+          data: {
+            schoolId,
+            academicSessionId,
+            name: previousTemplate.name,
+            description: previousTemplate.description,
+            assessments: previousTemplate.assessments,
+            isActive: true,
+          },
+        });
+        return;
+      }
+
+      // If no previous template, use global default
+      const globalDefault = await tx.assessmentStructureTemplate.findFirst({
+        where: {
+          isGlobalDefault: true,
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+
+      if (globalDefault) {
+        const newTemplate = await tx.assessmentStructureTemplate.create({
+          data: {
+            schoolId,
+            academicSessionId,
+            name: globalDefault.name,
+            description: globalDefault.description,
+            assessments: globalDefault.assessments,
+            isActive: true,
+          },
+        });
+      } else {
+      }
+    } catch (error) {
+      console.error('❌ Error creating assessment structure template for new session:', error);
+      // Don't throw error to avoid breaking session creation
+    }
+  }
+
+  private async createAssessmentStructureForNewSession(schoolId: string, academicSessionId: string) {
+    try {
+      // Check if school already has an assessment structure template for this session
+      const existingTemplate = await this.prisma.assessmentStructureTemplate.findFirst({
+        where: {
+          schoolId,
+          academicSessionId,
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+
+      if (existingTemplate) {
+        return;
+      }
+
+      // Try to find the most recent session's template to copy from
+      // First, find the most recent academic session that has a template
+      const mostRecentSessionWithTemplate = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId,
+          id: { not: academicSessionId },
+          assessmentStructureTemplates: {
+            some: {
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          assessmentStructureTemplates: {
+            where: {
+              isActive: true,
+              deletedAt: null,
+            },
+          },
+        },
+      });
+
+      const previousTemplate = mostRecentSessionWithTemplate?.assessmentStructureTemplates[0];
+
+      if (previousTemplate) {
+        // Copy from previous session
+        const newTemplate = await this.prisma.assessmentStructureTemplate.create({
+          data: {
+            schoolId,
+            academicSessionId,
+            name: previousTemplate.name,
+            description: previousTemplate.description,
+            assessments: previousTemplate.assessments,
+            isActive: true,
+          },
+        });
+        return;
+      }
+
+      // If no previous template, use global default
+      const globalDefault = await this.prisma.assessmentStructureTemplate.findFirst({
+        where: {
+          isGlobalDefault: true,
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+
+      if (globalDefault) {
+        const newTemplate = await this.prisma.assessmentStructureTemplate.create({
+          data: {
+            schoolId,
+            academicSessionId,
+            name: globalDefault.name,
+            description: globalDefault.description,
+            assessments: globalDefault.assessments,
+            isActive: true,
+          },
+        });
+      } else {
+      }
+    } catch (error) {
+      console.error('❌ Error creating assessment structure template for new session:', error);
+      // Don't throw error to avoid breaking session creation
+    }
+  }
+
+  private async createClassArmsForNewSessionInTransaction(tx: any, schoolId: string, academicSessionId: string) {
+    try {
+      
+      // Check if class arms already exist for this session
+      const existingClassArms = await tx.classArm.findMany({
+        where: {
+          schoolId,
+          academicSessionId,
+          deletedAt: null,
+        },
+      });
+
+      if (existingClassArms.length > 0) {
+        return;
+      }
+
+      // Find the most recent session that has class arms with teacher assignments
+      const mostRecentSessionWithClassArms = await tx.academicSession.findFirst({
+        where: {
+          schoolId,
+          id: { not: academicSessionId },
+          classArms: {
+            some: {
+              deletedAt: null,
+              classArmSubjectTeachers: {
+                some: {
+                  deletedAt: null,
+                },
+              },
+            },
+          },
+        },
+        include: {
+          classArms: {
+            where: {
+              deletedAt: null,
+            },
+            include: {
+              level: true,
+              department: true,
+              classArmSubjectTeachers: {
+                where: {
+                  deletedAt: null,
+                },
+                include: {
+                  subject: true,
+                  teacher: {
+                    include: {
+                      user: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (mostRecentSessionWithClassArms?.classArms) {
+        
+        // Copy class arms from the previous session
+        for (const classArm of mostRecentSessionWithClassArms.classArms) {
+          const newClassArm = await tx.classArm.create({
+            data: {
+              name: classArm.name,
+              levelId: classArm.levelId,
+              departmentId: classArm.departmentId,
+              schoolId,
+              academicSessionId,
+              // Note: We don't copy classTeacherId and captainId as these are session-specific
+              // Administrators need to assign new class teachers and captains for the new session
+            },
+          });
+          
+          // Copy subject teacher assignments for this class arm
+          for (const subjectTeacher of classArm.classArmSubjectTeachers) {
+            await tx.classArmSubjectTeacher.create({
+              data: {
+                classArmId: newClassArm.id,
+                subjectId: subjectTeacher.subjectId,
+                teacherId: subjectTeacher.teacherId,
+              },
+            });
+          }
+        }
+      } else {
+        // If no previous class arms exist, we could create default ones here
+        // For now, we'll leave it to the administrator to set up
+      }
+    } catch (error) {
+      console.error('❌ Error creating class arms for new session:', error);
+      // Don't throw error to avoid breaking session creation
+    }
   }
 }

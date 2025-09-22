@@ -71,16 +71,16 @@ export class BffAdminService {
     return this.studentService.getSingleStudentDetails(userId, studentId);
   }
 
-  async getTeachersViewData(userId: string): Promise<TeachersViewData> {
-    return this.teacherService.getTeachersViewData(userId);
+  async getTeachersViewData(userId: string, academicSessionId?: string): Promise<TeachersViewData> {
+    return this.teacherService.getTeachersViewData(userId, academicSessionId);
   }
 
   async getSingleTeacherDetails(userId: string, teacherId: string): Promise<SingleTeacherDetails> {
     return this.teacherService.getSingleTeacherDetails(userId, teacherId);
   }
 
-  async getStudentsViewData(userId: string): Promise<StudentsViewData> {
-    return this.studentService.getStudentsViewData(userId);
+  async getStudentsViewData(userId: string, academicSessionId?: string): Promise<StudentsViewData> {
+    return this.studentService.getStudentsViewData(userId, academicSessionId);
   }
 
   async getSubjectsViewData(userId: string): Promise<SubjectsViewData> {
@@ -206,7 +206,7 @@ export class BffAdminService {
       this.getStudentStats(schoolId, currentSession.id),
       this.getTeacherStats(schoolId),
       this.getClassroomStats(schoolId, currentSession.id),
-      this.getSubjectStats(schoolId),
+      this.getSubjectStats(schoolId, currentSession.id),
       this.getDepartmentStats(schoolId),
       this.getLevelStats(schoolId),
       this.getAdminStats(schoolId),
@@ -478,25 +478,34 @@ export class BffAdminService {
     };
   }
 
-  private async getSubjectStats(schoolId: string) {
+  private async getSubjectStats(schoolId: string, sessionId: string) {
     const [totalSubjects, coreSubjects, generalSubjects, vocationalSubjects, subjectsWithTeachers] =
       await Promise.all([
         this.prisma.subject.count({
-          where: { schoolId },
+          where: { schoolId, deletedAt: null },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'CORE' },
+          where: { schoolId, category: 'CORE', deletedAt: null },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'GENERAL' },
+          where: { schoolId, category: 'GENERAL', deletedAt: null },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'VOCATIONAL' },
+          where: { schoolId, category: 'VOCATIONAL', deletedAt: null },
         }),
         this.prisma.subject.count({
           where: {
             schoolId,
-            classArmSubjectTeachers: { some: {} },
+            deletedAt: null,
+            classArmSubjectTeachers: { 
+              some: {
+                deletedAt: null,
+                classArm: {
+                  academicSessionId: sessionId,
+                  deletedAt: null,
+                },
+              },
+            },
           },
         }),
       ]);

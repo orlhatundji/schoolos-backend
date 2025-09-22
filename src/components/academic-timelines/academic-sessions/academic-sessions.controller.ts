@@ -91,6 +91,19 @@ export class AcademicSessionsController {
     });
   }
 
+  @Post(':id/set-current')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async setCurrent(
+    @GetCurrentUserId() userId: string,
+    @Param('id') id: string,
+  ): Promise<AcademicSessionResult> {
+    const academicSession = await this.academicSessionsService.setCurrentSession(userId, id);
+    return AcademicSessionResult.from(academicSession, {
+      status: HttpStatus.OK,
+      message: 'Session set as current successfully',
+    });
+  }
+
   @Delete(':id')
   @CheckPolicies(new ManageStudentPolicyHandler())
   async remove(

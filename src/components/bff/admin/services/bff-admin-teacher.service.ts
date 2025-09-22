@@ -8,7 +8,7 @@ import { TeachersViewData, SingleTeacherDetails } from '../types';
 export class BffAdminTeacherService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getTeachersViewData(userId: string): Promise<TeachersViewData> {
+  async getTeachersViewData(userId: string, academicSessionId?: string): Promise<TeachersViewData> {
     // First, get the user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -21,7 +21,20 @@ export class BffAdminTeacherService {
 
     const schoolId = user.schoolId;
 
-    // Get all teachers for the school with their related data
+    // Get the target academic session (either specified or current)
+    const targetSession = academicSessionId 
+      ? await this.prisma.academicSession.findFirst({
+          where: { id: academicSessionId, schoolId },
+        })
+      : await this.prisma.academicSession.findFirst({
+          where: { schoolId, isCurrent: true },
+        });
+
+    if (!targetSession) {
+      throw new Error('Academic session not found');
+    }
+
+    // Get all teachers for the school with their related data (filtered by current session)
     const teachers = await this.prisma.teacher.findMany({
       where: {
         user: {
@@ -38,16 +51,47 @@ export class BffAdminTeacherService {
           },
         },
         classArmSubjectTeachers: {
+          where: {
+            deletedAt: null,
+            classArm: {
+              academicSessionId: targetSession.id,
+              deletedAt: null,
+            },
+          },
           include: {
             subject: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
           },
         },
         classArmTeachers: {
+          where: {
+            deletedAt: null,
+            classArm: {
+              academicSessionId: targetSession.id,
+              deletedAt: null,
+            },
+          },
           include: {
-            classArm: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
           },
         },
-        classArmsAsTeacher: true, // Direct class teacher assignments
+        classArmsAsTeacher: {
+          where: {
+            academicSessionId: targetSession.id,
+            deletedAt: null,
+          },
+          include: {
+            level: true,
+          },
+        },
       },
     });
 
@@ -224,8 +268,8 @@ export class BffAdminTeacherService {
     const lastLogin = teacher.user.lastLoginAt?.toISOString() || null;
 
     // Check if teacher is HOD
-    const isHOD = teacher.hod.length > 0;
-    const hodDepartment = isHOD ? teacher.hod[0].department.name : null;
+    const isHOD = !!teacher.hod;
+    const hodDepartment = isHOD ? teacher.hod.department.name : null;
 
     // Calculate total students and average class size
     const allStudents = [

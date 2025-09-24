@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, IsDateString } from 'class-validator';
 
 export class CreateTermDto {
   @ApiProperty()
@@ -12,4 +12,14 @@ export class CreateTermDto {
   @IsNotEmpty()
   @IsUUID()
   academicSessionId: string;
+
+  @ApiProperty()
+  @IsDateString()
+  @IsNotEmpty()
+  startDate: string;
+
+  @ApiProperty()
+  @IsDateString()
+  @IsNotEmpty()
+  endDate: string;
 }

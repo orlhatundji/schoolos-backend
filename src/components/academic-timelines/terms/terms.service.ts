@@ -17,7 +17,13 @@ export class TermsService extends BaseService {
   }
 
   async createTerm(data: CreateTermDto): Promise<Term> {
-    return this.termsRepository.create(data);
+    // Convert string dates to Date objects for Prisma
+    const termData = {
+      ...data,
+      startDate: new Date(data.startDate),
+      endDate: new Date(data.endDate),
+    };
+    return this.termsRepository.create(termData);
   }
 
   async getAllTerms(): Promise<Term[]> {
@@ -33,7 +39,13 @@ export class TermsService extends BaseService {
   }
 
   async updateTerm(id: string, data: UpdateTermDto): Promise<Term> {
-    return this.termsRepository.update({ id }, data);
+    // Convert string dates to Date objects for Prisma if they exist
+    const updateData = {
+      ...data,
+      ...(data.startDate && { startDate: new Date(data.startDate) }),
+      ...(data.endDate && { endDate: new Date(data.endDate) }),
+    };
+    return this.termsRepository.update({ id }, updateData);
   }
 
   async deleteTerm(id: string): Promise<Term> {
@@ -55,5 +67,19 @@ export class TermsService extends BaseService {
     }
 
     return this.termsRepository.delete({ id });
+  }
+
+  async setCurrentTerm(id: string): Promise<Term> {
+    // First, get the term to find its academic session
+    const term = await this.getTermById(id);
+    
+    // Set all terms in the same academic session to not current
+    await this.prisma.term.updateMany({
+      where: { academicSessionId: term.academicSessionId },
+      data: { isCurrent: false },
+    });
+
+    // Set the specified term as current
+    return this.termsRepository.update({ id }, { isCurrent: true });
   }
 }

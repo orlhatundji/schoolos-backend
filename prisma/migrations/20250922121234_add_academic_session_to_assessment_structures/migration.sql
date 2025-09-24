@@ -1,3 +1,6 @@
+-- First, add the academicSessionId column to the assessment_structures table
+ALTER TABLE "assessment_structures" ADD COLUMN "academicSessionId" TEXT;
+
 -- Update existing records to use the current academic session for the school
 -- This assumes each school has at least one academic session
 UPDATE "assessment_structures" 

@@ -26,7 +26,16 @@ export class BffAdminClassroomService {
     });
 
     if (!currentSession) {
-      throw new Error('No current academic session found');
+      // Return empty data for new schools without academic sessions
+      return {
+        stats: {
+          totalClassrooms: 0,
+          totalStudents: 0,
+          gradeLevels: 0,
+          capacityUsage: 0,
+        },
+        classrooms: [],
+      };
     }
 
     // Get all class arms for the school with their students and teachers (filtered by current session)

@@ -66,3 +66,4 @@ test-endpoints.js
 test-prefects.js
 test-seed-state.js
 verify-refs.js
+seed-minimal.ts

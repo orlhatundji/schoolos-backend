@@ -243,8 +243,8 @@ export class AcademicSessionsService extends BaseService {
 
   private async createAssessmentStructureForNewSessionInTransaction(tx: any, schoolId: string, academicSessionId: string) {
     try {
-      // Check if school already has an assessment structure template for this session
-      const existingTemplate = await tx.assessmentStructureTemplate.findFirst({
+      // Check if school already has assessment structures for this session
+      const existingStructures = await tx.assessmentStructure.findMany({
         where: {
           schoolId,
           academicSessionId,
@@ -253,17 +253,16 @@ export class AcademicSessionsService extends BaseService {
         },
       });
 
-      if (existingTemplate) {
+      if (existingStructures.length > 0) {
         return;
       }
 
-      // Try to find the most recent session's template to copy from
-      // First, find the most recent academic session that has a template
-      const mostRecentSessionWithTemplate = await tx.academicSession.findFirst({
+      // Try to find the most recent session's assessment structures to copy from
+      const mostRecentSessionWithStructures = await tx.academicSession.findFirst({
         where: {
           schoolId,
           id: { not: academicSessionId },
-          assessmentStructureTemplates: {
+          assessmentStructures: {
             some: {
               isActive: true,
               deletedAt: null,
@@ -274,33 +273,61 @@ export class AcademicSessionsService extends BaseService {
           createdAt: 'desc',
         },
         include: {
-          assessmentStructureTemplates: {
+          assessmentStructures: {
             where: {
               isActive: true,
               deletedAt: null,
+            },
+            orderBy: {
+              order: 'asc',
             },
           },
         },
       });
 
-      const previousTemplate = mostRecentSessionWithTemplate?.assessmentStructureTemplates[0];
+      if (mostRecentSessionWithStructures?.assessmentStructures?.length > 0) {
+        // Copy assessment structures from previous session
+        for (const structure of mostRecentSessionWithStructures.assessmentStructures) {
+          await tx.assessmentStructure.create({
+            data: {
+              schoolId,
+              academicSessionId,
+              name: structure.name,
+              description: structure.description,
+              maxScore: structure.maxScore,
+              isExam: structure.isExam,
+              order: structure.order,
+              isActive: true,
+            },
+          });
+        }
 
-      if (previousTemplate) {
-        // Copy from previous session
-        const newTemplate = await tx.assessmentStructureTemplate.create({
-          data: {
+        // Also copy the assessment structure template
+        const previousTemplate = await tx.assessmentStructureTemplate.findFirst({
+          where: {
             schoolId,
-            academicSessionId,
-            name: previousTemplate.name,
-            description: previousTemplate.description,
-            assessments: previousTemplate.assessments,
+            academicSessionId: mostRecentSessionWithStructures.id,
             isActive: true,
+            deletedAt: null,
           },
         });
+
+        if (previousTemplate) {
+          await tx.assessmentStructureTemplate.create({
+            data: {
+              schoolId,
+              academicSessionId,
+              name: previousTemplate.name,
+              description: previousTemplate.description,
+              assessments: previousTemplate.assessments,
+              isActive: true,
+            },
+          });
+        }
         return;
       }
 
-      // If no previous template, use global default
+      // Try to use global default template first
       const globalDefault = await tx.assessmentStructureTemplate.findFirst({
         where: {
           isGlobalDefault: true,
@@ -309,29 +336,81 @@ export class AcademicSessionsService extends BaseService {
         },
       });
 
+      let defaultStructures;
       if (globalDefault) {
-        const newTemplate = await tx.assessmentStructureTemplate.create({
+        // Use global default template
+        defaultStructures = globalDefault.assessments as any[];
+        console.log('✅ Using global default template for session:', academicSessionId);
+      } else {
+        // Fallback to hardcoded defaults
+        defaultStructures = [
+          {
+            name: 'Cont. Ass. 1',
+            description: 'First continuous assessment test',
+            maxScore: 20,
+            isExam: false,
+            order: 1,
+          },
+          {
+            name: 'Cont. Ass. 2',
+            description: 'Second continuous assessment test',
+            maxScore: 20,
+            isExam: false,
+            order: 2,
+          },
+          {
+            name: 'Exam',
+            description: 'Final examination',
+            maxScore: 60,
+            isExam: true,
+            order: 3,
+          },
+        ];
+        console.log('✅ Using hardcoded defaults for session:', academicSessionId);
+      }
+
+      for (const structure of defaultStructures) {
+        await tx.assessmentStructure.create({
           data: {
             schoolId,
             academicSessionId,
-            name: globalDefault.name,
-            description: globalDefault.description,
-            assessments: globalDefault.assessments,
+            name: structure.name,
+            description: structure.description,
+            maxScore: structure.maxScore,
+            isExam: structure.isExam,
+            order: structure.order,
             isActive: true,
           },
         });
-      } else {
+      }
+
+      // Also create assessment structure template
+      try {
+        await tx.assessmentStructureTemplate.create({
+          data: {
+            schoolId,
+            academicSessionId,
+            name: 'Standard Assessment Structure',
+            description: 'Standard assessment structure for all subjects',
+            assessments: defaultStructures,
+            isActive: true,
+          },
+        });
+        console.log('✅ Assessment structure template created successfully for session:', academicSessionId);
+      } catch (templateError) {
+        console.error('❌ Error creating assessment structure template:', templateError);
+        // Don't throw error to avoid breaking session creation
       }
     } catch (error) {
-      console.error('❌ Error creating assessment structure template for new session:', error);
+      console.error('❌ Error creating assessment structures for new session:', error);
       // Don't throw error to avoid breaking session creation
     }
   }
 
   private async createAssessmentStructureForNewSession(schoolId: string, academicSessionId: string) {
     try {
-      // Check if school already has an assessment structure template for this session
-      const existingTemplate = await this.prisma.assessmentStructureTemplate.findFirst({
+      // Check if school already has assessment structures for this session
+      const existingStructures = await this.prisma.assessmentStructure.findMany({
         where: {
           schoolId,
           academicSessionId,
@@ -340,17 +419,16 @@ export class AcademicSessionsService extends BaseService {
         },
       });
 
-      if (existingTemplate) {
+      if (existingStructures.length > 0) {
         return;
       }
 
-      // Try to find the most recent session's template to copy from
-      // First, find the most recent academic session that has a template
-      const mostRecentSessionWithTemplate = await this.prisma.academicSession.findFirst({
+      // Try to find the most recent session's assessment structures to copy from
+      const mostRecentSessionWithStructures = await this.prisma.academicSession.findFirst({
         where: {
           schoolId,
           id: { not: academicSessionId },
-          assessmentStructureTemplates: {
+          assessmentStructures: {
             some: {
               isActive: true,
               deletedAt: null,
@@ -361,33 +439,61 @@ export class AcademicSessionsService extends BaseService {
           createdAt: 'desc',
         },
         include: {
-          assessmentStructureTemplates: {
+          assessmentStructures: {
             where: {
               isActive: true,
               deletedAt: null,
+            },
+            orderBy: {
+              order: 'asc',
             },
           },
         },
       });
 
-      const previousTemplate = mostRecentSessionWithTemplate?.assessmentStructureTemplates[0];
+      if (mostRecentSessionWithStructures?.assessmentStructures?.length > 0) {
+        // Copy assessment structures from previous session
+        for (const structure of mostRecentSessionWithStructures.assessmentStructures) {
+          await this.prisma.assessmentStructure.create({
+            data: {
+              schoolId,
+              academicSessionId,
+              name: structure.name,
+              description: structure.description,
+              maxScore: structure.maxScore,
+              isExam: structure.isExam,
+              order: structure.order,
+              isActive: true,
+            },
+          });
+        }
 
-      if (previousTemplate) {
-        // Copy from previous session
-        const newTemplate = await this.prisma.assessmentStructureTemplate.create({
-          data: {
+        // Also copy the assessment structure template
+        const previousTemplate = await this.prisma.assessmentStructureTemplate.findFirst({
+          where: {
             schoolId,
-            academicSessionId,
-            name: previousTemplate.name,
-            description: previousTemplate.description,
-            assessments: previousTemplate.assessments,
+            academicSessionId: mostRecentSessionWithStructures.id,
             isActive: true,
+            deletedAt: null,
           },
         });
+
+        if (previousTemplate) {
+          await this.prisma.assessmentStructureTemplate.create({
+            data: {
+              schoolId,
+              academicSessionId,
+              name: previousTemplate.name,
+              description: previousTemplate.description,
+              assessments: previousTemplate.assessments,
+              isActive: true,
+            },
+          });
+        }
         return;
       }
 
-      // If no previous template, use global default
+      // Try to use global default template first
       const globalDefault = await this.prisma.assessmentStructureTemplate.findFirst({
         where: {
           isGlobalDefault: true,
@@ -396,21 +502,73 @@ export class AcademicSessionsService extends BaseService {
         },
       });
 
+      let defaultStructures;
       if (globalDefault) {
-        const newTemplate = await this.prisma.assessmentStructureTemplate.create({
+        // Use global default template
+        defaultStructures = globalDefault.assessments as any[];
+        console.log('✅ Using global default template for session:', academicSessionId);
+      } else {
+        // Fallback to hardcoded defaults
+        defaultStructures = [
+          {
+            name: 'Cont. Ass. 1',
+            description: 'First continuous assessment test',
+            maxScore: 20,
+            isExam: false,
+            order: 1,
+          },
+          {
+            name: 'Cont. Ass. 2',
+            description: 'Second continuous assessment test',
+            maxScore: 20,
+            isExam: false,
+            order: 2,
+          },
+          {
+            name: 'Examination',
+            description: 'Final examination',
+            maxScore: 60,
+            isExam: true,
+            order: 3,
+          },
+        ];
+        console.log('✅ Using hardcoded defaults for session:', academicSessionId);
+      }
+
+      for (const structure of defaultStructures) {
+        await this.prisma.assessmentStructure.create({
           data: {
             schoolId,
             academicSessionId,
-            name: globalDefault.name,
-            description: globalDefault.description,
-            assessments: globalDefault.assessments,
+            name: structure.name,
+            description: structure.description,
+            maxScore: structure.maxScore,
+            isExam: structure.isExam,
+            order: structure.order,
             isActive: true,
           },
         });
-      } else {
+      }
+
+      // Also create assessment structure template
+      try {
+        await this.prisma.assessmentStructureTemplate.create({
+          data: {
+            schoolId,
+            academicSessionId,
+            name: 'Standard Assessment Structure',
+            description: 'Standard assessment structure for all subjects',
+            assessments: defaultStructures,
+            isActive: true,
+          },
+        });
+        console.log('✅ Assessment structure template created successfully for session:', academicSessionId);
+      } catch (templateError) {
+        console.error('❌ Error creating assessment structure template:', templateError);
+        // Don't throw error to avoid breaking session creation
       }
     } catch (error) {
-      console.error('❌ Error creating assessment structure template for new session:', error);
+      console.error('❌ Error creating assessment structures for new session:', error);
       // Don't throw error to avoid breaking session creation
     }
   }

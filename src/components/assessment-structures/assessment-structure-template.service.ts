@@ -89,7 +89,8 @@ export class AssessmentStructureTemplateService {
         return await this.createFromGlobalDefault(user.schoolId, academicSessionId, globalDefault);
       }
 
-      throw new NotFoundException('No assessment structure template found for this academic session');
+      // Return null instead of throwing error for new schools without templates
+      return null;
     }
 
     return template;
@@ -198,19 +199,24 @@ export class AssessmentStructureTemplateService {
     }
 
     // Create global default (no school or session required)
-    const globalDefault = await this.prisma.assessmentStructureTemplate.create({
-      data: {
-        schoolId: '', // Empty for global default
-        academicSessionId: '', // Empty for global default
-        name: 'Global Default Assessment Structure',
-        description: 'Default assessment structure for new schools',
-        assessments: defaultAssessments as any,
-        isActive: true,
-        isGlobalDefault: true,
-      },
-    });
+    try {
+      const globalDefault = await this.prisma.assessmentStructureTemplate.create({
+        data: {
+          schoolId: null, // Null for global default
+          academicSessionId: null, // Null for global default
+          name: 'Global Default Assessment Structure',
+          description: 'Default assessment structure for new schools',
+          assessments: defaultAssessments as any,
+          isActive: true,
+          isGlobalDefault: true,
+        },
+      });
 
-    return globalDefault;
+      return globalDefault;
+    } catch (error) {
+      console.error('Error creating global default template:', error);
+      throw new ConflictException('Failed to create global default template. It may already exist.');
+    }
   }
 
   private validateTotalScore(assessments: AssessmentDetailDto[]) {

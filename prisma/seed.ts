@@ -271,6 +271,8 @@ async function main() {
         data: {
           name,
           academicSessionId: session.id,
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2024-03-31'),
           isCurrent: session.isCurrent && name === 'First Term', // Mark first term of current session as current
         },
       });

@@ -179,8 +179,8 @@ export class DashboardSummaryResult {
     this.operationalStats = data.operationalStats;
     this.academicInfo = {
       ...data.academicInfo,
-      sessionStartDate: data.academicInfo.sessionStartDate.toISOString(),
-      sessionEndDate: data.academicInfo.sessionEndDate.toISOString(),
+      sessionStartDate: data.academicInfo.sessionStartDate?.toISOString() || null,
+      sessionEndDate: data.academicInfo.sessionEndDate?.toISOString() || null,
     };
   }
 }

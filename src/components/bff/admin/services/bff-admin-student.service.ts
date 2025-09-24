@@ -354,7 +354,27 @@ export class BffAdminStudentService {
         });
 
     if (!targetSession) {
-      throw new Error('Academic session not found');
+      // Return empty data for new schools without academic sessions
+      return {
+        stats: {
+          totalStudents: 0,
+          maleStudents: 0,
+          femaleStudents: 0,
+          graduatedStudents: 0,
+          attendanceToday: {
+            present: 0,
+            absent: 0,
+            presentPercentage: 0,
+            absentPercentage: 0,
+          },
+          statusBreakdown: {
+            active: 0,
+            inactive: 0,
+            suspended: 0,
+          },
+        },
+        students: [],
+      };
     }
 
     // Get all students for the school (not filtered by class arm assignment)

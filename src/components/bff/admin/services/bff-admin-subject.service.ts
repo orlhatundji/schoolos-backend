@@ -33,7 +33,19 @@ export class BffAdminSubjectService {
     });
 
     if (!currentSession) {
-      throw new Error('No current academic session found');
+      // Return empty data for new schools without academic sessions
+      return {
+        stats: {
+          totalSubjects: 0,
+          categoryBreakdown: {
+            core: 0,
+            general: 0,
+            vocational: 0,
+          },
+          departmentBreakdown: {},
+        },
+        subjects: [],
+      };
     }
 
     // Get all subjects for the school with their related data (filtered by current session)

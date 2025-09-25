@@ -14,6 +14,12 @@ export class TermEntity implements Term {
   academicSessionId: string;
 
   @ApiProperty()
+  startDate: Date;
+
+  @ApiProperty()
+  endDate: Date;
+
+  @ApiProperty()
   createdAt: Date;
 
   @ApiProperty()

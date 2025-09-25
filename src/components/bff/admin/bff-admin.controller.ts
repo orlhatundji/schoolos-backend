@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -9,6 +9,7 @@ import { AccessTokenGuard } from '../../auth/strategies/jwt/guards';
 import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
 import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
+import { CreateSubjectDto } from './dto/create-subject.dto';
 import {
   AdminsViewSwagger,
   ClassroomDetailsLimitQuery,
@@ -140,6 +141,16 @@ export class BffAdminController {
   async getSubjectsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getSubjectsViewData(userId);
     return new AdminSubjectsViewResult(data);
+  }
+
+  @Post('subjects')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async createSubject(
+    @GetCurrentUserId() userId: string,
+    @Body() createSubjectDto: CreateSubjectDto,
+  ) {
+    const data = await this.bffAdminService.createSubject(userId, createSubjectDto);
+    return data;
   }
 
   // Department endpoints

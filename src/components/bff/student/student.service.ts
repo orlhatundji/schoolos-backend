@@ -380,6 +380,7 @@ export class StudentService extends BaseService {
         schoolId: student.user.schoolId,
         isActive: true,
       },
+      orderBy: { order: 'asc' },
     });
 
     // Create a map for quick lookup of maxScore by assessment name
@@ -390,16 +391,35 @@ export class StudentService extends BaseService {
 
     // Calculate subject results
     const subjects = subjectTermStudents.map((sts) => {
-      const assessments = sts.assessments.map((assessment) => {
-        const maxScore = assessmentStructureMap.get(assessment.name) || 100;
-        return {
-          id: assessment.id,
-          name: assessment.name,
-          score: assessment.score,
-          maxScore: maxScore,
-          isExam: assessment.isExam,
-          date: assessment.createdAt,
-        };
+      // Create a map of student assessments by name for quick lookup
+      const studentAssessmentsMap = new Map();
+      sts.assessments.forEach((assessment) => {
+        studentAssessmentsMap.set(assessment.name, assessment);
+      });
+
+      // Order assessments according to assessment structure order
+      const orderedAssessments = assessmentStructures.map((structure) => {
+        const studentAssessment = studentAssessmentsMap.get(structure.name);
+        if (studentAssessment) {
+          return {
+            id: studentAssessment.id,
+            name: structure.name,
+            score: studentAssessment.score,
+            maxScore: structure.maxScore,
+            isExam: structure.isExam,
+            date: studentAssessment.createdAt,
+          };
+        } else {
+          // Return structure even if student doesn't have this assessment
+          return {
+            id: null,
+            name: structure.name,
+            score: 0,
+            maxScore: structure.maxScore,
+            isExam: structure.isExam,
+            date: null,
+          };
+        }
       });
 
       return {
@@ -409,7 +429,7 @@ export class StudentService extends BaseService {
         totalScore: sts.totalScore,
         averageScore: sts.totalScore,
         grade: this.calculateGrade(sts.totalScore),
-        assessments,
+        assessments: orderedAssessments,
       };
     });
 

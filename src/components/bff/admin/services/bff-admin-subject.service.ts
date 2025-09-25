@@ -33,7 +33,19 @@ export class BffAdminSubjectService {
     });
 
     if (!currentSession) {
-      throw new Error('No current academic session found');
+      // Return empty data for new schools without academic sessions
+      return {
+        stats: {
+          totalSubjects: 0,
+          categoryBreakdown: {
+            core: 0,
+            general: 0,
+            vocational: 0,
+          },
+          departmentBreakdown: {},
+        },
+        subjects: [],
+      };
     }
 
     // Get all subjects for the school with their related data (filtered by current session)
@@ -44,6 +56,7 @@ export class BffAdminSubjectService {
       },
       include: {
         department: true,
+        category: true,
         classArmSubjectTeachers: {
           where: {
             deletedAt: null,
@@ -70,11 +83,11 @@ export class BffAdminSubjectService {
     // Calculate statistics
     const totalSubjects = subjects.length;
 
-    // Calculate category breakdown using the new category field
-    const coreSubjects = subjects.filter((subject) => subject.category === 'CORE').length;
-    const generalSubjects = subjects.filter((subject) => subject.category === 'GENERAL').length;
+    // Calculate category breakdown using the new category relation
+    const coreSubjects = subjects.filter((subject) => subject.category?.name === 'Core').length;
+    const generalSubjects = subjects.filter((subject) => subject.category?.name === 'General').length;
     const vocationalSubjects = subjects.filter(
-      (subject) => subject.category === 'VOCATIONAL',
+      (subject) => subject.category?.name === 'Vocational',
     ).length;
 
     const categoryBreakdown = {
@@ -109,7 +122,7 @@ export class BffAdminSubjectService {
         id: subject.id,
         name: subject.name,
         department: subject.department?.name || null,
-        category: subject.category,
+        category: subject.category?.name || null,
         classesCount,
         studentCount,
         status,
@@ -170,23 +183,40 @@ export class BffAdminSubjectService {
       }
     }
 
+    // Validate category if provided
+    if (createSubjectDto.categoryId) {
+      const category = await this.prisma.category.findFirst({
+        where: {
+          id: createSubjectDto.categoryId,
+          schoolId,
+          deletedAt: null,
+        },
+      });
+
+      if (!category) {
+        throw new BadRequestException('Category not found or does not belong to this school');
+      }
+    }
+
     // Create the subject
     const subject = await this.prisma.subject.create({
       data: {
         name: createSubjectDto.name,
-        category: createSubjectDto.category || 'CORE',
         schoolId,
         departmentId: createSubjectDto.departmentId || null,
+        categoryId: createSubjectDto.categoryId || null,
       },
       include: {
         department: true,
+        category: true,
       },
     });
 
     return {
       id: subject.id,
       name: subject.name,
-      category: subject.category,
+      category: subject.category?.name || null,
+      categoryId: subject.categoryId,
       department: subject.department?.name || null,
       departmentId: subject.departmentId,
       schoolId: subject.schoolId,
@@ -260,20 +290,22 @@ export class BffAdminSubjectService {
       where: { id: subjectId },
       data: {
         ...(updateSubjectDto.name && { name: updateSubjectDto.name }),
-        ...(updateSubjectDto.category && { category: updateSubjectDto.category }),
+        ...(updateSubjectDto.categoryId !== undefined && { categoryId: updateSubjectDto.categoryId }),
         ...(updateSubjectDto.departmentId !== undefined && {
           departmentId: updateSubjectDto.departmentId,
         }),
       },
       include: {
         department: true,
+        category: true,
       },
     });
 
     return {
       id: updatedSubject.id,
       name: updatedSubject.name,
-      category: updatedSubject.category,
+      category: updatedSubject.category?.name || null,
+      categoryId: updatedSubject.categoryId,
       department: updatedSubject.department?.name || null,
       departmentId: updatedSubject.departmentId,
       schoolId: updatedSubject.schoolId,

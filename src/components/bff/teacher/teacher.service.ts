@@ -36,7 +36,25 @@ export class TeacherService {
     });
 
     if (!currentSession) {
-      throw new Error('No current academic session found');
+      // Return empty data for new schools without academic sessions
+      return {
+        stats: {
+          totalClasses: 0,
+          totalStudents: 0,
+          totalSubjects: 0,
+          averageClassSize: 0,
+          attendanceRate: 0,
+          pendingAssessments: 0,
+          completedAssessments: 0,
+        },
+        academicInfo: {
+          currentSession: 'No active session',
+          currentTerm: 'No active term',
+          sessionStartDate: null,
+          sessionEndDate: null,
+          daysRemaining: 0,
+        },
+      };
     }
 
     const currentTerm = await this.prisma.term.findFirst({
@@ -95,9 +113,9 @@ export class TeacherService {
         currentTerm: currentTerm?.name || 'No active term',
         sessionStartDate: currentSession.startDate.toISOString(),
         sessionEndDate: currentSession.endDate.toISOString(),
-        daysRemaining: Math.ceil(
+        daysRemaining: Math.max(0, Math.ceil(
           (currentSession.endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
-        ),
+        )),
       },
     };
   }
@@ -142,6 +160,11 @@ export class TeacherService {
     const teacher = await this.getTeacherWithRelations(userId);
     const currentSession = await this.getCurrentSession(teacher.user.schoolId);
 
+    // Return empty array if no current session
+    if (!currentSession) {
+      return [];
+    }
+
     const uniqueSubjects = teacher.classArmSubjectTeachers
       .map((cast) => cast.subject)
       .filter((subject, index, self) => index === self.findIndex((s) => s.id === subject.id));
@@ -168,26 +191,8 @@ export class TeacherService {
     // Note: limit parameter is reserved for future pagination implementation
     await this.getTeacherWithRelations(userId);
 
-    // This would typically come from an activity log or audit trail
-    // For now, we'll return mock data - you can implement this based on your activity logging system
-    return [
-      {
-        id: '1',
-        type: 'attendance' as const,
-        title: 'Marked attendance for JSS 1A',
-        description: '25 students present, 3 absent',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        classId: 'class_1',
-      },
-      {
-        id: '2',
-        type: 'assessment' as const,
-        title: 'Graded Mathematics Test',
-        description: 'Average score: 78%',
-        timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
-        subjectId: 'math_1',
-      },
-    ];
+    // For new teachers with no data, return empty array
+    return [];
   }
 
   // Get upcoming events
@@ -196,32 +201,8 @@ export class TeacherService {
     // Note: days parameter is reserved for future date range filtering
     await this.getTeacherWithRelations(userId);
 
-    // This would typically come from a calendar or schedule system
-    // For now, we'll return mock data
-    return [
-      {
-        id: '1',
-        type: 'class' as const,
-        title: 'Mathematics - JSS 1A',
-        description: 'Algebra basics',
-        date: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-        time: '09:00 AM',
-        location: 'Room 101',
-        classId: 'class_1',
-        subjectId: 'math_1',
-        priority: 'high' as const,
-      },
-      {
-        id: '2',
-        type: 'assessment' as const,
-        title: 'Physics Test Due',
-        description: 'Chapter 5-7 Test',
-        date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        time: '11:59 PM',
-        subjectId: 'physics_1',
-        priority: 'medium' as const,
-      },
-    ];
+    // For new teachers with no data, return empty array
+    return [];
   }
 
   // Helper method to get teacher with relations
@@ -335,10 +316,6 @@ export class TeacherService {
       where: { schoolId, isCurrent: true },
     });
 
-    if (!currentSession) {
-      throw new Error('No current academic session found');
-    }
-
     return currentSession;
   }
 
@@ -358,18 +335,16 @@ export class TeacherService {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async getAttendanceRate(_teacherId: string, _sessionId: string, _termId?: string) {
-    // This would typically calculate from attendance records
-    // For now, we'll return mock data
-    return 87.5;
+    // For new teachers with no data, return 0
+    return 0;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async getAssessmentCounts(_teacherId: string, _sessionId: string) {
-    // This would typically count from assessment records
-    // For now, we'll return mock data
+    // For new teachers with no data, return 0
     return {
-      pending: 3,
-      completed: 12,
+      pending: 0,
+      completed: 0,
     };
   }
 
@@ -489,21 +464,8 @@ export class TeacherService {
     const attendanceRate = students.length > 0 ? Math.round((presentToday / students.length) * 100) : 0;
 
 
-    // Get recent activities (mock data for now)
-    const recentActivities = [
-      {
-        id: '1',
-        type: 'attendance',
-        title: 'Daily attendance marked',
-        date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: '2',
-        type: 'assessment',
-        title: 'Mathematics test conducted',
-        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ];
+    // Get recent activities (empty for new teachers)
+    const recentActivities: any[] = [];
 
     return {
       id: classArmData.id,
@@ -1889,7 +1851,11 @@ export class TeacherService {
     });
 
     if (!currentSession) {
-      throw new NotFoundException('No current academic session found');
+      // Return empty data for new schools without academic sessions
+      return {
+        currentSession: null,
+        currentTerm: null,
+      };
     }
 
     // Get current term

@@ -40,7 +40,8 @@ export interface TermDropdownItem {
 export interface SubjectDropdownItem {
   id: string;
   name: string;
-  category: SubjectCategory;
+  category: string | null;
+  categoryId: string | null;
   department: string | null;
   departmentCode: string | null;
   status: 'active' | 'inactive';

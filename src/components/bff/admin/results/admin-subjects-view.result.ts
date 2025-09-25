@@ -42,10 +42,10 @@ export class SubjectInfoResult {
   department: string | null;
 
   @ApiProperty({
-    description: 'Subject category',
-    enum: SubjectCategory,
+    description: 'Subject category name',
+    nullable: true,
   })
-  category: SubjectCategory;
+  category: string | null;
 
   @ApiProperty({ description: 'Number of classes taking this subject' })
   classesCount: number;

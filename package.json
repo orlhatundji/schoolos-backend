@@ -21,6 +21,7 @@
     "db-generate": "prisma generate",
     "db-migrate:dev": "prisma migrate dev",
     "db-seed": "prisma db seed -- --preview-feature",
+    "db-seed-minimal": "ts-node prisma/seed-minimal.ts",
     "db-reset": "prisma migrate reset",
     "db-reset-test": "dotenv -e .env.test -- prisma migrate reset --force --skip-seed",
     "db:studio": "prisma studio",

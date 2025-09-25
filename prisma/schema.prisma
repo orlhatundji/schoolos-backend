@@ -66,6 +66,18 @@ model School {
   updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
   logoUrl              String?
+  phone                String?
+  email                String?
+  website              String?
+  motto                String?
+  principalName        String?
+  principalEmail       String?
+  establishedYear      String?
+  schoolType           String?
+  accreditation        String?
+  studentCapacity      String?
+  description          String?
+  colorScheme          String?
   academicSessions           AcademicSession[]
   assessmentStructures        AssessmentStructure[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
@@ -80,6 +92,7 @@ model School {
   addresses            SchoolAddress[]
   primaryAddress       Address?              @relation("SchoolPrimaryAddress", fields: [primaryAddressId], references: [id])
   subjects             Subject[]
+  categories           Category[]
   userActivities       UserActivity[]
   users                User[]
 
@@ -165,6 +178,8 @@ model Term {
   id                 String              @id @default(uuid())
   name               String
   academicSessionId  String
+  startDate          DateTime
+  endDate            DateTime
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
@@ -474,14 +489,15 @@ model Subject {
   name                    String
   schoolId                String
   departmentId            String?
+  categoryId              String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
-  category                SubjectCategory          @default(CORE)
   classArmSubjectTeachers ClassArmSubjectTeacher[]
   subjectTerms            SubjectTerm[]
   department              Department?              @relation(fields: [departmentId], references: [id])
   school                  School                   @relation(fields: [schoolId], references: [id])
+  category                Category?                @relation(fields: [categoryId], references: [id])
 
   @@map("subjects")
 }
@@ -595,7 +611,7 @@ model AssessmentStructureTemplate {
   school            School?         @relation(fields: [schoolId], references: [id])
   academicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id])
 
-  @@unique([schoolId, academicSessionId, isActive]) // Only one active per school/session
+  @@unique([schoolId, academicSessionId, isActive], name: "unique_active_template_per_session") // Only one active per school/session
   @@index([academicSessionId])
   @@index([isGlobalDefault])
   @@map("assessment_structure_templates")
@@ -1057,6 +1073,29 @@ enum EmploymentType {
   FULL_TIME
   PART_TIME
   CONTRACT
+}
+
+/// *
+/// * Category
+/// * -------
+/// * Represents a subject category that can be created and managed by schools.
+/// * Categories are used to classify subjects (e.g., Core, Elective, Vocational).
+/// * Each school can have its own set of categories, with default ones seeded during school creation.
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  schoolId    String
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  subjects    Subject[]
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, name])
+  @@map("categories")
 }
 
 enum SubjectCategory {

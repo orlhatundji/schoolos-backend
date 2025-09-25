@@ -177,7 +177,157 @@ export class BffAdminService {
     });
 
     if (!currentSession) {
-      throw new Error('No current academic session found');
+      // Return empty data for new schools without academic sessions
+      return {
+        overview: {
+          totalStudents: 0,
+          totalTeachers: 0,
+          totalClassrooms: 0,
+          totalSubjects: 0,
+          totalDepartments: 0,
+          totalLevels: 0,
+          totalAdmins: 0,
+        },
+        studentStats: {
+          totalStudents: 0,
+          maleStudents: 0,
+          femaleStudents: 0,
+          activeStudents: 0,
+          graduatedStudents: 0,
+          newAdmissions: 0,
+          genderDistribution: {
+            male: 0,
+            female: 0,
+            malePercentage: 0,
+            femalePercentage: 0,
+          },
+        },
+        teacherStats: {
+          totalTeachers: 0,
+          activeTeachers: 0,
+          inactiveTeachers: 0,
+          onLeaveTeachers: 0,
+          employmentBreakdown: {
+            fullTime: 0,
+            partTime: 0,
+            contract: 0,
+          },
+          statusBreakdown: {
+            active: 0,
+            inactive: 0,
+            onLeave: 0,
+          },
+        },
+        classroomStats: {
+          totalClassrooms: 0,
+          classroomsWithTeachers: 0,
+          classroomsWithoutTeachers: 0,
+          averageClassSize: 0,
+          largestClass: {
+            name: 'N/A',
+            size: 0,
+          },
+          smallestClass: {
+            name: 'N/A',
+            size: 0,
+          },
+        },
+        subjectStats: {
+          totalSubjects: 0,
+          categoryBreakdown: {
+            core: 0,
+            general: 0,
+            vocational: 0,
+          },
+          subjectsWithTeachers: 0,
+          subjectsWithoutTeachers: 0,
+        },
+        departmentStats: {
+          totalDepartments: 0,
+          activeDepartments: 0,
+          archivedDepartments: 0,
+          departmentsWithHOD: 0,
+          departmentsWithoutHOD: 0,
+          averageTeachersPerDept: 0,
+        },
+        levelStats: {
+          totalLevels: 0,
+          activeLevels: 0,
+          archivedLevels: 0,
+          levelsWithClassArms: 0,
+          levelsWithoutClassArms: 0,
+          averageStudentsPerLevel: 0,
+        },
+        adminStats: {
+          totalAdmins: 0,
+          activeAdmins: 0,
+          inactiveAdmins: 0,
+          superAdmins: 0,
+          regularAdmins: 0,
+        },
+        attendanceStats: {
+          totalAttendanceRecords: 0,
+          todayAttendanceRecords: 0,
+          presentToday: 0,
+          absentToday: 0,
+          lateToday: 0,
+          excusedToday: 0,
+          attendanceRate: 0,
+          totalStudents: 0,
+        },
+        paymentStats: {
+          totalPayments: 0,
+          paidPayments: 0,
+          pendingPayments: 0,
+          overduePayments: 0,
+          partialPayments: 0,
+          totalAmount: 0,
+          paidAmount: 0,
+          pendingAmount: 0,
+          overdueAmount: 0,
+          collectionRate: 0,
+        },
+        academicPerformanceStats: {
+          totalAssessments: 0,
+          totalSubjectsWithAssessments: 0,
+          averageAssessmentScore: 0,
+          highestAssessmentScore: 0,
+          lowestAssessmentScore: 0,
+        },
+        financialStats: {
+          totalRevenue: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          totalIncome: 0,
+          totalExpenseAmount: 0,
+          totalIncomeAmount: 0,
+          totalExpenseAmountByCategory: {},
+          totalIncomeAmountByCategory: {},
+        },
+        operationalStats: {
+          totalStaff: 0,
+          totalTeachers: 0,
+          totalStudents: 0,
+          totalClassrooms: 0,
+          totalSubjects: 0,
+          totalDepartments: 0,
+          totalLevels: 0,
+          totalAssessments: 0,
+          totalAttendanceRecords: 0,
+          totalPayments: 0,
+          totalExpenses: 0,
+          totalIncome: 0,
+          totalRevenue: 0,
+          totalNetProfit: 0,
+        },
+        academicInfo: {
+          currentSession: 'No active session',
+          currentTerm: 'No active term',
+          sessionStartDate: null,
+          sessionEndDate: null,
+          daysRemaining: 0,
+        },
+      };
     }
 
     const currentTerm = await this.prisma.term.findFirst({
@@ -485,13 +635,25 @@ export class BffAdminService {
           where: { schoolId, deletedAt: null },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'CORE', deletedAt: null },
+          where: { 
+            schoolId, 
+            category: { name: 'Core' },
+            deletedAt: null 
+          },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'GENERAL', deletedAt: null },
+          where: { 
+            schoolId, 
+            category: { name: 'General' },
+            deletedAt: null 
+          },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'VOCATIONAL', deletedAt: null },
+          where: { 
+            schoolId, 
+            category: { name: 'Vocational' },
+            deletedAt: null 
+          },
         }),
         this.prisma.subject.count({
           where: {

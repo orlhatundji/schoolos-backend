@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
-import { SubjectCategory } from '@prisma/client';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateSubjectDto {
   @ApiProperty({
@@ -20,12 +19,11 @@ export class CreateSubjectDto {
   departmentId?: string;
 
   @ApiProperty({
-    description: 'Subject category',
-    enum: SubjectCategory,
-    example: SubjectCategory.CORE,
-    default: SubjectCategory.CORE,
+    description: 'Category ID (optional)',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    nullable: true,
   })
-  @IsEnum(SubjectCategory)
+  @IsUUID()
   @IsOptional()
-  category?: SubjectCategory;
+  categoryId?: string;
 }

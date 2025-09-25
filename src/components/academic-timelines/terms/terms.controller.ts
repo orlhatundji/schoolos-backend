@@ -64,4 +64,14 @@ export class TermsController {
       message: TermMessages.SUCCESS.TERM_DELETED_SUCCESSFULLY,
     });
   }
+
+  @Patch(':id/set-current')
+  async setCurrent(@Param('id') id: string) {
+    const term = await this.termsService.setCurrentTerm(id);
+
+    return TermResult.from(term, {
+      status: HttpStatus.OK,
+      message: TermMessages.SUCCESS.TERM_UPDATED_SUCCESSFULLY,
+    });
+  }
 }

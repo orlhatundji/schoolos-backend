@@ -85,8 +85,11 @@ export class SubjectDropdownItemResult {
   @ApiProperty({ description: 'Subject name' })
   name: string;
 
-  @ApiProperty({ description: 'Subject category', enum: SubjectCategory })
-  category: SubjectCategory;
+  @ApiProperty({ description: 'Subject category name', nullable: true })
+  category: string | null;
+
+  @ApiProperty({ description: 'Category ID', nullable: true })
+  categoryId: string | null;
 
   @ApiProperty({ description: 'Department name', nullable: true })
   department: string | null;

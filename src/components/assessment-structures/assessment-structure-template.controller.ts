@@ -48,6 +48,15 @@ export class AssessmentStructureTemplateController {
     @Query('academicSessionId') academicSessionId: string,
   ) {
     const template = await this.assessmentStructureTemplateService.findActiveForSession(userId, academicSessionId);
+    
+    if (!template) {
+      return {
+        status: 404,
+        message: 'No assessment structure template found for this academic session',
+        data: null,
+      };
+    }
+    
     return {
       status: 200,
       message: 'Assessment structure template retrieved successfully',

@@ -10,27 +10,27 @@ export class AdminService {
   constructor(private readonly resetPasswordService: ResetPasswordService) {}
 
   async create(createAdminDto: CreateAdminDto) {
-    // TODO: Implement admin creation logic
+    // Admin creation logic not yet implemented
     throw new Error('Admin creation not implemented yet');
   }
 
   async findAll() {
-    // TODO: Implement admin listing logic
+    // Admin listing logic not yet implemented
     throw new Error('Admin listing not implemented yet');
   }
 
   async findOne(id: number) {
-    // TODO: Implement admin retrieval logic
+    // Admin retrieval logic not yet implemented
     throw new Error(`Admin retrieval not implemented yet for ID: ${id}`);
   }
 
   async update(id: number, updateAdminDto: UpdateAdminDto) {
-    // TODO: Implement admin update logic
+    // Admin update logic not yet implemented
     throw new Error(`Admin update not implemented yet for ID: ${id}`);
   }
 
   async remove(id: number) {
-    // TODO: Implement admin removal logic
+    // Admin removal logic not yet implemented
     throw new Error(`Admin removal not implemented yet for ID: ${id}`);
   }
 

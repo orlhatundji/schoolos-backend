@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiQuery } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -294,5 +303,4 @@ export class BffAdminController {
     const data = await this.bffAdminService.createClassroom(userId, createClassroomDto);
     return data;
   }
-
 }

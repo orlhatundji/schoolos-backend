@@ -154,16 +154,6 @@ export class BffAdminController {
     return data;
   }
 
-  @Post('subjects')
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async createSubject(
-    @GetCurrentUserId() userId: string,
-    @Body() createSubjectDto: CreateSubjectDto,
-  ) {
-    const data = await this.bffAdminService.createSubject(userId, createSubjectDto);
-    return data;
-  }
-
   // Department endpoints
   @Get('departments-view')
   @DepartmentsViewSwagger()

@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiQuery } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -154,16 +163,6 @@ export class BffAdminController {
     return data;
   }
 
-  @Post('subjects')
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async createSubject(
-    @GetCurrentUserId() userId: string,
-    @Body() createSubjectDto: CreateSubjectDto,
-  ) {
-    const data = await this.bffAdminService.createSubject(userId, createSubjectDto);
-    return data;
-  }
-
   // Department endpoints
   @Get('departments-view')
   @DepartmentsViewSwagger()
@@ -304,5 +303,4 @@ export class BffAdminController {
     const data = await this.bffAdminService.createClassroom(userId, createClassroomDto);
     return data;
   }
-
 }

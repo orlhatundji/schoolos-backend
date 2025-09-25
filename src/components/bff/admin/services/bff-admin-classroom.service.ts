@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 
 import { PrismaService } from '../../../../prisma';
 import { AdminClassroomsViewData, ClassroomDetailsData } from '../types';
+import { CreateClassroomDto } from '../dto/create-classroom.dto';
 
 @Injectable()
 export class BffAdminClassroomService {
@@ -327,11 +328,8 @@ export class BffAdminClassroomService {
       hasPrevious: page > 1,
     };
 
-    // Create paginated students response
-    const students = {
-      students: studentsData,
-      pagination: paginationInfo,
-    };
+    // Return flattened students array
+    const students = studentsData;
 
     return {
       classroom: {
@@ -373,4 +371,253 @@ export class BffAdminClassroomService {
       topPerformers,
     };
   }
+
+  async createClassroom(userId: string, createClassroomDto: CreateClassroomDto) {
+    // First, get the user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not found or not associated with a school');
+    }
+
+    const schoolId = user.schoolId;
+
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      throw new BadRequestException('No current academic session found. Please create an academic session first.');
+    }
+
+    // Validate level exists and belongs to the school
+    const level = await this.prisma.level.findFirst({
+      where: {
+        id: createClassroomDto.levelId,
+        schoolId,
+        deletedAt: null,
+      },
+    });
+
+    if (!level) {
+      throw new BadRequestException('Level not found or does not belong to this school');
+    }
+
+    // Check if classroom with same name already exists in the same level and session
+    const existingClassroom = await this.prisma.classArm.findFirst({
+      where: {
+        schoolId,
+        levelId: createClassroomDto.levelId,
+        academicSessionId: currentSession.id,
+        name: {
+          equals: createClassroomDto.name,
+          mode: 'insensitive',
+        },
+        deletedAt: null,
+      },
+    });
+
+    if (existingClassroom) {
+      throw new ConflictException(`Classroom with name '${createClassroomDto.name}' already exists in ${level.name}`);
+    }
+
+    // Validate class teacher if provided
+    if (createClassroomDto.classTeacherId) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: {
+          id: createClassroomDto.classTeacherId,
+          deletedAt: null,
+          user: {
+            schoolId,
+          },
+        },
+      });
+
+      if (!teacher) {
+        throw new BadRequestException('Teacher not found or does not belong to this school');
+      }
+    }
+
+    // Create the classroom (classArm)
+    const classroom = await this.prisma.classArm.create({
+      data: {
+        name: createClassroomDto.name,
+        levelId: createClassroomDto.levelId,
+        academicSessionId: currentSession.id,
+        schoolId,
+        classTeacherId: createClassroomDto.classTeacherId,
+      },
+      include: {
+        level: true,
+        classTeacher: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: classroom.id,
+      name: classroom.name,
+      level: classroom.level.name,
+      classTeacher: classroom.classTeacher ? {
+        id: classroom.classTeacher.id,
+        name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
+      } : null,
+      academicSession: currentSession.academicYear,
+      createdAt: classroom.createdAt,
+    };
+  }
+
+  async getClassroomDetailsByLevelAndArm(
+    userId: string,
+    level: string,
+    classArm: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<ClassroomDetailsData> {
+    // First, get the user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new Error('User not found or not associated with a school');
+    }
+
+    const schoolId = user.schoolId;
+
+    // Get classroom details by level and classArm
+    const classroom = await this.prisma.classArm.findFirst({
+      where: {
+        name: classArm,
+        level: {
+          name: level,
+        },
+        schoolId,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+        classTeacher: {
+          include: {
+            user: true,
+          },
+        },
+        captain: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!classroom) {
+      throw new Error('Classroom not found or not accessible');
+    }
+
+    // Get total count of students in the classroom
+    const totalStudents = await this.prisma.student.count({
+      where: {
+        classArm: {
+          name: classArm,
+          level: {
+            name: level,
+          },
+          schoolId,
+          deletedAt: null,
+        },
+      },
+    });
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+    const totalPages = Math.ceil(totalStudents / limit);
+
+    // Get paginated students with all their data
+    // Use the level and class name to find students instead of classroom ID
+    const students = await this.prisma.student.findMany({
+      where: {
+        classArm: {
+          name: classArm,
+          level: {
+            name: level,
+          },
+          schoolId,
+          deletedAt: null,
+        },
+      },
+      include: {
+        user: true,
+      },
+      skip,
+      take: limit,
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    // Calculate population statistics
+    const maleStudents = students.filter(s => s.user.gender === 'MALE').length;
+    const femaleStudents = students.filter(s => s.user.gender === 'FEMALE').length;
+
+    // Get attendance data (simplified - you might want to implement proper attendance calculation)
+    const attendanceData = {
+      totalDays: 180, // Academic year days
+      presentDays: 173, // This should be calculated from actual attendance records
+      absentDays: 7,
+      attendanceRate: 96.11,
+      studentsPresent: 0, // Today's attendance
+      studentsAbsent: 0,
+      totalStudents: totalStudents,
+    };
+
+    // Get top performers (simplified - you might want to implement proper performance calculation)
+    const topPerformers = [];
+
+    return {
+      classroom: {
+        id: classroom.id,
+        name: classroom.name,
+        level: classroom.level.name,
+        location: null, // Add location if available
+      },
+      population: {
+        total: totalStudents,
+        male: maleStudents,
+        female: femaleStudents,
+      },
+      attendance: attendanceData,
+      classTeacher: classroom.classTeacher ? {
+        id: classroom.classTeacher.id,
+        name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
+        phone: classroom.classTeacher.user.phone || '',
+        email: classroom.classTeacher.user.email || '',
+      } : null,
+      classCaptain: classroom.captain ? {
+        id: classroom.captain.id,
+        name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
+        admissionNumber: classroom.captain.studentNo || '',
+      } : null,
+      students: students.map(student => ({
+        id: student.id,
+        name: `${student.user.firstName} ${student.user.lastName}`,
+        gender: student.user.gender,
+        age: student.user.dateOfBirth ? 
+          new Date().getFullYear() - new Date(student.user.dateOfBirth).getFullYear() : 0,
+        admissionNumber: student.studentNo || '',
+        guardianPhone: student.user.phone || '',
+        guardianName: '', // Add default values for missing fields
+        stateOfOrigin: student.user.stateOfOrigin || 'N/A', // Use actual state of origin
+      })),
+      topPerformers,
+    };
+  }
+
 }

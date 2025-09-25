@@ -159,8 +159,8 @@ export class AdminClassroomDetailsResult {
   @ApiProperty({ type: ClassCaptainResult, nullable: true })
   classCaptain: ClassCaptainResult | null;
 
-  @ApiProperty({ type: PaginatedStudentsResult })
-  students: PaginatedStudentsResult;
+  @ApiProperty({ type: [StudentInfoResult] })
+  students: StudentInfoResult[];
 
   @ApiProperty({ type: [TopPerformerResult] })
   topPerformers: TopPerformerResult[];

@@ -88,7 +88,7 @@ export interface ClassroomDetailsData {
     name: string;
     admissionNumber: string;
   } | null;
-  students: PaginatedStudents;
+  students: StudentInfo[];
   topPerformers: TopPerformer[];
 }
 

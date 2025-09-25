@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { ActivityLogService } from '../../../common/services/activity-log.service';
 import { PrismaService } from '../../../prisma';
+import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { CreateLevelDto } from './dto/create-level.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
@@ -1183,4 +1184,19 @@ export class BffAdminService {
       totalNetProfit: netProfit,
     };
   }
+
+  async createClassroom(userId: string, createClassroomDto: CreateClassroomDto) {
+    return this.classroomService.createClassroom(userId, createClassroomDto);
+  }
+
+  async getClassroomDetailsByLevelAndArm(
+    userId: string,
+    level: string,
+    classArm: string,
+    page: number,
+    limit: number,
+  ) {
+    return this.classroomService.getClassroomDetailsByLevelAndArm(userId, level, classArm, page, limit);
+  }
+
 }

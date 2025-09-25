@@ -730,7 +730,7 @@ async function main() {
         },
       });
 
-      // Use default assessment structure: Test 1, Test 2, Exam
+      // Use default assessment structure: CA1, CA2, Exam
       const assessmentStructure = getAssessmentStructureForSeeding();
       const assessments = assessmentStructure.map((assessment) => ({
         name: assessment.name,

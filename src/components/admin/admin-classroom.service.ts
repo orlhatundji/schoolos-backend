@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
+import { UpdateClassroomDto } from '../bff/admin/dto/update-classroom.dto';
 
 @Injectable()
 export class AdminClassroomService {
@@ -72,5 +74,122 @@ export class AdminClassroomService {
     });
 
     return { message: 'Classroom deleted successfully' };
+  }
+
+  async updateClassroom(userId: string, classroomId: string, updateClassroomDto: UpdateClassroomDto) {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not associated with a school');
+    }
+
+    const schoolId = user.schoolId;
+
+    // Check if classroom exists and belongs to the school
+    const existingClassroom = await this.prisma.classArm.findFirst({
+      where: {
+        id: classroomId,
+        schoolId,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+      },
+    });
+
+    if (!existingClassroom) {
+      throw new NotFoundException('Classroom not found or access denied');
+    }
+
+    // Validate level if provided
+    if (updateClassroomDto.levelId) {
+      const level = await this.prisma.level.findFirst({
+        where: {
+          id: updateClassroomDto.levelId,
+          schoolId,
+          deletedAt: null,
+        },
+      });
+
+      if (!level) {
+        throw new BadRequestException('Level not found or does not belong to this school');
+      }
+    }
+
+    // Check for name conflicts if name is being updated
+    if (updateClassroomDto.name) {
+      const nameConflict = await this.prisma.classArm.findFirst({
+        where: {
+          schoolId,
+          levelId: updateClassroomDto.levelId || existingClassroom.levelId,
+          academicSessionId: existingClassroom.academicSessionId,
+          name: {
+            equals: updateClassroomDto.name,
+            mode: 'insensitive',
+          },
+          id: {
+            not: classroomId,
+          },
+          deletedAt: null,
+        },
+      });
+
+      if (nameConflict) {
+        const levelName = updateClassroomDto.levelId ? 
+          (await this.prisma.level.findUnique({ where: { id: updateClassroomDto.levelId } }))?.name :
+          existingClassroom.level.name;
+        throw new ConflictException(`Classroom with name '${updateClassroomDto.name}' already exists in ${levelName}`);
+      }
+    }
+
+    // Validate class teacher if provided
+    if (updateClassroomDto.classTeacherId) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: {
+          id: updateClassroomDto.classTeacherId,
+          deletedAt: null,
+          user: {
+            schoolId,
+          },
+        },
+      });
+
+      if (!teacher) {
+        throw new BadRequestException('Teacher not found or does not belong to this school');
+      }
+    }
+
+    // Update the classroom
+    const updatedClassroom = await this.prisma.classArm.update({
+      where: { id: classroomId },
+      data: {
+        ...(updateClassroomDto.name && { name: updateClassroomDto.name }),
+        ...(updateClassroomDto.levelId && { levelId: updateClassroomDto.levelId }),
+        ...(updateClassroomDto.classTeacherId !== undefined && { classTeacherId: updateClassroomDto.classTeacherId }),
+      },
+      include: {
+        level: true,
+        classTeacher: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: updatedClassroom.id,
+      name: updatedClassroom.name,
+      level: updatedClassroom.level.name,
+      classTeacher: updatedClassroom.classTeacher ? {
+        id: updatedClassroom.classTeacher.id,
+        name: `${updatedClassroom.classTeacher.user.firstName} ${updatedClassroom.classTeacher.user.lastName}`,
+      } : null,
+      updatedAt: updatedClassroom.updatedAt,
+    };
   }
 }

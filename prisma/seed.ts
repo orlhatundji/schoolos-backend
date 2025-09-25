@@ -52,6 +52,9 @@ async function main() {
   console.log('🚀 Starting seed process...');
   const samplePassword = 'Password@123';
 
+  // Variable to store system admin user ID for logging
+  let systemAdminUserId: string;
+
   console.log('Checking if system admin already exists...');
   const existingSystemAdmin = await prisma.systemAdmin.findFirst({
     where: {
@@ -68,6 +71,14 @@ async function main() {
       password: samplePassword,
       role: existingSystemAdmin.role,
     });
+
+    // Get existing system admin user ID
+    const existingSystemAdminUser = await prisma.user.findFirst({
+      where: {
+        systemAdmin: { id: existingSystemAdmin.id },
+      },
+    });
+    systemAdminUserId = existingSystemAdminUser!.id;
 
     // Check if school and students already exist
     const existingSchool = await prisma.school.findFirst();
@@ -95,6 +106,9 @@ async function main() {
         gender: 'MALE',
       },
     });
+
+    // Store system admin user ID for logging
+    systemAdminUserId = systemAdminUser.id;
 
     // Create system admin record
     const systemAdmin = await prisma.systemAdmin.create({
@@ -170,7 +184,7 @@ async function main() {
 
     // Log school creation
     await logSeedActivity(
-      'system',
+      systemAdminUserId,
       school.id,
       'CREATE',
       'School',
@@ -199,7 +213,7 @@ async function main() {
   // Check if super admin already exists
   let adminUser = await prisma.user.findFirst({
     where: {
-      email: 'orlhatundji@gmail.com',
+      email: 'admin@brightfuture.edu',
       schoolId: school.id,
     },
   });
@@ -209,7 +223,7 @@ async function main() {
     adminUser = await prisma.user.create({
       data: {
         type: UserTypes.SUPER_ADMIN,
-        email: 'orlhatundji@gmail.com',
+        email: 'admin@brightfuture.edu',
         password: bcrypt.hashSync(samplePassword, 10),
         firstName: 'Jane',
         lastName: 'Doe',
@@ -295,13 +309,18 @@ async function main() {
 
   console.log('Creating academic sessions and terms...');
   // Academic Sessions & Terms
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  const currentAcademicYear = `${currentYear}/${nextYear}`;
+  const previousAcademicYear = `${currentYear - 1}/${currentYear}`;
+
   const sessions = await Promise.all(
-    ['2023/2024', '2024/2025'].map((academicYear) =>
+    [previousAcademicYear, currentAcademicYear].map((academicYear) =>
       prisma.academicSession.create({
         data: {
           academicYear,
           schoolId: school.id,
-          isCurrent: academicYear === '2024/2025',
+          isCurrent: academicYear === currentAcademicYear,
           startDate: faker.date.past(),
           endDate: faker.date.future(),
         },
@@ -448,6 +467,36 @@ async function main() {
       });
       subjectTerms.push(subjectTerm);
     }
+  }
+
+  // Ensure current session is properly set
+  console.log('Ensuring current session is set...');
+  const year = new Date().getFullYear();
+  const nextYearValue = year + 1;
+  const targetAcademicYear = `${year}/${nextYearValue}`;
+
+  // First, unset all current sessions for this school
+  await prisma.academicSession.updateMany({
+    where: { schoolId: school.id },
+    data: { isCurrent: false },
+  });
+
+  // Then set the current year session as current
+  const targetSession = await prisma.academicSession.findFirst({
+    where: {
+      schoolId: school.id,
+      academicYear: targetAcademicYear,
+    },
+  });
+
+  if (targetSession) {
+    await prisma.academicSession.update({
+      where: { id: targetSession.id },
+      data: { isCurrent: true },
+    });
+    console.log(`✅ Set current session to: ${targetAcademicYear}`);
+  } else {
+    console.log(`⚠️  Current session ${targetAcademicYear} not found`);
   }
 
   console.log('Assigning class teachers...');

@@ -439,6 +439,129 @@ export class BffAdminStudentService {
     // Calculate attendance today (simulated for now)
     const studentsPresent = Math.floor(totalStudents * (0.9 + Math.random() * 0.08)); // 90-98% present
     const studentsAbsent = totalStudents - studentsPresent;
+    const presentPercentage = totalStudents > 0 ? studentsPresent / totalStudents : 0;
+    const absentPercentage = totalStudents > 0 ? studentsAbsent / totalStudents : 0;
+
+    // Calculate status breakdown (simplified)
+    const activeStudents = Math.floor(totalStudents * 0.95); // 95% active
+    const inactiveStudents = Math.floor(totalStudents * 0.03); // 3% inactive
+    const suspendedStudents = totalStudents - activeStudents - inactiveStudents;
+
+    // Transform students data for the response
+    const studentsData = students.map((student) => ({
+      id: student.id,
+      name: `${student.user.firstName} ${student.user.lastName}`,
+      studentId: student.studentNo,
+      admissionNumber: student.admissionNo || student.studentNo,
+      gender: student.user.gender,
+      age: student.user.dateOfBirth
+        ? Math.floor(
+            (Date.now() - new Date(student.user.dateOfBirth).getTime()) /
+              (365.25 * 24 * 60 * 60 * 1000),
+          )
+        : 0,
+      stateOfOrigin: student.user.stateOfOrigin || 'Unknown',
+      guardianName: student.guardian?.user
+        ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+        : 'N/A',
+      guardianPhone: student.guardian?.user?.phone || 'N/A',
+      telephone: student.user.phone || 'N/A',
+      className: student.classArm?.name || 'N/A',
+      classLevel: student.classArm?.level?.name || 'N/A',
+      averageGrade: 0, // This would need to be calculated from actual grades
+      isPresent: Math.random() > 0.1, // Simulated attendance
+      attendanceRate: Math.floor(Math.random() * 40) + 60, // 60-100% attendance rate
+      avatarUrl: student.user.avatarUrl || null,
+    }));
+
+    return {
+      stats: {
+        totalStudents,
+        maleStudents,
+        femaleStudents,
+        graduatedStudents,
+        attendanceToday: {
+          present: studentsPresent,
+          absent: studentsAbsent,
+          presentPercentage: Math.round(presentPercentage * 100) / 100,
+          absentPercentage: Math.round(absentPercentage * 100) / 100,
+        },
+        statusBreakdown: {
+          active: activeStudents,
+          inactive: inactiveStudents,
+          suspended: suspendedStudents,
+        },
+      },
+      students: studentsData,
+    };
+  }
+
+  private async getStudentsForSchool(
+    schoolId: string,
+    targetSession: any,
+  ): Promise<StudentsViewData> {
+    // Get all students for the school (not filtered by class arm assignment)
+    const students = await this.prisma.student.findMany({
+      where: {
+        user: {
+          schoolId,
+        },
+        deletedAt: null,
+      },
+      include: {
+        user: true,
+        guardian: {
+          include: {
+            user: true,
+          },
+        },
+        classArm: {
+          include: {
+            level: true,
+            academicSession: true,
+          },
+        },
+        subjectTermStudents: {
+          where: {
+            subjectTerm: {
+              academicSessionId: targetSession.id,
+            },
+          },
+          include: {
+            assessments: true,
+          },
+        },
+        studentAttendances: {
+          where: {
+            academicSessionId: targetSession.id,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 30, // Last 30 attendance records for rate calculation
+        },
+      },
+    });
+
+    // Calculate statistics
+    const totalStudents = students.length;
+    const maleStudents = students.filter((student) => student.user.gender === 'MALE').length;
+    const femaleStudents = students.filter((student) => student.user.gender === 'FEMALE').length;
+
+    // Calculate graduated students (students in final year/class)
+    // This is a simplified calculation - you might want to adjust based on your logic
+    const graduatedStudents = students.filter((student) => {
+      // Assuming final year is the highest level
+      const levels = students.map((s) => s.classArm?.level?.name).filter(Boolean);
+      const maxLevel = Math.max(
+        ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
+      );
+      return student.classArm?.level?.name?.includes(maxLevel.toString());
+    }).length;
+
+    // Calculate attendance today (simulated for now)
+    const studentsPresent = Math.floor(totalStudents * (0.9 + Math.random() * 0.08)); // 90-98% present
+    const studentsAbsent = totalStudents - studentsPresent;
     const presentPercentage = totalStudents > 0 ? (studentsPresent / totalStudents) * 100 : 0;
     const absentPercentage = totalStudents > 0 ? (studentsAbsent / totalStudents) * 100 : 0;
 

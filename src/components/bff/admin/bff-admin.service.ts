@@ -635,13 +635,25 @@ export class BffAdminService {
           where: { schoolId, deletedAt: null },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'CORE', deletedAt: null },
+          where: { 
+            schoolId, 
+            category: { name: 'Core' },
+            deletedAt: null 
+          },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'GENERAL', deletedAt: null },
+          where: { 
+            schoolId, 
+            category: { name: 'General' },
+            deletedAt: null 
+          },
         }),
         this.prisma.subject.count({
-          where: { schoolId, category: 'VOCATIONAL', deletedAt: null },
+          where: { 
+            schoolId, 
+            category: { name: 'Vocational' },
+            deletedAt: null 
+          },
         }),
         this.prisma.subject.count({
           where: {

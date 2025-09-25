@@ -122,6 +122,7 @@ export class DropdownsService {
               code: true,
             },
           },
+          category: true,
         },
         orderBy: { name: 'asc' },
       }),
@@ -175,7 +176,8 @@ export class DropdownsService {
     const subjectsData = subjects.map((subject) => ({
       id: subject.id,
       name: subject.name,
-      category: subject.category,
+      category: subject.category?.name || null,
+      categoryId: subject.categoryId,
       department: subject.department?.name || null,
       departmentCode: subject.department?.code || null,
       status: (subject.deletedAt ? 'inactive' : 'active') as 'active' | 'inactive',

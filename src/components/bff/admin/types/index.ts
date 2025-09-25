@@ -226,7 +226,7 @@ export interface SubjectInfo {
   id: string;
   name: string;
   department: string | null;
-  category: SubjectCategory;
+  category: string | null;
   classesCount: number;
   studentCount: number;
   status: 'active' | 'inactive';

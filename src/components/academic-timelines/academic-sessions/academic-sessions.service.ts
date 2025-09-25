@@ -59,7 +59,11 @@ export class AcademicSessionsService extends BaseService {
       });
 
       // Create assessment structure template for the new session
-      await this.createAssessmentStructureForNewSessionInTransaction(tx, user.schoolId, newSession.id);
+      await this.createAssessmentStructureForNewSessionInTransaction(
+        tx,
+        user.schoolId,
+        newSession.id,
+      );
 
       // Create class arms for the new session
       await this.createClassArmsForNewSessionInTransaction(tx, user.schoolId, newSession.id);
@@ -121,7 +125,7 @@ export class AcademicSessionsService extends BaseService {
     data: UpdateAcademicSessionDto,
   ): Promise<AcademicSession> {
     await this.getAcademicSessionById(userId, id);
-    
+
     // If this session is being set as current, deactivate all other current sessions for this school
     if (data.isCurrent) {
       const user = await this.prisma.user.findUnique({
@@ -142,7 +146,7 @@ export class AcademicSessionsService extends BaseService {
         });
       }
     }
-    
+
     return this.academicSessionsRepository.update({ id }, data);
   }
 
@@ -161,9 +165,10 @@ export class AcademicSessionsService extends BaseService {
 
     if (classArms.length > 0) {
       // Check if any class arms have students or teacher assignments
-      const hasStudents = classArms.some(classArm => classArm.students.length > 0);
-      const hasTeacherAssignments = classArms.some(classArm => 
-        classArm.classArmSubjectTeachers.length > 0 || classArm.classArmTeachers.length > 0
+      const hasStudents = classArms.some((classArm) => classArm.students.length > 0);
+      const hasTeacherAssignments = classArms.some(
+        (classArm) =>
+          classArm.classArmSubjectTeachers.length > 0 || classArm.classArmTeachers.length > 0,
       );
 
       if (hasStudents) {
@@ -222,9 +227,6 @@ export class AcademicSessionsService extends BaseService {
       );
     }
 
-    // Verify the session belongs to the user's school
-    const session = await this.getAcademicSessionById(userId, id);
-
     // Deactivate all other current sessions for this school
     await this.prisma.academicSession.updateMany({
       where: {
@@ -241,7 +243,11 @@ export class AcademicSessionsService extends BaseService {
     return this.academicSessionsRepository.update({ id }, { isCurrent: true });
   }
 
-  private async createAssessmentStructureForNewSessionInTransaction(tx: any, schoolId: string, academicSessionId: string) {
+  private async createAssessmentStructureForNewSessionInTransaction(
+    tx: any,
+    schoolId: string,
+    academicSessionId: string,
+  ) {
     try {
       // Check if school already has assessment structures for this session
       const existingStructures = await tx.assessmentStructure.findMany({
@@ -340,19 +346,18 @@ export class AcademicSessionsService extends BaseService {
       if (globalDefault) {
         // Use global default template
         defaultStructures = globalDefault.assessments as any[];
-        console.log('✅ Using global default template for session:', academicSessionId);
       } else {
         // Fallback to hardcoded defaults
         defaultStructures = [
           {
-            name: 'Cont. Ass. 1',
+            name: 'CA 1',
             description: 'First continuous assessment test',
             maxScore: 20,
             isExam: false,
             order: 1,
           },
           {
-            name: 'Cont. Ass. 2',
+            name: 'CA 2',
             description: 'Second continuous assessment test',
             maxScore: 20,
             isExam: false,
@@ -366,7 +371,6 @@ export class AcademicSessionsService extends BaseService {
             order: 3,
           },
         ];
-        console.log('✅ Using hardcoded defaults for session:', academicSessionId);
       }
 
       for (const structure of defaultStructures) {
@@ -396,7 +400,6 @@ export class AcademicSessionsService extends BaseService {
             isActive: true,
           },
         });
-        console.log('✅ Assessment structure template created successfully for session:', academicSessionId);
       } catch (templateError) {
         console.error('❌ Error creating assessment structure template:', templateError);
         // Don't throw error to avoid breaking session creation
@@ -407,7 +410,10 @@ export class AcademicSessionsService extends BaseService {
     }
   }
 
-  private async createAssessmentStructureForNewSession(schoolId: string, academicSessionId: string) {
+  private async createAssessmentStructureForNewSession(
+    schoolId: string,
+    academicSessionId: string,
+  ) {
     try {
       // Check if school already has assessment structures for this session
       const existingStructures = await this.prisma.assessmentStructure.findMany({
@@ -506,7 +512,6 @@ export class AcademicSessionsService extends BaseService {
       if (globalDefault) {
         // Use global default template
         defaultStructures = globalDefault.assessments as any[];
-        console.log('✅ Using global default template for session:', academicSessionId);
       } else {
         // Fallback to hardcoded defaults
         defaultStructures = [
@@ -532,7 +537,6 @@ export class AcademicSessionsService extends BaseService {
             order: 3,
           },
         ];
-        console.log('✅ Using hardcoded defaults for session:', academicSessionId);
       }
 
       for (const structure of defaultStructures) {
@@ -562,7 +566,6 @@ export class AcademicSessionsService extends BaseService {
             isActive: true,
           },
         });
-        console.log('✅ Assessment structure template created successfully for session:', academicSessionId);
       } catch (templateError) {
         console.error('❌ Error creating assessment structure template:', templateError);
         // Don't throw error to avoid breaking session creation
@@ -573,9 +576,12 @@ export class AcademicSessionsService extends BaseService {
     }
   }
 
-  private async createClassArmsForNewSessionInTransaction(tx: any, schoolId: string, academicSessionId: string) {
+  private async createClassArmsForNewSessionInTransaction(
+    tx: any,
+    schoolId: string,
+    academicSessionId: string,
+  ) {
     try {
-      
       // Check if class arms already exist for this session
       const existingClassArms = await tx.classArm.findMany({
         where: {
@@ -635,7 +641,6 @@ export class AcademicSessionsService extends BaseService {
       });
 
       if (mostRecentSessionWithClassArms?.classArms) {
-        
         // Copy class arms from the previous session
         for (const classArm of mostRecentSessionWithClassArms.classArms) {
           const newClassArm = await tx.classArm.create({
@@ -649,7 +654,7 @@ export class AcademicSessionsService extends BaseService {
               // Administrators need to assign new class teachers and captains for the new session
             },
           });
-          
+
           // Copy subject teacher assignments for this class arm
           for (const subjectTeacher of classArm.classArmSubjectTeachers) {
             await tx.classArmSubjectTeacher.create({

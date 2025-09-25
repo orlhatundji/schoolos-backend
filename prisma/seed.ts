@@ -126,6 +126,9 @@ async function main() {
   console.log('Getting or creating school...');
   let school = await prisma.school.findFirst();
 
+  // Declare category variables outside the if block
+  let coreCategory, generalCategory, vocationalCategory;
+
   if (!school) {
     school = await prisma.school.create({
       data: {
@@ -133,6 +136,37 @@ async function main() {
         code: 'BFH',
       },
     });
+
+    // Create default categories
+    console.log('Creating default categories...');
+    coreCategory = await prisma.category.create({
+      data: {
+        name: 'Core',
+        description: 'Essential subjects required for all students',
+        isDefault: true,
+        schoolId: school.id,
+      },
+    });
+
+    generalCategory = await prisma.category.create({
+      data: {
+        name: 'General',
+        description: 'General education subjects',
+        isDefault: true,
+        schoolId: school.id,
+      },
+    });
+
+    vocationalCategory = await prisma.category.create({
+      data: {
+        name: 'Vocational',
+        description: 'Skills-based and technical subjects',
+        isDefault: true,
+        schoolId: school.id,
+      },
+    });
+
+    console.log('✅ Created default categories');
 
     // Log school creation
     await logSeedActivity(
@@ -148,6 +182,17 @@ async function main() {
     console.log('School created:', school.name);
   } else {
     console.log('School already exists:', school.name);
+
+    // Get existing categories
+    coreCategory = await prisma.category.findFirst({
+      where: { schoolId: school.id, name: 'Core' },
+    });
+    generalCategory = await prisma.category.findFirst({
+      where: { schoolId: school.id, name: 'General' },
+    });
+    vocationalCategory = await prisma.category.findFirst({
+      where: { schoolId: school.id, name: 'Vocational' },
+    });
   }
 
   console.log('Creating super admin user...');
@@ -369,8 +414,12 @@ async function main() {
       const subject = await prisma.subject.create({
         data: {
           name: subjectName,
-          category:
-            dept.name === 'Science' ? 'CORE' : dept.name === 'Arts' ? 'GENERAL' : 'VOCATIONAL',
+          categoryId:
+            dept.name === 'Science'
+              ? coreCategory.id
+              : dept.name === 'Arts'
+                ? generalCategory.id
+                : vocationalCategory.id,
           schoolId: school.id,
           departmentId: dept.id,
         },
@@ -389,7 +438,7 @@ async function main() {
           curriculum: {
             create: {
               items: {
-                create: Array.from({ length: 3 }).map(() => ({
+                create: Array.from({ length: 2 }).map(() => ({
                   title: faker.word.words({ count: { min: 2, max: 5 } }),
                 })),
               },
@@ -470,7 +519,7 @@ async function main() {
   for (const classArm of classArms) {
     console.log(`Creating students for ${classArm.name}...`);
     const studentsPerArm = await Promise.all(
-      Array.from({ length: 25 }).map(async (_, i) => {
+      Array.from({ length: 2 }).map(async (_, i) => {
         const studentUser = await prisma.user.create({
           data: {
             type: UserTypes.STUDENT,
@@ -829,7 +878,7 @@ async function main() {
   // Generate student payments for each payment structure
   const studentPayments = [];
 
-  for (const student of students) {
+  for (const student of students.slice(0, 2)) {
     for (const paymentStructure of paymentStructures) {
       // Determine payment status randomly
       const statusOptions = ['PENDING', 'PAID', 'PARTIAL', 'OVERDUE', 'WAIVED'];

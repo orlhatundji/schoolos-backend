@@ -12,11 +12,13 @@ import { AuthModule } from './components/auth/auth.module';
 import { BffAdminModule } from './components/bff/admin/bff-admin.module';
 import { StudentModule } from './components/bff/student/student.module';
 import { TeacherModule } from './components/bff/teacher/teacher.module';
+import { CategoriesModule } from './components/categories/categories.module';
 import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
 import { PaymentsModule } from './components/payments/payments.module';
 import { RolesManagerModule } from './components/roles-manager';
 import { SchoolsModule } from './components/schools/schools.module';
+import { SettingsModule } from './components/settings/settings.module';
 import { StudentsModule } from './components/students/students.module';
 import { SubjectsModule } from './components/subjects/subjects.module';
 import { UsersModule } from './components/users/users.module';
@@ -51,6 +53,7 @@ export const AppModuleList = [
   MailQueueModule,
   UsersModule,
   SchoolsModule,
+  SettingsModule,
   StudentsModule,
   AuthModule,
   AcademicTimelinesModule,
@@ -59,6 +62,7 @@ export const AppModuleList = [
   BffAdminModule,
   TeacherModule,
   StudentModule,
+  CategoriesModule,
   SubjectsModule,
   DepartmentsModule,
   LevelsModule,

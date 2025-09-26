@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Delete,
-  Put,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Body,
-} from '@nestjs/common';
+import { Controller, Delete, Get, Put, HttpCode, HttpStatus, Param, Body } from '@nestjs/common';
 import { ApiBearerAuth, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StrategyEnum } from '../auth/strategies';
 import { GetCurrentUserId } from '../../common/decorators';
@@ -18,6 +10,23 @@ import { UpdateClassroomDto } from '../bff/admin/dto/update-classroom.dto';
 @ApiBearerAuth(StrategyEnum.JWT)
 export class AdminClassroomController {
   constructor(private readonly adminClassroomService: AdminClassroomService) {}
+
+  @Get(':classroomId')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Classroom details retrieved successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Classroom not found',
+  })
+  @ApiParam({ name: 'classroomId', description: 'Classroom ID' })
+  async getClassroom(
+    @GetCurrentUserId() userId: string,
+    @Param('classroomId') classroomId: string,
+  ) {
+    return this.adminClassroomService.getClassroom(userId, classroomId);
+  }
 
   @Put(':classroomId')
   @ApiResponse({

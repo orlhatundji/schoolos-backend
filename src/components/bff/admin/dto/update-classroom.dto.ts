@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateClassroomDto {
@@ -28,4 +28,13 @@ export class UpdateClassroomDto {
   @IsUUID()
   @IsOptional()
   classTeacherId?: string;
+
+  @ApiProperty({
+    description: 'Location of the classroom (optional)',
+    example: 'Room 101, Block A',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  location?: string;
 }

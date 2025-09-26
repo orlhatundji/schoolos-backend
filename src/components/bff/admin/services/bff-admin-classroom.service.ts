@@ -46,7 +46,10 @@ export class BffAdminClassroomService {
         academicSessionId: currentSession.id,
         deletedAt: null,
       },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        location: true,
         level: true,
         students: {
           where: {
@@ -63,7 +66,7 @@ export class BffAdminClassroomService {
             user: true,
           },
         },
-      } as any, // Temporary until Prisma types fully refresh
+      },
     });
 
     // Calculate stats (with type assertions until Prisma types fully refresh)
@@ -84,15 +87,15 @@ export class BffAdminClassroomService {
       return {
         id: classArm.id,
         name: classArm.name,
-        level: (classArm as any).level.name,
-        location: null, // Add location field to ClassArm model if needed
-        classTeacher: (classArm as any).classTeacher
-          ? `${(classArm as any).classTeacher.user.firstName} ${(classArm as any).classTeacher.user.lastName}`
+        level: classArm.level.name,
+        location: classArm.location,
+        classTeacher: classArm.classTeacher
+          ? `${classArm.classTeacher.user.firstName} ${classArm.classTeacher.user.lastName}`
           : null,
-        classCaptain: (classArm as any).captain
-          ? `${(classArm as any).captain.user.firstName} ${(classArm as any).captain.user.lastName}`
+        classCaptain: classArm.captain
+          ? `${classArm.captain.user.firstName} ${classArm.captain.user.lastName}`
           : null,
-        studentsCount: (classArm as any).students.length,
+        studentsCount: classArm.students.length,
       };
     });
 
@@ -336,7 +339,7 @@ export class BffAdminClassroomService {
         id: classroom.id,
         name: classroom.name,
         level: (classroom as any).level.name,
-        location: null, // Add location field to ClassArm model if needed
+        location: (classroom as any).location,
       },
       population: {
         total: totalStudents,
@@ -586,7 +589,7 @@ export class BffAdminClassroomService {
         id: classroom.id,
         name: classroom.name,
         level: classroom.level.name,
-        location: null, // Add location if available
+        location: (classroom as any).location,
       },
       population: {
         total: totalStudents,

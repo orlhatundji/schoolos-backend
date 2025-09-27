@@ -13,6 +13,7 @@ interface IAuthResultInput {
   user?: User;
   student?: Student;
   teacher?: Teacher;
+  preferences?: any;
   tokens: AuthTokens;
   message: string;
   status: HttpStatus;
@@ -22,6 +23,7 @@ class AuthResultData {
   user?: UserEntity;
   student?: StudentEntity;
   teacher?: TeacherEntity;
+  preferences?: any;
   tokens: AuthTokens;
 }
 
@@ -33,6 +35,7 @@ export class AuthResult extends BaseResultWithData {
     user,
     student,
     teacher,
+    preferences,
     tokens,
     message,
     status,
@@ -40,7 +43,7 @@ export class AuthResult extends BaseResultWithData {
     if (!user && !student && !teacher) {
       throw new Error('User, student, or teacher must be provided');
     }
-    const data: AuthResultData = { tokens };
+    const data: AuthResultData = { tokens, preferences };
     if (student) {
       data.student = StudentEntity.fromStudent(student);
     } else if (teacher) {

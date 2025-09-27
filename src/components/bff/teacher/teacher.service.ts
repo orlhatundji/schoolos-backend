@@ -1,6 +1,13 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../../../prisma';
+import { PasswordHasher } from '../../../utils/hasher';
+import { PaystackService } from '../../../shared/services/paystack.service';
 import {
   ClassDetails,
   ClassStudentInfo,
@@ -22,7 +29,11 @@ import { ClassAttendanceResult, SubjectAttendanceResult } from './results/attend
 
 @Injectable()
 export class TeacherService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordHasher: PasswordHasher,
+    private readonly paystackService: PaystackService,
+  ) {}
 
   async getTeacherDashboardData(userId: string): Promise<TeacherDashboardData> {
     // Get teacher information with current session filtering
@@ -113,9 +124,12 @@ export class TeacherService {
         currentTerm: currentTerm?.name || 'No active term',
         sessionStartDate: currentSession.startDate.toISOString(),
         sessionEndDate: currentSession.endDate.toISOString(),
-        daysRemaining: Math.max(0, Math.ceil(
-          (currentSession.endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
-        )),
+        daysRemaining: Math.max(
+          0,
+          Math.ceil(
+            (currentSession.endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+          ),
+        ),
       },
     };
   }
@@ -310,6 +324,348 @@ export class TeacherService {
     };
   }
 
+  // Update teacher profile information
+  async updateTeacherProfile(userId: string, updateData: any): Promise<TeacherProfile> {
+    const teacher = await this.getTeacherWithRelations(userId);
+
+    // Prepare user update data
+    const userUpdateData: any = {};
+    if (updateData.firstName) userUpdateData.firstName = updateData.firstName;
+    if (updateData.lastName) userUpdateData.lastName = updateData.lastName;
+    if (updateData.email) userUpdateData.email = updateData.email;
+    if (updateData.phone) userUpdateData.phone = updateData.phone;
+    if (updateData.avatarUrl) userUpdateData.avatarUrl = updateData.avatarUrl;
+    if (updateData.dateOfBirth) userUpdateData.dateOfBirth = new Date(updateData.dateOfBirth);
+    if (updateData.gender) userUpdateData.gender = updateData.gender;
+    if (updateData.stateOfOrigin) userUpdateData.stateOfOrigin = updateData.stateOfOrigin;
+
+    // Check for phone number conflicts if phone is being updated
+    if (updateData.phone && updateData.phone !== teacher.user.phone) {
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          phone: updateData.phone,
+          schoolId: teacher.user.schoolId,
+          id: { not: teacher.userId },
+        },
+      });
+
+      if (existingUser) {
+        throw new ConflictException(
+          'Phone number is already in use by another user in this school',
+        );
+      }
+    }
+
+    // Check for email conflicts if email is being updated
+    if (updateData.email && updateData.email !== teacher.user.email) {
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          email: updateData.email,
+          schoolId: teacher.user.schoolId,
+          id: { not: teacher.userId },
+        },
+      });
+
+      if (existingUser) {
+        throw new ConflictException(
+          'Email address is already in use by another user in this school',
+        );
+      }
+    }
+
+    // Update user if there are changes
+    if (Object.keys(userUpdateData).length > 0) {
+      await this.prisma.user.update({
+        where: { id: teacher.userId },
+        data: userUpdateData,
+      });
+    }
+
+    // Get updated teacher data
+    const updatedTeacher = await this.getTeacherWithRelations(userId);
+
+    return {
+      teacherNo: updatedTeacher.teacherNo,
+      firstName: updatedTeacher.user.firstName,
+      lastName: updatedTeacher.user.lastName,
+      email: updatedTeacher.user.email,
+      phone: updatedTeacher.user.phone,
+      department: (updatedTeacher as any).department?.name || 'Unassigned',
+      status: updatedTeacher.status,
+      employmentType: updatedTeacher.employmentType,
+      qualification: updatedTeacher.qualification,
+      joinDate: updatedTeacher.joinDate.toISOString(),
+      avatar: updatedTeacher.user.avatarUrl,
+    };
+  }
+
+  // Change teacher password
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+    const teacher = await this.getTeacherWithRelations(userId);
+
+    // Verify old password
+    const isOldPasswordValid = await this.passwordHasher.compare(
+      oldPassword,
+      teacher.user.password,
+    );
+    if (!isOldPasswordValid) {
+      throw new ForbiddenException('Invalid current password');
+    }
+
+    // Hash new password
+    const hashedNewPassword = await this.passwordHasher.hash(newPassword);
+
+    // Update password
+    await this.prisma.user.update({
+      where: { id: teacher.userId },
+      data: { password: hashedNewPassword },
+    });
+  }
+
+  // Get user preferences
+  async getUserPreferences(userId: string) {
+    let preferences = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+    });
+
+    // Create default preferences if they don't exist
+    if (!preferences) {
+      preferences = await this.prisma.userPreferences.create({
+        data: {
+          userId,
+          themeMode: 'SYSTEM',
+          colorSchemeType: 'SCHOOL',
+          emailNotifications: true,
+          smsNotifications: false,
+          pushNotifications: true,
+          inAppNotifications: true,
+          marketingEmails: false,
+        },
+      });
+    }
+
+    return preferences;
+  }
+
+  // Update user preferences
+  async updateUserPreferences(userId: string, updateData: any) {
+    // Check if user has paid for custom color scheme if trying to use custom colors
+    if (updateData.colorSchemeType === 'CUSTOM') {
+      const hasValidPayment = await this.prisma.colorSchemePayment.findFirst({
+        where: {
+          userId,
+          status: 'PAID',
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (!hasValidPayment) {
+        throw new ConflictException(
+          'Custom color scheme requires payment. Please initiate payment first.',
+        );
+      }
+    }
+
+    const preferences = await this.prisma.userPreferences.upsert({
+      where: { userId },
+      update: updateData,
+      create: {
+        userId,
+        ...updateData,
+      },
+    });
+
+    return preferences;
+  }
+
+  // Initiate color scheme payment
+  async initiateColorSchemePayment(userId: string, colorData: any) {
+    // Get user information
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, firstName: true, lastName: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check if user already has a valid paid payment
+    const validPaidPayment = await this.prisma.colorSchemePayment.findFirst({
+      where: {
+        userId,
+        status: 'PAID',
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (validPaidPayment) {
+      throw new ConflictException('You already have an active custom color scheme subscription');
+    }
+
+    // Check for existing pending payment
+    const existingPendingPayment = await this.prisma.colorSchemePayment.findFirst({
+      where: {
+        userId,
+        status: 'PENDING',
+      },
+    });
+
+    // If there's a pending payment, check if it's still valid (30 minutes)
+    if (existingPendingPayment) {
+      const paymentAge = Date.now() - existingPendingPayment.createdAt.getTime();
+      const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+      if (paymentAge < 0) {
+        // Payment is still valid, return the existing authorization URL
+        return {
+          paymentId: existingPendingPayment.id,
+          paymentReference: existingPendingPayment.paymentReference,
+          amount: Number(existingPendingPayment.amount),
+          currency: existingPendingPayment.currency,
+          expiresAt: existingPendingPayment.expiresAt,
+          authorizationUrl: existingPendingPayment.authorizationUrl,
+        };
+      } else {
+        // Payment has expired, mark it as expired and create a new one
+        await this.prisma.colorSchemePayment.update({
+          where: { id: existingPendingPayment.id },
+          data: { status: 'EXPIRED' },
+        });
+      }
+    }
+
+    // Generate payment reference
+    const paymentReference = this.paystackService.generateReference('CS_PAY');
+
+    // Initialize payment with Paystack
+    try {
+      const paystackResponse = await this.paystackService.initializePayment({
+        amount: this.paystackService.convertToKobo(500), // 500 NGN in kobo
+        email: user.email,
+        reference: paymentReference,
+        metadata: {
+          userId,
+          paymentType: 'COLOR_SCHEME',
+          customPrimaryColor: colorData.customPrimaryColor,
+          customSecondaryColor: colorData.customSecondaryColor,
+          customAccentColor: colorData.customAccentColor,
+        },
+      });
+
+      console.log('Paystack Response:', JSON.stringify(paystackResponse, null, 2));
+
+      if (!paystackResponse.data || !paystackResponse.data.authorization_url) {
+        console.error('Paystack response missing authorization_url:', paystackResponse);
+        throw new Error('Failed to get authorization URL from Paystack');
+      }
+
+      // Create payment record
+      const payment = await this.prisma.colorSchemePayment.create({
+        data: {
+          userId,
+          amount: 500, // 500 NGN
+          currency: 'NGN',
+          status: 'PENDING',
+          paymentReference,
+          authorizationUrl: paystackResponse.data.authorization_url,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        },
+      });
+
+      return {
+        paymentId: payment.id,
+        paymentReference,
+        amount: 500,
+        currency: 'NGN',
+        expiresAt: payment.expiresAt,
+        authorizationUrl: paystackResponse.data.authorization_url,
+      };
+    } catch (error) {
+      console.error('Paystack initialization error:', error);
+      throw new Error(`Failed to initialize payment: ${error.message}`);
+    }
+  }
+
+  // Get color scheme payment status
+  async getColorSchemePaymentStatus(userId: string) {
+    const payment = await this.prisma.colorSchemePayment.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!payment) {
+      return {
+        hasPayment: false,
+        status: null,
+        canUseCustomColors: false,
+      };
+    }
+
+    const canUseCustomColors =
+      payment.status === 'PAID' && payment.expiresAt && payment.expiresAt > new Date();
+
+    return {
+      hasPayment: true,
+      status: payment.status,
+      canUseCustomColors,
+      expiresAt: payment.expiresAt,
+      paymentReference: payment.paymentReference,
+    };
+  }
+
+  // Verify color scheme payment
+  async verifyColorSchemePayment(userId: string, reference: string) {
+    try {
+      // Verify payment with Paystack
+      const paystackResponse = await this.paystackService.verifyPayment(reference);
+
+      if (paystackResponse.data.status !== 'success') {
+        return {
+          success: false,
+          message: 'Payment verification failed',
+        };
+      }
+
+      // Find the payment record
+      const payment = await this.prisma.colorSchemePayment.findFirst({
+        where: {
+          userId,
+          paymentReference: reference,
+          status: 'PENDING',
+        },
+      });
+
+      if (!payment) {
+        return {
+          success: false,
+          message: 'Payment record not found',
+        };
+      }
+
+      // Update payment status to PAID
+      await this.prisma.colorSchemePayment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'PAID',
+          paidAt: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Payment verified successfully',
+        paymentId: payment.id,
+        status: 'PAID',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Payment verification failed',
+      };
+    }
+  }
+
   // Helper method to get current session
   private async getCurrentSession(schoolId: string) {
     const currentSession = await this.prisma.academicSession.findFirst({
@@ -349,7 +705,11 @@ export class TeacherService {
   }
 
   // Get class arm ID for subject teachers (no authorization required)
-  async getClassArmId(userId: string, level: string, classArm: string): Promise<{ classArmId: string; classArmName: string; levelName: string }> {
+  async getClassArmId(
+    userId: string,
+    level: string,
+    classArm: string,
+  ): Promise<{ classArmId: string; classArmName: string; levelName: string }> {
     const teacher = await this.getTeacherWithRelations(userId);
 
     // Find the class arm by level and classArm name
@@ -448,21 +808,27 @@ export class TeacherService {
     // Calculate today's attendance rate
     const today = new Date();
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-    
-    const todayAttendanceRecords = classArmData.studentAttendances.filter(
-      (attendance) => {
-        const attendanceDate = new Date(attendance.date);
-        return attendanceDate >= startOfToday && attendanceDate <= endOfToday;
-      }
+    const endOfToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
     );
-    
+
+    const todayAttendanceRecords = classArmData.studentAttendances.filter((attendance) => {
+      const attendanceDate = new Date(attendance.date);
+      return attendanceDate >= startOfToday && attendanceDate <= endOfToday;
+    });
+
     const presentToday = todayAttendanceRecords.filter(
       (attendance) => attendance.status === 'PRESENT',
     ).length;
-    
-    const attendanceRate = students.length > 0 ? Math.round((presentToday / students.length) * 100) : 0;
 
+    const attendanceRate =
+      students.length > 0 ? Math.round((presentToday / students.length) * 100) : 0;
 
     // Get recent activities (empty for new teachers)
     const recentActivities: any[] = [];
@@ -662,7 +1028,7 @@ export class TeacherService {
 
     if (!classArmData) {
       throw new NotFoundException(
-        `Class ${level} ${classArm} not found in the current academic session. Please contact the administrator to set up class arms for the current session.`
+        `Class ${level} ${classArm} not found in the current academic session. Please contact the administrator to set up class arms for the current session.`,
       );
     }
 
@@ -1903,18 +2269,30 @@ export class TeacherService {
     const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
       where: { teacherId: teacher.id, classArmId, deletedAt: null },
     });
-    
+
     const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: { teacherId: teacher.id, classArmId, deletedAt: null },
     });
-    
+
     if (!classArmTeacher && !subjectTeacher) {
       throw new ForbiddenException('You are not authorized to mark attendance for this class');
     }
 
     const attendanceDate = new Date(date);
-    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate());
-    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+    const startOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+    );
+    const endOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     // Check if any attendance records exist for this class on this date
     const attendanceCount = await this.prisma.studentAttendance.count({
@@ -1951,18 +2329,30 @@ export class TeacherService {
     const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
       where: { teacherId: teacher.id, classArmId, deletedAt: null },
     });
-    
+
     const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: { teacherId: teacher.id, classArmId, deletedAt: null },
     });
-    
+
     if (!classArmTeacher && !subjectTeacher) {
       throw new ForbiddenException('You are not authorized to view attendance for this class');
     }
 
     const attendanceDate = new Date(date);
-    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate());
-    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+    const startOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+    );
+    const endOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     // Get class arm information
     const classArm = await this.prisma.classArm.findFirst({
@@ -1991,7 +2381,7 @@ export class TeacherService {
 
     // Create attendance data for all students
     const attendanceData = students.map((student) => {
-      const attendanceRecord = attendanceRecords.find(record => record.studentId === student.id);
+      const attendanceRecord = attendanceRecords.find((record) => record.studentId === student.id);
       return {
         studentId: student.id,
         studentName: `${student.user.firstName} ${student.user.lastName}`,
@@ -2003,13 +2393,13 @@ export class TeacherService {
     });
 
     // Calculate statistics
-    const presentCount = attendanceData.filter(record => record.status === 'PRESENT').length;
-    const absentCount = attendanceData.filter(record => record.status === 'ABSENT').length;
-    const lateCount = attendanceData.filter(record => record.status === 'LATE').length;
-    const excusedCount = attendanceData.filter(record => record.status === 'EXCUSED').length;
+    const presentCount = attendanceData.filter((record) => record.status === 'PRESENT').length;
+    const absentCount = attendanceData.filter((record) => record.status === 'ABSENT').length;
+    const lateCount = attendanceData.filter((record) => record.status === 'LATE').length;
+    const excusedCount = attendanceData.filter((record) => record.status === 'EXCUSED').length;
     const totalStudents = attendanceData.length;
-    const attendancePercentage = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
-
+    const attendancePercentage =
+      totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
 
     return {
       classArmId,

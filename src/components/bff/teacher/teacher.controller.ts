@@ -26,6 +26,9 @@ import {
   UpsertStudentAssessmentScoreDto,
   MarkClassAttendanceDto,
   MarkSubjectAttendanceDto,
+  UpdateTeacherProfileDto,
+  UpdateUserPreferencesDto,
+  InitiateColorSchemePaymentDto,
 } from './dto';
 import {
   ClassDetailsResult,
@@ -300,6 +303,126 @@ export class TeacherController {
     const profile = await this.teacherService.getTeacherProfile(userId);
     return new TeacherProfileResult(profile);
   }
+
+  @Put('profile')
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'UPDATE_TEACHER_PROFILE',
+    entityType: 'TEACHER_PROFILE',
+    description: 'Teacher updated profile',
+    category: 'TEACHER',
+  })
+  @ApiOperation({ summary: 'Update teacher profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile updated successfully',
+    type: TeacherProfileResult,
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 404, description: 'Teacher not found' })
+  @ApiResponse({ status: 409, description: 'Phone number or email already in use' })
+  async updateTeacherProfile(
+    @GetCurrentUserId() userId: string,
+    @Body() updateData: UpdateTeacherProfileDto,
+  ) {
+    const profile = await this.teacherService.updateTeacherProfile(userId, updateData);
+    return new TeacherProfileResult(profile);
+  }
+
+  @Put('change-password')
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'CHANGE_PASSWORD',
+    entityType: 'TEACHER_PROFILE',
+    description: 'Teacher changed password',
+    category: 'TEACHER',
+  })
+  @ApiOperation({ summary: 'Change teacher password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 401, description: 'Invalid current password' })
+  async changePassword(
+    @GetCurrentUserId() userId: string,
+    @Body() passwordData: { oldPassword: string; newPassword: string },
+  ) {
+    await this.teacherService.changePassword(
+      userId,
+      passwordData.oldPassword,
+      passwordData.newPassword,
+    );
+    return { message: 'Password changed successfully' };
+  }
+
+  @Get('preferences')
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'VIEW_USER_PREFERENCES',
+    entityType: 'USER_PREFERENCES',
+    description: 'Teacher viewed preferences',
+    category: 'TEACHER',
+  })
+  @ApiOperation({ summary: 'Get user preferences' })
+  @ApiResponse({ status: 200, description: 'User preferences retrieved successfully' })
+  async getUserPreferences(@GetCurrentUserId() userId: string) {
+    return this.teacherService.getUserPreferences(userId);
+  }
+
+  @Put('preferences')
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'UPDATE_USER_PREFERENCES',
+    entityType: 'USER_PREFERENCES',
+    description: 'Teacher updated preferences',
+    category: 'TEACHER',
+  })
+  @ApiOperation({ summary: 'Update user preferences' })
+  @ApiResponse({ status: 200, description: 'Preferences updated successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  async updateUserPreferences(
+    @GetCurrentUserId() userId: string,
+    @Body() preferences: UpdateUserPreferencesDto,
+  ) {
+    return this.teacherService.updateUserPreferences(userId, preferences);
+  }
+
+  @Post('color-scheme/payment/initiate')
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'INITIATE_COLOR_SCHEME_PAYMENT',
+    entityType: 'COLOR_SCHEME_PAYMENT',
+    description: 'Teacher initiated color scheme payment',
+    category: 'TEACHER',
+  })
+  @ApiOperation({ summary: 'Initiate color scheme customization payment' })
+  @ApiResponse({ status: 201, description: 'Payment initiated successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 409, description: 'Payment already exists or user already has custom colors' })
+  async initiateColorSchemePayment(
+    @GetCurrentUserId() userId: string,
+    @Body() colorData: InitiateColorSchemePaymentDto,
+  ) {
+    return this.teacherService.initiateColorSchemePayment(userId, colorData);
+  }
+
+  @Get('color-scheme/payment/status')
+  @ApiOperation({ summary: 'Get color scheme payment status' })
+  @ApiResponse({ status: 200, description: 'Payment status retrieved successfully' })
+  async getColorSchemePaymentStatus(@GetCurrentUserId() userId: string) {
+    return this.teacherService.getColorSchemePaymentStatus(userId);
+  }
+
+  @Post('color-scheme/payment/verify')
+  @ApiOperation({ summary: 'Verify color scheme payment' })
+  @ApiResponse({ status: 200, description: 'Payment verified successfully' })
+  @ApiResponse({ status: 400, description: 'Payment verification failed' })
+  async verifyColorSchemePayment(
+    @GetCurrentUserId() userId: string,
+    @Body() body: { reference: string },
+  ) {
+    return this.teacherService.verifyColorSchemePayment(userId, body.reference);
+  }
+
+
 
   // Student Assessment Score Management Endpoints
   @Post('student-assessment-scores')

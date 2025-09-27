@@ -14,6 +14,7 @@ import { TokensService } from './modules/refresh-token/tokens.service';
 import { AuthMessages } from './results';
 import { JwtAuthService } from './strategies/jwt/jwt-auth.service';
 import { AuthTokens } from './strategies/jwt/types';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AuthService extends BaseService {
@@ -24,6 +25,7 @@ export class AuthService extends BaseService {
     private readonly teachersService: TeachersService,
     private readonly jwtAuthService: JwtAuthService,
     private readonly tokenService: TokensService,
+    private readonly prisma: PrismaService,
   ) {
     super(AuthService.name);
   }
@@ -49,7 +51,7 @@ export class AuthService extends BaseService {
 
   async login(
     dto: LoginDto,
-  ): Promise<{ tokens: AuthTokens; user?: User; student?: Student; teacher?: Teacher }> {
+  ): Promise<{ tokens: AuthTokens; user?: User; student?: Student; teacher?: Teacher; preferences?: any }> {
     const { email, password } = dto;
     const user = await this.userService.findByEmail(email);
     if (!user) {
@@ -65,21 +67,58 @@ export class AuthService extends BaseService {
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);
 
+    // Get school's color scheme
+    const school = await this.prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: { colorScheme: true },
+    });
+    const schoolColorScheme = school?.colorScheme || 'default';
+
+    // Fetch user preferences
+    let preferences = await this.prisma.userPreferences.findUnique({
+      where: { userId: user.id },
+    });
+
+    // Create default preferences if they don't exist
+    if (!preferences) {
+      preferences = await this.prisma.userPreferences.create({
+        data: {
+          userId: user.id,
+          themeMode: 'SYSTEM',
+          colorSchemeType: 'SCHOOL',
+          schoolColorScheme: schoolColorScheme,
+          emailNotifications: true,
+          smsNotifications: false,
+          pushNotifications: true,
+          inAppNotifications: true,
+          marketingEmails: false,
+        },
+      });
+    } else {
+      // Always update school color scheme to reflect current school's color scheme
+      if (preferences.schoolColorScheme !== schoolColorScheme) {
+        preferences = await this.prisma.userPreferences.update({
+          where: { userId: user.id },
+          data: { schoolColorScheme: schoolColorScheme },
+        });
+      }
+    }
+
     // Return appropriate data based on user type
     if (user.type === UserType.TEACHER) {
       const teacher = await this.teachersService.getTeacherByUserId(user.id);
       if (teacher) {
-        return { tokens, teacher };
+        return { tokens, teacher, preferences };
       }
     } else if (user.type === UserType.STUDENT) {
       const student = await this.studentService.getStudentByUserId(user.id);
       if (student) {
-        return { tokens, student };
+        return { tokens, student, preferences };
       }
     }
 
     // Fallback to regular user data
-    return { tokens, user };
+    return { tokens, user, preferences };
   }
 
   private async _validate(password: string, user: User) {

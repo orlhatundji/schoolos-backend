@@ -67,7 +67,8 @@ export class PaystackWebhookService {
     try {
       const { reference, amount } = transactionData;
 
-      const payment = await this.prisma.studentPayment.findFirst({
+      // First, try to find a student payment
+      const studentPayment = await this.prisma.studentPayment.findFirst({
         where: {
           notes: {
             contains: reference,
@@ -83,34 +84,66 @@ export class PaystackWebhookService {
         },
       });
 
-      if (!payment) {
-        this.logger.warn(`Payment not found for reference: ${reference}`);
-        return { success: false, message: 'Payment record not found' };
+      if (studentPayment) {
+        // Handle student payment
+        const amountPaid = this.paystackService.convertFromKobo(amount);
+        const newPaidAmount = Number(studentPayment.paidAmount) + amountPaid;
+        const totalAmount = Number(studentPayment.amount);
+        const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
+
+        await this.prisma.studentPayment.update({
+          where: { id: studentPayment.id },
+          data: {
+            paidAmount: newPaidAmount,
+            status: newStatus,
+            paidAt: new Date(),
+            notes: `Payment completed via webhook. Reference: ${reference}. Amount: ${amountPaid}`,
+          },
+        });
+
+        await this.logPaymentActivity(studentPayment.student.userId, 'PAYMENT_COMPLETED', {
+          paymentId: studentPayment.id,
+          amount: amountPaid,
+          reference,
+          status: newStatus,
+        });
+
+        return { success: true, message: 'Student payment processed successfully' };
       }
 
-      const amountPaid = this.paystackService.convertFromKobo(amount);
-      const newPaidAmount = Number(payment.paidAmount) + amountPaid;
-      const totalAmount = Number(payment.amount);
-      const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
-
-      await this.prisma.studentPayment.update({
-        where: { id: payment.id },
-        data: {
-          paidAmount: newPaidAmount,
-          status: newStatus,
-          paidAt: new Date(),
-          notes: `Payment completed via webhook. Reference: ${reference}. Amount: ${amountPaid}`,
+      // If not a student payment, try to find a color scheme payment
+      const colorSchemePayment = await this.prisma.colorSchemePayment.findFirst({
+        where: {
+          paymentReference: reference,
+          status: 'PENDING',
+        },
+        include: {
+          user: true,
         },
       });
 
-      await this.logPaymentActivity(payment.student.userId, 'PAYMENT_COMPLETED', {
-        paymentId: payment.id,
-        amount: amountPaid,
-        reference,
-        status: newStatus,
-      });
+      if (colorSchemePayment) {
+        // Handle color scheme payment
+        await this.prisma.colorSchemePayment.update({
+          where: { id: colorSchemePayment.id },
+          data: {
+            status: 'PAID',
+            paidAt: new Date(),
+          },
+        });
 
-      return { success: true, message: 'Payment processed successfully' };
+        await this.logPaymentActivity(colorSchemePayment.userId, 'COLOR_SCHEME_PAYMENT_COMPLETED', {
+          paymentId: colorSchemePayment.id,
+          amount: Number(colorSchemePayment.amount),
+          reference,
+          status: 'PAID',
+        });
+
+        return { success: true, message: 'Color scheme payment processed successfully' };
+      }
+
+      this.logger.warn(`Payment not found for reference: ${reference}`);
+      return { success: false, message: 'Payment record not found' };
     } catch (error) {
       this.logger.error(`Error handling charge success: ${error.message}`, error.stack);
       throw new BadRequestException('Failed to process successful payment');
@@ -123,7 +156,8 @@ export class PaystackWebhookService {
     try {
       const { reference, gateway_response } = transactionData;
 
-      const payment = await this.prisma.studentPayment.findFirst({
+      // First, try to find a student payment
+      const studentPayment = await this.prisma.studentPayment.findFirst({
         where: {
           notes: {
             contains: reference,
@@ -139,25 +173,47 @@ export class PaystackWebhookService {
         },
       });
 
-      if (!payment) {
-        this.logger.warn(`Payment not found for failed reference: ${reference}`);
-        return { success: false, message: 'Payment record not found' };
+      if (studentPayment) {
+        await this.prisma.studentPayment.update({
+          where: { id: studentPayment.id },
+          data: {
+            notes: `Payment failed via webhook. Reference: ${reference}. Reason: ${gateway_response}`,
+          },
+        });
+
+        await this.logPaymentActivity(studentPayment.student.userId, 'PAYMENT_FAILED', {
+          paymentId: studentPayment.id,
+          reference,
+          reason: gateway_response,
+        });
+
+        return { success: true, message: 'Student payment failure logged' };
       }
 
-      await this.prisma.studentPayment.update({
-        where: { id: payment.id },
-        data: {
-          notes: `Payment failed via webhook. Reference: ${reference}. Reason: ${gateway_response}`,
+      // If not a student payment, try to find a color scheme payment
+      const colorSchemePayment = await this.prisma.colorSchemePayment.findFirst({
+        where: {
+          paymentReference: reference,
+          status: 'PENDING',
+        },
+        include: {
+          user: true,
         },
       });
 
-      await this.logPaymentActivity(payment.student.userId, 'PAYMENT_FAILED', {
-        paymentId: payment.id,
-        reference,
-        reason: gateway_response,
-      });
+      if (colorSchemePayment) {
+        // Mark color scheme payment as failed (we could add a FAILED status or just log it)
+        await this.logPaymentActivity(colorSchemePayment.userId, 'COLOR_SCHEME_PAYMENT_FAILED', {
+          paymentId: colorSchemePayment.id,
+          reference,
+          reason: gateway_response,
+        });
 
-      return { success: true, message: 'Payment failure processed' };
+        return { success: true, message: 'Color scheme payment failure logged' };
+      }
+
+      this.logger.warn(`Payment not found for failed reference: ${reference}`);
+      return { success: false, message: 'Payment record not found' };
     } catch (error) {
       this.logger.error(`Error handling charge failure: ${error.message}`, error.stack);
       throw new BadRequestException('Failed to process payment failure');

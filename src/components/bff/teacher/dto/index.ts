@@ -5,3 +5,6 @@ export * from './bulk-update-student-assessment-score.dto';
 export * from './upsert-student-assessment-score.dto';
 export * from './mark-class-attendance.dto';
 export * from './mark-subject-attendance.dto';
+export * from './update-teacher-profile.dto';
+export * from './update-user-preferences.dto';
+export * from './initiate-color-scheme-payment.dto';

@@ -24,12 +24,13 @@ export class AuthController {
     description: AuthMessages.FAILURE.ACCESS_DENIED,
   })
   async login(@Body() loginDto: LoginDto): Promise<AuthResult> {
-    const { tokens, user, student, teacher } = await this.authService.login(loginDto);
+    const { tokens, user, student, teacher, preferences } = await this.authService.login(loginDto);
 
     return AuthResult.from({
       user,
       student,
       teacher,
+      preferences,
       tokens,
       status: HttpStatus.OK,
       message: AuthMessages.SUCCESS.AUTHENTICATED,

@@ -308,6 +308,8 @@ model User {
   teacher            Teacher?
   activities         UserActivity[]
   tokens             UserToken[]
+  preferences        UserPreferences?
+  colorSchemePayments ColorSchemePayment[]
   address            Address?        @relation(fields: [addressId], references: [id])
   school             School?         @relation(fields: [schoolId], references: [id])
 
@@ -982,6 +984,55 @@ model UserActivity {
   @@map("user_activities")
 }
 
+/// *
+/// * UserPreferences
+/// * ----------------
+/// * Stores user preferences for theme, color scheme, and notification settings.
+/// * Allows users to customize their experience while maintaining school branding.
+model UserPreferences {
+  id                 String           @id @default(uuid())
+  userId             String           @unique
+  themeMode          ThemeMode        @default(SYSTEM)
+  colorSchemeType    ColorSchemeType  @default(SCHOOL)
+  schoolColorScheme  String?         @default("default")
+  customColorScheme  String?         @default("default")
+  emailNotifications Boolean         @default(true)
+  smsNotifications   Boolean         @default(false)
+  pushNotifications  Boolean         @default(true)
+  inAppNotifications Boolean         @default(true)
+  marketingEmails    Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+/// *
+/// * ColorSchemePayment
+/// * ------------------
+/// * Tracks payments for custom color scheme access.
+/// * Users must pay a fee to use custom colors instead of school colors.
+model ColorSchemePayment {
+  id                String        @id @default(uuid())
+  userId            String
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("NGN")
+  status            PaymentStatus @default(PENDING)
+  paymentReference  String?
+  paymentProvider   String?
+  authorizationUrl  String?
+  paidAt            DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("color_scheme_payments")
+}
+
 model BulkImportJob {
   id                String            @id @default(cuid())
   schoolId          String
@@ -1070,6 +1121,25 @@ enum TeacherStatus {
   ON_LEAVE
 }
 
+enum ColorSchemeType {
+  SCHOOL
+  CUSTOM
+}
+
+enum ThemeMode {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+}
+
+
 enum EmploymentType {
   FULL_TIME
   PART_TIME
@@ -1119,6 +1189,7 @@ enum PaymentStatus {
   OVERDUE
   PARTIAL
   WAIVED
+  EXPIRED
 }
 
 enum PaymentCategory {

@@ -95,6 +95,7 @@ model School {
   categories           Category[]
   userActivities       UserActivity[]
   users                User[]
+  complaints           Complaint[]
 
   @@map("schools")
 }
@@ -312,6 +313,8 @@ model User {
   colorSchemePayments ColorSchemePayment[]
   address            Address?        @relation(fields: [addressId], references: [id])
   school             School?         @relation(fields: [schoolId], references: [id])
+  complaintsReported Complaint[]      @relation("ComplaintReporter")
+  complaintComments  ComplaintComment[] @relation("ComplaintCommentAuthor")
 
   @@unique([email, schoolId])
   @@unique([phone, schoolId])
@@ -374,6 +377,7 @@ model SystemAdmin {
   updatedAt      DateTime              @updatedAt
   deletedAt      DateTime?
   signupRequests SchoolSignupRequest[]
+  assignedComplaints Complaint[]       @relation("ComplaintAssignee")
   user           User                  @relation(fields: [userId], references: [id])
 
   @@map("system_admins")
@@ -1218,4 +1222,97 @@ enum BulkImportStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+/// *
+/// * Complaint
+/// * ---------
+/// * Represents a complaint or issue reported by users or schools.
+/// * System admins can track, assign, and resolve complaints.
+model Complaint {
+  id              String            @id @default(uuid())
+  title           String
+  description     String
+  category        ComplaintCategory
+  priority        ComplaintPriority  @default(MEDIUM)
+  status          ComplaintStatus    @default(OPEN)
+  reporterId      String?            // User who reported the complaint
+  schoolId        String?            // School associated with complaint
+  assignedToId    String?            // System admin assigned to handle
+  reporter        User?              @relation("ComplaintReporter", fields: [reporterId], references: [id])
+  school          School?            @relation(fields: [schoolId], references: [id])
+  assignedTo      SystemAdmin?       @relation("ComplaintAssignee", fields: [assignedToId], references: [id])
+  attachments     ComplaintAttachment[]
+  comments        ComplaintComment[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([assignedToId])
+  @@map("complaints")
+}
+
+/// *
+/// * ComplaintAttachment
+/// * -------------------
+/// * Stores file attachments for complaints.
+model ComplaintAttachment {
+  id          String    @id @default(uuid())
+  complaintId String
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("complaint_attachments")
+}
+
+/// *
+/// * ComplaintComment
+/// * ----------------
+/// * Stores comments and updates on complaints.
+model ComplaintComment {
+  id          String    @id @default(uuid())
+  complaintId String
+  authorId    String
+  content     String
+  isInternal  Boolean   @default(false) // Internal notes vs public comments
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  author      User      @relation("ComplaintCommentAuthor", fields: [authorId], references: [id])
+
+  @@map("complaint_comments")
+}
+
+enum ComplaintCategory {
+  TECHNICAL
+  BILLING
+  FEATURE_REQUEST
+  BUG_REPORT
+  ACCOUNT_ISSUE
+  PERFORMANCE
+  SECURITY
+  OTHER
+}
+
+enum ComplaintPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  CANCELLED
 }

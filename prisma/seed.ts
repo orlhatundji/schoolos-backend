@@ -59,7 +59,7 @@ async function main() {
   const existingSystemAdmin = await prisma.systemAdmin.findFirst({
     where: {
       user: {
-        email: 'platform.admin@example.com',
+        email: 'orlhatund@gmail.com',
       },
     },
   });
@@ -67,7 +67,7 @@ async function main() {
   if (existingSystemAdmin) {
     console.log('System admin already exists:', {
       id: existingSystemAdmin.id,
-      email: 'platform.admin@example.com',
+      email: 'orlhatund@gmail.com',
       password: samplePassword,
       role: existingSystemAdmin.role,
     });
@@ -98,7 +98,7 @@ async function main() {
     const systemAdminUser = await prisma.user.create({
       data: {
         type: UserTypes.SYSTEM_ADMIN,
-        email: 'platform.admin@example.com',
+        email: 'orlhatund@gmail.com',
         phone: '+1234567890',
         password: hashedPassword,
         firstName: 'Platform',

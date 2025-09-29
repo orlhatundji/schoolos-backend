@@ -67,12 +67,15 @@ export class AuthService extends BaseService {
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);
 
-    // Get school's color scheme
-    const school = await this.prisma.school.findUnique({
-      where: { id: user.schoolId },
-      select: { colorScheme: true },
-    });
-    const schoolColorScheme = school?.colorScheme || 'default';
+    // Get school's color scheme (only for users with a school)
+    let schoolColorScheme = 'default';
+    if (user.schoolId) {
+      const school = await this.prisma.school.findUnique({
+        where: { id: user.schoolId },
+        select: { colorScheme: true },
+      });
+      schoolColorScheme = school?.colorScheme || 'default';
+    }
 
     // Fetch user preferences
     let preferences = await this.prisma.userPreferences.findUnique({

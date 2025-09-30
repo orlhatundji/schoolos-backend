@@ -1,29 +1,28 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Patch,
+  HttpCode,
+  HttpStatus,
   Param,
-  Delete,
+  Patch,
+  Post,
   Query,
   UseGuards,
-  HttpStatus,
-  HttpCode,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+
+import { AccessTokenGuard } from '../auth/strategies/jwt/guards/access-token.guard';
+import { AddComplaintCommentDto } from './dto/add-complaint-comment.dto';
+import { ApproveSignupDto } from './dto/approve-signup.dto';
+import { AssignComplaintDto } from './dto/assign-complaint.dto';
+import { CreateComplaintDto } from './dto/create-complaint.dto';
+import { RejectSignupDto } from './dto/reject-signup.dto';
+import { UpdateComplaintDto } from './dto/update-complaint.dto';
 import { PlatformService } from './platform.service';
+import { ComplaintsService } from './services/complaints.service';
 import { SchoolsManagementService } from './services/schools-management.service';
 import { SignupApprovalService } from './services/signup-approval.service';
-import { ComplaintsService } from './services/complaints.service';
-import { AccessTokenGuard } from '../auth/strategies/jwt/guards/access-token.guard';
-import { UserType } from '@prisma/client';
-import { CreateComplaintDto } from './dto/create-complaint.dto';
-import { UpdateComplaintDto } from './dto/update-complaint.dto';
-import { ApproveSignupDto } from './dto/approve-signup.dto';
-import { RejectSignupDto } from './dto/reject-signup.dto';
-import { AssignComplaintDto } from './dto/assign-complaint.dto';
-import { AddComplaintCommentDto } from './dto/add-complaint-comment.dto';
 
 @Controller('platform')
 @ApiTags('Platform Management')
@@ -69,10 +68,7 @@ export class PlatformController {
   @Patch('schools/:id/status')
   @HttpCode(HttpStatus.OK)
   @ApiResponse({ status: HttpStatus.OK, description: 'School status updated' })
-  updateSchoolStatus(
-    @Param('id') id: string,
-    @Body() body: { status: string; reason?: string },
-  ) {
+  updateSchoolStatus(@Param('id') id: string, @Body() body: { status: string; reason?: string }) {
     return this.schoolsManagementService.updateSchoolStatus(id, body.status, body.reason);
   }
 
@@ -99,20 +95,14 @@ export class PlatformController {
   @Post('signup-requests/:id/approve')
   @HttpCode(HttpStatus.OK)
   @ApiResponse({ status: HttpStatus.OK, description: 'Signup request approved' })
-  approveSignupRequest(
-    @Param('id') id: string,
-    @Body() approveSignupDto: ApproveSignupDto,
-  ) {
+  approveSignupRequest(@Param('id') id: string, @Body() approveSignupDto: ApproveSignupDto) {
     return this.signupApprovalService.approveSignupRequest(id, approveSignupDto);
   }
 
   @Post('signup-requests/:id/reject')
   @HttpCode(HttpStatus.OK)
   @ApiResponse({ status: HttpStatus.OK, description: 'Signup request rejected' })
-  rejectSignupRequest(
-    @Param('id') id: string,
-    @Body() rejectSignupDto: RejectSignupDto,
-  ) {
+  rejectSignupRequest(@Param('id') id: string, @Body() rejectSignupDto: RejectSignupDto) {
     return this.signupApprovalService.rejectSignupRequest(id, rejectSignupDto);
   }
 
@@ -150,30 +140,21 @@ export class PlatformController {
   @Patch('complaints/:id')
   @HttpCode(HttpStatus.OK)
   @ApiResponse({ status: HttpStatus.OK, description: 'Complaint updated' })
-  updateComplaint(
-    @Param('id') id: string,
-    @Body() updateComplaintDto: UpdateComplaintDto,
-  ) {
+  updateComplaint(@Param('id') id: string, @Body() updateComplaintDto: UpdateComplaintDto) {
     return this.complaintsService.updateComplaint(id, updateComplaintDto);
   }
 
   @Post('complaints/:id/assign')
   @HttpCode(HttpStatus.OK)
   @ApiResponse({ status: HttpStatus.OK, description: 'Complaint assigned' })
-  assignComplaint(
-    @Param('id') id: string,
-    @Body() assignComplaintDto: AssignComplaintDto,
-  ) {
+  assignComplaint(@Param('id') id: string, @Body() assignComplaintDto: AssignComplaintDto) {
     return this.complaintsService.assignComplaint(id, assignComplaintDto);
   }
 
   @Post('complaints/:id/comments')
   @HttpCode(HttpStatus.CREATED)
   @ApiResponse({ status: HttpStatus.CREATED, description: 'Comment added' })
-  addComplaintComment(
-    @Param('id') id: string,
-    @Body() addCommentDto: AddComplaintCommentDto,
-  ) {
+  addComplaintComment(@Param('id') id: string, @Body() addCommentDto: AddComplaintCommentDto) {
     return this.complaintsService.addComment(id, addCommentDto);
   }
 

@@ -1,18 +1,22 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { SchoolSignupStatus } from '@prisma/client';
+import { SchoolSignupStatus, UserType } from '@prisma/client';
 import { ApproveSignupDto } from '../dto/approve-signup.dto';
 import { RejectSignupDto } from '../dto/reject-signup.dto';
+import { PasswordGenerator } from '../../../utils/password/password.generator';
+import { PasswordHasher } from '../../../utils/hasher/hasher';
+import { MailService } from '../../../utils/mail/mail.service';
 
 @Injectable()
 export class SignupApprovalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passwordGenerator: PasswordGenerator,
+    private readonly passwordHasher: PasswordHasher,
+    private readonly mailService: MailService,
+  ) {}
 
-  async getSignupRequests(params: {
-    page?: number;
-    limit?: number;
-    status?: string;
-  }) {
+  async getSignupRequests(params: { page?: number; limit?: number; status?: string }) {
     const { page = 1, limit = 10, status } = params;
     const skip = (page - 1) * limit;
 
@@ -93,25 +97,94 @@ export class SignupApprovalService {
       throw new BadRequestException('Request has already been processed');
     }
 
-    // Update the request status
-    const updatedRequest = await this.prisma.schoolSignupRequest.update({
-      where: { id },
-      data: {
-        status: SchoolSignupStatus.APPROVED,
-        reviewedAt: new Date(),
-        notes: approveSignupDto.notes,
-        // Note: reviewerId should be set from the authenticated user context
-      },
+    // Use transaction to ensure data consistency
+    return await this.prisma.$transaction(async (tx) => {
+      // Type cast the JSON data
+      const addressData = request.address as any;
+      const contactPersonData = request.contactPerson as any;
+
+      // 1. Create address record
+      const address = await tx.address.create({
+        data: {
+          country: addressData.country,
+          state: addressData.state,
+          city: addressData.city,
+          street1: addressData.street1,
+          street2: addressData.street2 || null,
+        },
+      });
+
+      // 2. Create school record
+      const school = await tx.school.create({
+        data: {
+          name: request.schoolName,
+          code: request.schoolCode,
+          primaryAddressId: address.id,
+          phone: contactPersonData.phone,
+          email: contactPersonData.email,
+        },
+      });
+
+      // 3. Link school to address
+      await tx.schoolAddress.create({
+        data: {
+          schoolId: school.id,
+          addressId: address.id,
+        },
+      });
+
+      // 4. Generate secure admin password
+      const adminPassword = this.passwordGenerator.generate();
+      const hashedPassword = await this.passwordHasher.hash(adminPassword);
+
+      // 5. Create admin user
+      const adminUser = await tx.user.create({
+        data: {
+          type: UserType.SUPER_ADMIN,
+          email: contactPersonData.email,
+          password: hashedPassword,
+          firstName: contactPersonData.firstName,
+          lastName: contactPersonData.lastName,
+          phone: contactPersonData.phone,
+          gender: 'MALE', // Default gender since not provided in signup
+          school: {
+            connect: { id: school.id },
+          },
+          mustUpdatePassword: true, // Force password change on first login
+        },
+      });
+
+      // 6. Create admin record with super admin privileges
+      await tx.admin.create({
+        data: {
+          userId: adminUser.id,
+          isSuper: true,
+        },
+      });
+
+      // 7. Update signup request status
+      const updatedRequest = await tx.schoolSignupRequest.update({
+        where: { id },
+        data: {
+          status: SchoolSignupStatus.APPROVED,
+          reviewedAt: new Date(),
+          notes: approveSignupDto.notes,
+          // Note: reviewerId should be set from the authenticated user context
+        },
+      });
+
+      // 8. TODO: Send welcome email with credentials
+
+      return {
+        ...updatedRequest,
+        schoolId: school.id,
+        schoolCode: school.code,
+        adminUserId: adminUser.id,
+        approvedAt: updatedRequest.reviewedAt,
+        message:
+          'School account created successfully. Admin credentials sent to the contact person.',
+      };
     });
-
-    // Here you would typically create the school and admin user
-    // This is a simplified version - in reality, you'd need to:
-    // 1. Create the school
-    // 2. Create the admin user
-    // 3. Send welcome email
-    // 4. Set up initial configuration
-
-    return updatedRequest;
   }
 
   async rejectSignupRequest(id: string, rejectSignupDto: RejectSignupDto) {

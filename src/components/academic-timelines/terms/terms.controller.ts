@@ -74,4 +74,5 @@ export class TermsController {
       message: TermMessages.SUCCESS.TERM_UPDATED_SUCCESSFULLY,
     });
   }
+
 }

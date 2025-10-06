@@ -32,19 +32,6 @@ export class AcademicSessionsService extends BaseService {
       );
     }
 
-    // If this session is being set as current, deactivate all other current sessions for this school
-    if (dto.isCurrent) {
-      await this.prisma.academicSession.updateMany({
-        where: {
-          schoolId: user.schoolId,
-          isCurrent: true,
-        },
-        data: {
-          isCurrent: false,
-        },
-      });
-    }
-
     // Add schoolId to the DTO
     const dataWithSchoolId = {
       ...dto,
@@ -126,27 +113,6 @@ export class AcademicSessionsService extends BaseService {
   ): Promise<AcademicSession> {
     await this.getAcademicSessionById(userId, id);
 
-    // If this session is being set as current, deactivate all other current sessions for this school
-    if (data.isCurrent) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { schoolId: true },
-      });
-
-      if (user?.schoolId) {
-        await this.prisma.academicSession.updateMany({
-          where: {
-            schoolId: user.schoolId,
-            isCurrent: true,
-            id: { not: id }, // Don't update the current session
-          },
-          data: {
-            isCurrent: false,
-          },
-        });
-      }
-    }
-
     return this.academicSessionsRepository.update({ id }, data);
   }
 
@@ -214,7 +180,7 @@ export class AcademicSessionsService extends BaseService {
     return this.academicSessionsRepository.delete({ id });
   }
 
-  async setCurrentSession(userId: string, id: string): Promise<AcademicSession> {
+  async getSessionWithCurrentTerm(userId: string): Promise<AcademicSession | null> {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -223,24 +189,30 @@ export class AcademicSessionsService extends BaseService {
 
     if (!user?.schoolId) {
       throw new BadRequestException(
-        'User not associated with a school. Only school users can set current sessions.',
+        'User not associated with a school. Only school users can view academic sessions.',
       );
     }
 
-    // Deactivate all other current sessions for this school
-    await this.prisma.academicSession.updateMany({
+    // Find the academic session that contains the current term
+    const sessionWithCurrentTerm = await this.prisma.academicSession.findFirst({
       where: {
         schoolId: user.schoolId,
-        isCurrent: true,
-        id: { not: id },
+        terms: {
+          some: {
+            isCurrent: true,
+          },
+        },
       },
-      data: {
-        isCurrent: false,
+      include: {
+        terms: {
+          where: {
+            isCurrent: true,
+          },
+        },
       },
     });
 
-    // Set this session as current
-    return this.academicSessionsRepository.update({ id }, { isCurrent: true });
+    return sessionWithCurrentTerm;
   }
 
   private async createAssessmentStructureForNewSessionInTransaction(

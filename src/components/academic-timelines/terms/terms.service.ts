@@ -73,13 +73,32 @@ export class TermsService extends BaseService {
     // First, get the term to find its academic session
     const term = await this.getTermById(id);
     
-    // Set all terms in the same academic session to not current
-    await this.prisma.term.updateMany({
-      where: { academicSessionId: term.academicSessionId },
-      data: { isCurrent: false },
-    });
+    // Use a transaction to ensure all operations succeed or fail together
+    return this.prisma.$transaction(async (tx) => {
+      // Set ALL terms across ALL sessions to not current
+      await tx.term.updateMany({
+        where: { isCurrent: true },
+        data: { isCurrent: false },
+      });
 
-    // Set the specified term as current
-    return this.termsRepository.update({ id }, { isCurrent: true });
+      // Set ALL academic sessions to not current
+      await tx.academicSession.updateMany({
+        where: { isCurrent: true },
+        data: { isCurrent: false },
+      });
+
+      // Set the academic session of this term as current
+      await tx.academicSession.update({
+        where: { id: term.academicSessionId },
+        data: { isCurrent: true },
+      });
+
+      // Set the specified term as current
+      return tx.term.update({
+        where: { id },
+        data: { isCurrent: true },
+      });
+    });
   }
+
 }

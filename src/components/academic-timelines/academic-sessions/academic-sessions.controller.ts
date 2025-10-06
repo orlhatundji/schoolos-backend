@@ -62,6 +62,25 @@ export class AcademicSessionsController {
     });
   }
 
+  @Get('current-term-session')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getSessionWithCurrentTerm(@GetCurrentUserId() userId: string) {
+    const academicSession = await this.academicSessionsService.getSessionWithCurrentTerm(userId);
+
+    if (!academicSession) {
+      return {
+        status: HttpStatus.NOT_FOUND,
+        message: 'No session with current term found',
+        data: null,
+      };
+    }
+
+    return AcademicSessionResult.from(academicSession, {
+      status: HttpStatus.OK,
+      message: 'Session with current term retrieved successfully',
+    });
+  }
+
   @Get(':id')
   @CheckPolicies(new ManageStudentPolicyHandler())
   async findOne(@GetCurrentUserId() userId: string, @Param('id') id: string) {
@@ -91,18 +110,6 @@ export class AcademicSessionsController {
     });
   }
 
-  @Post(':id/set-current')
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async setCurrent(
-    @GetCurrentUserId() userId: string,
-    @Param('id') id: string,
-  ): Promise<AcademicSessionResult> {
-    const academicSession = await this.academicSessionsService.setCurrentSession(userId, id);
-    return AcademicSessionResult.from(academicSession, {
-      status: HttpStatus.OK,
-      message: 'Session set as current successfully',
-    });
-  }
 
   @Delete(':id')
   @CheckPolicies(new ManageStudentPolicyHandler())

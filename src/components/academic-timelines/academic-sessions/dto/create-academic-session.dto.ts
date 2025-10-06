@@ -40,12 +40,4 @@ export class CreateAcademicSessionDto {
   @IsNotEmpty()
   endDate: Date;
 
-  @ApiProperty({
-    example: true,
-    required: false,
-    description: 'Flag to indicate if this is the current academic session.',
-  })
-  @IsBoolean()
-  @IsOptional()
-  isCurrent?: boolean;
 }

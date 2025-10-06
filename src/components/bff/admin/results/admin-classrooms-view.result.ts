@@ -19,6 +19,8 @@ class ClassroomInfoResult implements ClassroomInfo {
   @ApiProperty()
   name: string;
   @ApiProperty()
+  slug: string;
+  @ApiProperty()
   level: string;
   @ApiProperty({ nullable: true })
   location: string | null;

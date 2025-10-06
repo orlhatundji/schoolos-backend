@@ -249,6 +249,7 @@ model Department {
 model ClassArm {
   id                      String                   @id @default(uuid())
   name                    String
+  slug                    String                   @unique
   academicSessionId       String
   levelId                 String
   departmentId            String?

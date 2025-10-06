@@ -41,7 +41,7 @@ export class BffAdminClassroomService {
 
     // Get all class arms for the school with their students and teachers (filtered by current session)
     const classArms = await this.prisma.classArm.findMany({
-      where: { 
+      where: {
         schoolId,
         academicSessionId: currentSession.id,
         deletedAt: null,
@@ -49,6 +49,7 @@ export class BffAdminClassroomService {
       select: {
         id: true,
         name: true,
+        slug: true,
         location: true,
         level: true,
         students: {
@@ -87,6 +88,7 @@ export class BffAdminClassroomService {
       return {
         id: classArm.id,
         name: classArm.name,
+        slug: classArm.slug,
         level: classArm.level.name,
         location: classArm.location,
         classTeacher: classArm.classTeacher
@@ -128,11 +130,21 @@ export class BffAdminClassroomService {
 
     const schoolId = user.schoolId;
 
-    // Get classroom details with efficient direct references
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      throw new Error('No current academic session found');
+    }
+
+    // Get classroom details with efficient direct references (filtered by current session)
     const classroom = await this.prisma.classArm.findFirst({
       where: {
         id: classroomId,
         schoolId,
+        academicSessionId: currentSession.id,
       },
       include: {
         level: true,
@@ -146,28 +158,29 @@ export class BffAdminClassroomService {
             user: true,
           },
         },
-      } as any, // Type assertion until VS Code restarts
+      },
     });
 
     if (!classroom) {
       throw new Error('Classroom not found or not accessible');
     }
 
-    // Get total count of students in the classroom
+    // Get total count of students in the classroom (filtered by current session)
     const totalStudents = await this.prisma.student.count({
       where: {
         classArmId: classroomId,
+        deletedAt: null,
       },
     });
 
     // Calculate pagination
     const skip = (page - 1) * limit;
-    const totalPages = Math.ceil(totalStudents / limit);
 
-    // Get paginated students with all their data
+    // Get paginated students with all their data (filtered by current session)
     const paginatedStudents = await this.prisma.student.findMany({
       where: {
         classArmId: classroomId,
+        deletedAt: null,
       },
       skip,
       take: limit,
@@ -204,10 +217,11 @@ export class BffAdminClassroomService {
       },
     });
 
-    // Get all students for population and top performers calculation (without pagination)
+    // Get all students for population and top performers calculation (without pagination, filtered by current session)
     const allStudents = await this.prisma.student.findMany({
       where: {
         classArmId: classroomId,
+        deletedAt: null,
       },
       include: {
         user: {
@@ -322,14 +336,6 @@ export class BffAdminClassroomService {
     });
 
     // Create pagination info
-    const paginationInfo = {
-      page,
-      limit,
-      total: totalStudents,
-      totalPages,
-      hasNext: page < totalPages,
-      hasPrevious: page > 1,
-    };
 
     // Return flattened students array
     const students = studentsData;
@@ -394,7 +400,9 @@ export class BffAdminClassroomService {
     });
 
     if (!currentSession) {
-      throw new BadRequestException('No current academic session found. Please create an academic session first.');
+      throw new BadRequestException(
+        'No current academic session found. Please create an academic session first.',
+      );
     }
 
     // Validate level exists and belongs to the school
@@ -425,7 +433,9 @@ export class BffAdminClassroomService {
     });
 
     if (existingClassroom) {
-      throw new ConflictException(`Classroom with name '${createClassroomDto.name}' already exists in ${level.name}`);
+      throw new ConflictException(
+        `Classroom with name '${createClassroomDto.name}' already exists in ${level.name}`,
+      );
     }
 
     // Validate class teacher if provided
@@ -449,6 +459,7 @@ export class BffAdminClassroomService {
     const classroom = await this.prisma.classArm.create({
       data: {
         name: createClassroomDto.name,
+        slug: `${createClassroomDto.name.toLowerCase()}-${currentSession.academicYear}`,
         levelId: createClassroomDto.levelId,
         academicSessionId: currentSession.id,
         schoolId,
@@ -468,10 +479,12 @@ export class BffAdminClassroomService {
       id: classroom.id,
       name: classroom.name,
       level: classroom.level.name,
-      classTeacher: classroom.classTeacher ? {
-        id: classroom.classTeacher.id,
-        name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
-      } : null,
+      classTeacher: classroom.classTeacher
+        ? {
+            id: classroom.classTeacher.id,
+            name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
+          }
+        : null,
       academicSession: currentSession.academicYear,
       createdAt: classroom.createdAt,
     };
@@ -541,7 +554,6 @@ export class BffAdminClassroomService {
 
     // Calculate pagination
     const skip = (page - 1) * limit;
-    const totalPages = Math.ceil(totalStudents / limit);
 
     // Get paginated students with all their data
     // Use the level and class name to find students instead of classroom ID
@@ -567,8 +579,8 @@ export class BffAdminClassroomService {
     });
 
     // Calculate population statistics
-    const maleStudents = students.filter(s => s.user.gender === 'MALE').length;
-    const femaleStudents = students.filter(s => s.user.gender === 'FEMALE').length;
+    const maleStudents = students.filter((s) => s.user.gender === 'MALE').length;
+    const femaleStudents = students.filter((s) => s.user.gender === 'FEMALE').length;
 
     // Get attendance data (simplified - you might want to implement proper attendance calculation)
     const attendanceData = {
@@ -597,23 +609,28 @@ export class BffAdminClassroomService {
         female: femaleStudents,
       },
       attendance: attendanceData,
-      classTeacher: classroom.classTeacher ? {
-        id: classroom.classTeacher.id,
-        name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
-        phone: classroom.classTeacher.user.phone || '',
-        email: classroom.classTeacher.user.email || '',
-      } : null,
-      classCaptain: classroom.captain ? {
-        id: classroom.captain.id,
-        name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
-        admissionNumber: classroom.captain.studentNo || '',
-      } : null,
-      students: students.map(student => ({
+      classTeacher: classroom.classTeacher
+        ? {
+            id: classroom.classTeacher.id,
+            name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
+            phone: classroom.classTeacher.user.phone || '',
+            email: classroom.classTeacher.user.email || '',
+          }
+        : null,
+      classCaptain: classroom.captain
+        ? {
+            id: classroom.captain.id,
+            name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
+            admissionNumber: classroom.captain.studentNo || '',
+          }
+        : null,
+      students: students.map((student) => ({
         id: student.id,
         name: `${student.user.firstName} ${student.user.lastName}`,
         gender: student.user.gender,
-        age: student.user.dateOfBirth ? 
-          new Date().getFullYear() - new Date(student.user.dateOfBirth).getFullYear() : 0,
+        age: student.user.dateOfBirth
+          ? new Date().getFullYear() - new Date(student.user.dateOfBirth).getFullYear()
+          : 0,
         admissionNumber: student.studentNo || '',
         guardianPhone: student.user.phone || '',
         guardianName: '', // Add default values for missing fields
@@ -623,4 +640,221 @@ export class BffAdminClassroomService {
     };
   }
 
+  async getClassroomDetailsDataBySlug(
+    userId: string,
+    slug: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<ClassroomDetailsData> {
+    // First, get the user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new Error('User not found or not associated with a school');
+    }
+
+    const schoolId = user.schoolId;
+
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      throw new Error('No current academic session found');
+    }
+
+    // Get classroom details by slug (filtered by current session)
+    const classroom = await this.prisma.classArm.findFirst({
+      where: {
+        slug: slug,
+        schoolId,
+        academicSessionId: currentSession.id,
+      },
+      include: {
+        level: true,
+        classTeacher: {
+          include: {
+            user: true,
+          },
+        },
+        captain: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!classroom) {
+      throw new Error('Classroom not found or not accessible');
+    }
+
+    // Get total count of students in the classroom (filtered by current session)
+    const totalStudents = await this.prisma.student.count({
+      where: {
+        classArmId: classroom.id,
+        deletedAt: null,
+      },
+    });
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    // Get paginated students with all their data (filtered by current session)
+    const paginatedStudents = await this.prisma.student.findMany({
+      where: {
+        classArmId: classroom.id,
+        deletedAt: null,
+      },
+      skip,
+      take: limit,
+      include: {
+        user: {
+          include: {
+            address: true, // Include address for residential info
+          },
+        },
+        prefect: true,
+        guardian: {
+          include: {
+            user: true, // Include guardian's user data to get their name
+          },
+        },
+        subjectTermStudents: {
+          take: 50, // Limit to recent results
+          orderBy: {
+            createdAt: 'desc',
+          },
+          include: {
+            subjectTerm: {
+              include: {
+                subject: true,
+              },
+            },
+            assessments: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Get all students for population and top performers calculation (without pagination, filtered by current session)
+    const allStudents = await this.prisma.student.findMany({
+      where: {
+        classArmId: classroom.id,
+        deletedAt: null,
+      },
+      include: {
+        user: {
+          include: {
+            address: true, // Include address for residential info
+          },
+        },
+        prefect: true,
+        guardian: {
+          include: {
+            user: true, // Include guardian's user data
+          },
+        },
+        subjectTermStudents: {
+          take: 50,
+          orderBy: {
+            createdAt: 'desc',
+          },
+          include: {
+            subjectTerm: {
+              include: {
+                subject: true,
+              },
+            },
+            assessments: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Calculate population statistics
+    const maleStudents = allStudents.filter((student) => student.user.gender === 'MALE').length;
+    const femaleStudents = allStudents.filter((student) => student.user.gender === 'FEMALE').length;
+
+    // Calculate top performers (simplified logic)
+    const topPerformers = allStudents
+      .map((student) => {
+        const totalScore = student.subjectTermStudents.reduce(
+          (sum, sts) => sum + sts.totalScore,
+          0,
+        );
+        const subjectCount = student.subjectTermStudents.length;
+        const averageScore = subjectCount > 0 ? totalScore / subjectCount : 0;
+
+        return {
+          id: student.id,
+          name: `${student.user.firstName} ${student.user.lastName}`,
+          score: Math.round(averageScore),
+          subject: student.subjectTermStudents[0]?.subjectTerm?.subject?.name || 'N/A',
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+
+    return {
+      classroom: {
+        id: classroom.id,
+        name: classroom.name,
+        level: classroom.level.name,
+        location: classroom.location,
+      },
+      population: {
+        total: allStudents.length,
+        male: maleStudents,
+        female: femaleStudents,
+      },
+      attendance: {
+        totalDays: 0, // Placeholder
+        presentDays: 0, // Placeholder
+        absentDays: 0, // Placeholder
+        attendanceRate: 0, // Placeholder
+        studentsPresent: 0, // Placeholder
+        studentsAbsent: 0, // Placeholder
+        totalStudents: allStudents.length,
+      },
+      classTeacher: classroom.classTeacher
+        ? {
+            id: classroom.classTeacher.id,
+            name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
+            phone: classroom.classTeacher.user.phone,
+            email: classroom.classTeacher.user.email,
+          }
+        : null,
+      classCaptain: classroom.captain
+        ? {
+            id: classroom.captain.id,
+            name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
+            admissionNumber: classroom.captain.studentNo,
+          }
+        : null,
+      students: paginatedStudents.map((student) => ({
+        id: student.id,
+        name: `${student.user.firstName} ${student.user.lastName}`,
+        gender: student.user.gender,
+        age: student.user.dateOfBirth ? new Date().getFullYear() - new Date(student.user.dateOfBirth).getFullYear() : 0,
+        admissionNumber: student.studentNo,
+        guardianPhone: student.guardian?.user.phone || null,
+        guardianName: student.guardian ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}` : '',
+        stateOfOrigin: student.user.stateOfOrigin || 'Not provided',
+      })),
+      topPerformers: topPerformers,
+    };
+  }
 }

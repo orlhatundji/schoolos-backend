@@ -8,6 +8,7 @@ export interface ViewStats {
 export interface ClassroomInfo {
   id: string;
   name: string;
+  slug: string;
   level: string;
   location: string | null;
   classTeacher: string | null;

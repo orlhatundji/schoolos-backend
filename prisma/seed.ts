@@ -366,6 +366,7 @@ async function main() {
       const classArm = await prisma.classArm.create({
         data: {
           name: arm,
+          slug: `${level.name.toLowerCase()}-${arm.toLowerCase()}-${currentSessionForClassArms.academicYear}`,
           levelId: level.id,
           departmentId: dept.id,
           schoolId: school.id,

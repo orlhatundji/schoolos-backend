@@ -200,13 +200,82 @@ export class TeacherService {
   }
 
   // Get recent activities
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async getRecentActivities(userId: string, _limit: number = 10): Promise<RecentActivity[]> {
-    // Note: limit parameter is reserved for future pagination implementation
-    await this.getTeacherWithRelations(userId);
+  async getRecentActivities(userId: string, limit: number = 10): Promise<RecentActivity[]> {
+    const teacher = await this.getTeacherWithRelations(userId);
+    
+    if (!teacher) {
+      return [];
+    }
 
-    // For new teachers with no data, return empty array
-    return [];
+    // Get recent activities from the user_activities table
+    const activities = await this.prisma.userActivity.findMany({
+      where: {
+        userId: userId,
+        category: 'TEACHER',
+      },
+      orderBy: {
+        timestamp: 'desc',
+      },
+      take: limit,
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+
+    // Transform activities to RecentActivity format
+    return activities.map((activity) => {
+      let title = '';
+      let description = '';
+      let type: 'attendance' | 'assessment' | 'class' | 'announcement' = 'class';
+
+      switch (activity.action) {
+        case 'MARK_CLASS_ATTENDANCE':
+          title = 'Class Attendance Marked';
+          description = activity.description || `Marked attendance for class`;
+          type = 'attendance';
+          break;
+        case 'MARK_SUBJECT_ATTENDANCE':
+          title = 'Subject Attendance Marked';
+          description = activity.description || `Marked attendance for subject`;
+          type = 'attendance';
+          break;
+        case 'CREATE_ASSESSMENT':
+          title = 'Assessment Created';
+          description = `Created new assessment`;
+          type = 'assessment';
+          break;
+        case 'GRADE_ASSESSMENT':
+          title = 'Assessment Graded';
+          description = `Graded student assessment`;
+          type = 'assessment';
+          break;
+        case 'VIEW_TEACHER_ACTIVITIES':
+          title = 'Viewed Activities';
+          description = `Checked recent activities`;
+          type = 'class';
+          break;
+        default:
+          title = activity.description || 'Activity';
+          description = `Teacher activity: ${activity.action}`;
+          type = 'class';
+      }
+
+      return {
+        id: activity.id,
+        type,
+        title,
+        description,
+        timestamp: activity.timestamp.toISOString(),
+        classId: activity.entityId,
+        subjectId: activity.entityId,
+      };
+    });
   }
 
   // Get upcoming events

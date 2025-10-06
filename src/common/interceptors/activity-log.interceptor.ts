@@ -24,7 +24,7 @@ export class ActivityLogInterceptor implements NestInterceptor {
     }
 
     const request = context.switchToHttp().getRequest();
-    const userId = request.user?.id;
+    const userId = request.user?.sub;
     const schoolId = request.user?.schoolId;
     const ipAddress = request.ip || request.connection?.remoteAddress;
     const userAgent = request.headers['user-agent'];

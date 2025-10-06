@@ -56,13 +56,6 @@ export class TeacherController {
 
   @Get('dashboard')
   @TeacherDashboardSwagger()
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_DASHBOARD',
-    entityType: 'TEACHER_DASHBOARD',
-    description: 'Teacher viewed dashboard',
-    category: 'TEACHER',
-  })
   async getTeacherDashboard(@GetCurrentUserId() userId: string) {
     const data = await this.teacherService.getTeacherDashboardData(userId);
     return new TeacherDashboardResult(data);
@@ -75,26 +68,12 @@ export class TeacherController {
     type: Number,
     description: 'Number of classes to return',
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_CLASSES',
-    entityType: 'TEACHER_CLASSES',
-    description: 'Teacher viewed classes',
-    category: 'TEACHER',
-  })
   async getTeacherClasses(@GetCurrentUserId() userId: string) {
     const classes = await this.teacherService.getTeacherClasses(userId);
     return new TeacherClassesResult(classes);
   }
 
   @Get('subjects')
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_SUBJECTS',
-    entityType: 'TEACHER_SUBJECTS',
-    description: 'Teacher viewed subjects',
-    category: 'TEACHER',
-  })
   async getTeacherSubjects(@GetCurrentUserId() userId: string) {
     const subjects = await this.teacherService.getTeacherSubjects(userId);
     return new TeacherSubjectsResult(subjects);
@@ -106,13 +85,6 @@ export class TeacherController {
     required: false,
     type: Number,
     description: 'Number of subject assignments to return',
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_SUBJECT_ASSIGNMENTS',
-    entityType: 'TEACHER_SUBJECT_ASSIGNMENTS',
-    description: 'Teacher viewed subject assignments',
-    category: 'TEACHER',
   })
   async getTeacherSubjectAssignments(@GetCurrentUserId() userId: string) {
     const assignments = await this.teacherService.getTeacherSubjectAssignments(userId);
@@ -131,13 +103,6 @@ export class TeacherController {
     required: true,
     type: String,
     description: 'Class arm name (e.g., A, B, Alpha)',
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_CLASS_DETAILS',
-    entityType: 'CLASS_DETAILS',
-    description: 'Teacher viewed class details',
-    category: 'TEACHER',
   })
   async getClassDetails(
     @GetCurrentUserId() userId: string,
@@ -196,13 +161,6 @@ export class TeacherController {
     type: String,
     description: 'Class arm name (e.g., A, B, Alpha)',
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_CLASS_STUDENTS',
-    entityType: 'CLASS_STUDENTS',
-    description: 'Teacher viewed class students',
-    category: 'TEACHER',
-  })
   async getClassStudents(
     @GetCurrentUserId() userId: string,
     @Query('level') level: string,
@@ -231,13 +189,6 @@ export class TeacherController {
     type: String,
     description: 'Subject name (e.g., Mathematics, English)',
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_SUBJECT_ASSESSMENT_SCORES',
-    entityType: 'SUBJECT_ASSESSMENT_SCORES',
-    description: 'Teacher viewed subject assessment scores',
-    category: 'TEACHER',
-  })
   async getSubjectAssessmentScores(
     @GetCurrentUserId() userId: string,
     @Query('level') level: string,
@@ -260,13 +211,6 @@ export class TeacherController {
     type: Number,
     description: 'Number of activities to return (default: 10)',
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_ACTIVITIES',
-    entityType: 'TEACHER_ACTIVITIES',
-    description: 'Teacher viewed recent activities',
-    category: 'TEACHER',
-  })
   async getTeacherActivities(@GetCurrentUserId() userId: string, @Query('limit') limit?: number) {
     const activities = await this.teacherService.getRecentActivities(userId, limit || 10);
     return new TeacherActivitiesResult(activities);
@@ -279,26 +223,12 @@ export class TeacherController {
     type: Number,
     description: 'Number of days ahead to fetch events (default: 7)',
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_EVENTS',
-    entityType: 'TEACHER_EVENTS',
-    description: 'Teacher viewed upcoming events',
-    category: 'TEACHER',
-  })
   async getTeacherEvents(@GetCurrentUserId() userId: string, @Query('days') days?: number) {
     const events = await this.teacherService.getUpcomingEvents(userId, days || 7);
     return new TeacherEventsResult(events);
   }
 
   @Get('profile')
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_TEACHER_PROFILE',
-    entityType: 'TEACHER_PROFILE',
-    description: 'Teacher viewed profile',
-    category: 'TEACHER',
-  })
   async getTeacherProfile(@GetCurrentUserId() userId: string) {
     const profile = await this.teacherService.getTeacherProfile(userId);
     return new TeacherProfileResult(profile);
@@ -354,13 +284,6 @@ export class TeacherController {
   }
 
   @Get('preferences')
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_USER_PREFERENCES',
-    entityType: 'USER_PREFERENCES',
-    description: 'Teacher viewed preferences',
-    category: 'TEACHER',
-  })
   @ApiOperation({ summary: 'Get user preferences' })
   @ApiResponse({ status: 200, description: 'User preferences retrieved successfully' })
   async getUserPreferences(@GetCurrentUserId() userId: string) {
@@ -611,7 +534,18 @@ export class TeacherController {
   @LogActivity({
     action: 'MARK_CLASS_ATTENDANCE',
     entityType: 'STUDENT_ATTENDANCE',
-    description: 'Teacher marked class attendance',
+    description: (args) => {
+      const dto = args[1] as MarkClassAttendanceDto;
+      return `Class attendance marked for class ${dto.classArmId}`;
+    },
+    details: (args, result) => {
+      const dto = args[1] as MarkClassAttendanceDto;
+      return {
+        classArmId: dto.classArmId,
+        date: dto.date,
+        studentCount: dto.studentAttendances.length,
+      };
+    },
     category: 'TEACHER',
   })
   async markClassAttendance(
@@ -645,7 +579,19 @@ export class TeacherController {
   @LogActivity({
     action: 'MARK_SUBJECT_ATTENDANCE',
     entityType: 'STUDENT_ATTENDANCE',
-    description: 'Teacher marked subject attendance',
+    description: (args) => {
+      const dto = args[1] as MarkSubjectAttendanceDto;
+      return `Subject attendance marked for class ${dto.classArmId}`;
+    },
+    details: (args, result) => {
+      const dto = args[1] as MarkSubjectAttendanceDto;
+      return {
+        subjectId: dto.subjectId,
+        classArmId: dto.classArmId,
+        date: dto.date,
+        studentCount: dto.studentAttendances.length,
+      };
+    },
     category: 'TEACHER',
   })
   async markSubjectAttendance(

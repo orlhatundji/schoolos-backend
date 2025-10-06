@@ -8,7 +8,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags, ApiQuery, ApiParam } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
 import { LogActivity } from '../../../common/decorators/log-activity.decorator';
@@ -211,6 +211,30 @@ export class BffAdminController {
     const data = await this.bffAdminService.getClassroomDetailsData(
       userId,
       classroomId,
+      pageNumber,
+      limitNumber,
+    );
+    return new AdminClassroomDetailsResult(data);
+  }
+
+  @Get('classroom-by-slug/:slug/details')
+  @ApiParam({ name: 'slug', description: 'Classroom slug (e.g., jss1-a-2024-2025)' })
+  @ClassroomDetailsPageQuery()
+  @ClassroomDetailsLimitQuery()
+  @ClassroomDetailsResponse()
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getClassroomDetailsBySlug(
+    @GetCurrentUserId() userId: string,
+    @Param('slug') slug: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const pageNumber = parseInt(page, 10) || 1;
+    const limitNumber = parseInt(limit, 10) || 10;
+
+    const data = await this.bffAdminService.getClassroomDetailsDataBySlug(
+      userId,
+      slug,
       pageNumber,
       limitNumber,
     );

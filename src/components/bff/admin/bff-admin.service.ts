@@ -58,6 +58,15 @@ export class BffAdminService {
     return this.classroomService.getClassroomDetailsData(userId, classroomId, page, limit);
   }
 
+  async getClassroomDetailsDataBySlug(
+    userId: string,
+    slug: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<ClassroomDetailsData> {
+    return this.classroomService.getClassroomDetailsDataBySlug(userId, slug, page, limit);
+  }
+
   async getStudentDetailsData(
     userId: string,
     page: number = 1,

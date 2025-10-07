@@ -49,7 +49,9 @@ export class AuthService extends BaseService {
     return { tokens, student };
   }
 
-  async login(dto: LoginDto): Promise<{
+  async login(
+    dto: LoginDto,
+  ): Promise<{
     tokens: AuthTokens;
     user?: User;
     student?: Student;
@@ -116,18 +118,15 @@ export class AuthService extends BaseService {
       const teacher = await this.teachersService.getTeacherByUserId(user.id);
       if (teacher) {
         return { tokens, teacher, preferences };
-        return { tokens, teacher, preferences };
       }
     } else if (user.type === UserType.STUDENT) {
       const student = await this.studentService.getStudentByUserId(user.id);
       if (student) {
         return { tokens, student, preferences };
-        return { tokens, student, preferences };
       }
     }
 
     // Fallback to regular user data
-    return { tokens, user, preferences };
     return { tokens, user, preferences };
   }
 

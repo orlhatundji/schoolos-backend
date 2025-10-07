@@ -66,13 +66,6 @@ export class BffAdminController {
   @Get('dashboard-summary')
   @DashboardSummarySwagger()
   @CheckPolicies(new ManageStudentPolicyHandler())
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_DASHBOARD',
-    entityType: 'DASHBOARD',
-    description: 'Admin viewed dashboard summary',
-    category: 'ADMINISTRATION',
-  })
   async getDashboardSummary(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getDashboardSummaryData(userId);
     return new DashboardSummaryResult(data);
@@ -80,13 +73,6 @@ export class BffAdminController {
 
   @Get('recent-activities')
   @CheckPolicies(new ManageStudentPolicyHandler())
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_RECENT_ACTIVITIES',
-    entityType: 'ACTIVITY_LOG',
-    description: 'Admin viewed recent activities',
-    category: 'ADMINISTRATION',
-  })
   async getRecentActivities(
     @GetCurrentUserId() userId: string,
     @Query('limit') limit?: string,
@@ -155,6 +141,13 @@ export class BffAdminController {
 
   @Post('subjects')
   @CheckPolicies(new ManageStudentPolicyHandler())
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'CREATE_SUBJECT',
+    entityType: 'SUBJECT',
+    description: 'Admin created a new subject',
+    category: 'ADMINISTRATION',
+  })
   async createSubject(
     @GetCurrentUserId() userId: string,
     @Body() createSubjectDto: CreateSubjectDto,
@@ -320,6 +313,13 @@ export class BffAdminController {
   // Classroom endpoints
   @Post('classrooms')
   @CheckPolicies(new ManageStudentPolicyHandler())
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'CREATE_CLASSROOM',
+    entityType: 'CLASSROOM',
+    description: 'Admin created a new classroom',
+    category: 'ADMINISTRATION',
+  })
   async createClassroom(
     @GetCurrentUserId() userId: string,
     @Body() createClassroomDto: CreateClassroomDto,

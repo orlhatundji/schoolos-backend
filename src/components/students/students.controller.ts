@@ -23,7 +23,7 @@ import {
 import { StrategyEnum } from '../auth/strategies';
 import { CheckPolicies, PoliciesGuard } from '../roles-manager';
 import { UserMessages } from '../users/results';
-import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto } from './dto';
+import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto, TransferStudentClassDto } from './dto';
 import {
   ManageStudentPolicyHandler,
   ReadStudentPolicyHandler,
@@ -239,6 +239,16 @@ export class StudentsController {
   @CheckPolicies(new UpdateStudentPolicyHandler())
   async updateStatus(@Param('id') id: string, @Body() updateStatusDto: UpdateStudentStatusDto) {
     return this.studentsService.updateStudentStatus(id, updateStatusDto);
+  }
+
+  @Patch(':id/transfer-class')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Transfer student to different class arm',
+  })
+  @CheckPolicies(new UpdateStudentPolicyHandler())
+  async transferStudentClass(@Param('id') id: string, @Body() transferDto: TransferStudentClassDto) {
+    return this.studentsService.transferStudentClass(id, transferDto);
   }
 
   @Delete(':id')

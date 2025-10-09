@@ -474,7 +474,7 @@ export class BffAdminClassroomService {
     const classroom = await this.prisma.classArm.create({
       data: {
         name: createClassroomDto.name,
-        slug: `${createClassroomDto.name.toLowerCase()}-${currentSession.academicYear}`,
+        slug: `${createClassroomDto.name.toLowerCase()}-${level.name.toLowerCase()}-${currentSession.academicYear}`,
         levelId: createClassroomDto.levelId,
         academicSessionId: currentSession.id,
         schoolId,

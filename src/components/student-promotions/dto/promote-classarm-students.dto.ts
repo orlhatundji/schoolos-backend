@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID, IsOptional, IsArray, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsString, IsUUID, IsOptional, IsArray, IsEnum, IsBoolean } from 'class-validator';
 
 export enum PromotionType {
   PROMOTE = 'PROMOTE',
@@ -61,4 +61,49 @@ export class PromoteClassArmStudentsDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiProperty({
+    description: 'Custom name for the target class arm (optional override for automatic name)',
+    required: false,
+    example: 'B',
+  })
+  @IsOptional()
+  @IsString()
+  targetClassArmName?: string;
+
+  @ApiProperty({
+    description: 'Whether to use an existing class arm instead of creating a new one',
+    required: false,
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  useExistingClassArm?: boolean;
+
+  @ApiProperty({
+    description: 'ID of existing target class arm (required if useExistingClassArm is true)',
+    required: false,
+    example: 'class-arm-uuid',
+  })
+  @IsOptional()
+  @IsString()
+  existingTargetClassArmId?: string;
+
+  @ApiProperty({
+    description: 'ID of class arm for repeaters (required for REPEAT type)',
+    required: false,
+    example: 'class-arm-uuid',
+  })
+  @IsOptional()
+  @IsString()
+  repeatersClassArmId?: string;
+
+  @ApiProperty({
+    description: 'Name for new repeaters class arm (optional, for creating new repeaters class arm)',
+    required: false,
+    example: 'Repeaters',
+  })
+  @IsOptional()
+  @IsString()
+  repeatersClassArmName?: string;
 }

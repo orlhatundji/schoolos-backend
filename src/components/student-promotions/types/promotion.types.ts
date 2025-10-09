@@ -50,19 +50,6 @@ export interface PromotionBatchResult {
   completedAt?: Date;
 }
 
-export interface StudentPromotionPreview {
-  studentId: string;
-  studentName: string;
-  studentNo: string;
-  currentLevel: string;
-  currentClassArm: string;
-  proposedLevel: string;
-  proposedClassArm: string;
-  promotionType: string;
-  canPromote: boolean;
-  warnings: string[];
-  errors: string[];
-}
 
 export interface LevelProgressionWithIncludes {
   id: string;
@@ -95,11 +82,3 @@ export interface ClassArmCapacityInfo {
   isOverCapacity: boolean;
 }
 
-export interface PromotionStatistics {
-  totalStudents: number;
-  eligibleForPromotion: number;
-  requiresManualReview: number;
-  cannotPromote: number;
-  byLevel: Record<string, number>;
-  byClassArm: Record<string, number>;
-}

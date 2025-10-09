@@ -11,7 +11,7 @@ import { SchoolsService } from '../schools';
 import { ClassArmStudentService } from './services/class-arm-student.service';
 import { UserTypes } from '../users/constants';
 import { UsersService } from '../users/users.service';
-import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto } from './dto';
+import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto, TransferStudentClassDto } from './dto';
 import { StudentMessages } from './results';
 import { StudentsRepository } from './students.repository';
 import { Student, StudentWithIncludes } from './types';
@@ -803,9 +803,16 @@ export class StudentsService extends BaseService {
               schoolId,
               deletedAt: null,
             },
-            select: {
-              id: true,
-              name: true,
+            include: {
+              _count: {
+                select: {
+                  classArmStudents: {
+                    where: {
+                      isActive: true,
+                    },
+                  },
+                },
+              },
             },
             orderBy: {
               name: 'asc',
@@ -824,6 +831,9 @@ export class StudentsService extends BaseService {
         classArms: level.classArms.map((classArm) => ({
           id: classArm.id,
           name: classArm.name,
+          studentCount: classArm._count.classArmStudents,
+          currentCapacity: classArm._count.classArmStudents,
+          maxCapacity: 30, // Default capacity, could be made configurable
         })),
       }));
 
@@ -916,5 +926,85 @@ export class StudentsService extends BaseService {
         ageRanges: [],
       };
     }
+  }
+
+  /**
+   * Transfer a student from one class arm to another within the same academic session
+   */
+  async transferStudentClass(studentId: string, transferDto: TransferStudentClassDto) {
+    // Get current student with their active class arm enrollment
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        user: true,
+        classArmStudents: {
+          where: { isActive: true },
+          include: {
+            classArm: {
+              include: {
+                level: true,
+                academicSession: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    if (student.classArmStudents.length === 0) {
+      throw new BadRequestException('Student is not currently enrolled in any class arm');
+    }
+
+    const currentClassArmStudent = student.classArmStudents[0];
+    const currentClassArm = currentClassArmStudent.classArm;
+
+    // Get target class arm
+    const targetClassArm = await this.prisma.classArm.findUnique({
+      where: { id: transferDto.toClassArmId },
+      include: {
+        level: true,
+        academicSession: true,
+      },
+    });
+
+    if (!targetClassArm) {
+      throw new NotFoundException('Target class arm not found');
+    }
+
+    // Validate that target class arm is in the same academic session
+    if (targetClassArm.academicSessionId !== currentClassArm.academicSessionId) {
+      throw new BadRequestException('Cannot transfer student to a class arm in a different academic session');
+    }
+
+    // Check if student is already in the target class arm
+    if (currentClassArm.id === targetClassArm.id) {
+      throw new BadRequestException('Student is already in the specified class arm');
+    }
+
+    // Use the existing transfer method from ClassArmStudentService
+    const result = await this.classArmStudentService.transferStudent(
+      studentId,
+      currentClassArm.id,
+      targetClassArm.id,
+      currentClassArm.academicSessionId
+    );
+
+    return {
+      success: true,
+      message: `Student successfully transferred from ${currentClassArm.name} to ${targetClassArm.name}`,
+      data: {
+        studentId: student.id,
+        studentName: `${student.user.firstName} ${student.user.lastName}`,
+        fromClassArm: currentClassArm.name,
+        toClassArm: targetClassArm.name,
+        fromLevel: currentClassArm.level.name,
+        toLevel: targetClassArm.level.name,
+        reason: transferDto.reason,
+      },
+    };
   }
 }

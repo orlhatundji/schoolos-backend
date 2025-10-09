@@ -2,7 +2,6 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { BaseService } from '../../common/base-service';
 import { ClassArmStudentService } from '../students/services/class-arm-student.service';
-import { CreatePromotionBatchDto } from './dto/create-promotion-batch.dto';
 import { PromoteStudentDto } from './dto/promote-student.dto';
 import { PromoteClassArmStudentsDto } from './dto/promote-classarm-students.dto';
 import { CreateLevelProgressionDto, UpdateLevelProgressionDto } from './dto/level-progression.dto';
@@ -10,11 +9,9 @@ import {
   StudentPromotionWithIncludes,
   PromotionResult,
   PromotionBatchResult,
-  StudentPromotionPreview,
   LevelProgressionWithIncludes,
   PromotionValidationResult,
   ClassArmCapacityInfo,
-  PromotionStatistics,
 } from './types/promotion.types';
 
 @Injectable()
@@ -37,6 +34,21 @@ export class StudentPromotionsService extends BaseService {
     userId: string,
     dto: PromoteClassArmStudentsDto,
   ): Promise<PromotionBatchResult> {
+    // Validate UUID fields only if they are provided and not empty
+    if (dto.existingTargetClassArmId && dto.existingTargetClassArmId.trim() !== '') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(dto.existingTargetClassArmId)) {
+        throw new BadRequestException('existingTargetClassArmId must be a valid UUID');
+      }
+    }
+
+    if (dto.repeatersClassArmId && dto.repeatersClassArmId.trim() !== '') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(dto.repeatersClassArmId)) {
+        throw new BadRequestException('repeatersClassArmId must be a valid UUID');
+      }
+    }
+
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -94,26 +106,65 @@ export class StudentPromotionsService extends BaseService {
       throw new NotFoundException('Target level not found');
     }
 
-    // Get or create the target class arm
-    const targetClassArm = await this.findOrCreateClassArm(nextLevel, targetSession, {
-      user: { schoolId: user.schoolId },
-    });
-
     // Filter students based on selection
-    const studentsToPromote =
+    const allStudents =
       dto.studentIds && dto.studentIds.length > 0
         ? sourceClassArm.classArmStudents.filter((cas) => dto.studentIds.includes(cas.studentId))
         : sourceClassArm.classArmStudents;
 
-    if (studentsToPromote.length === 0) {
+    if (allStudents.length === 0) {
       throw new BadRequestException('No students selected for promotion');
+    }
+
+    // For now, all students will be promoted based on the DTO promotion type
+    // In the future, this could be enhanced to allow individual student promotion types
+    const promotedStudents = dto.promotionType === 'PROMOTE' ? allStudents : [];
+    const repeaterStudents = dto.promotionType === 'REPEAT' ? allStudents : [];
+
+    // Get or create the target class arm for promoted students
+    const targetClassArm = await this.findOrCreateClassArm(nextLevel, targetSession, sourceClassArm, dto);
+
+    // Get or create repeaters class arm if there are repeaters
+    let repeatersClassArm = null;
+    if (repeaterStudents.length > 0) {
+      if (dto.repeatersClassArmId) {
+        // Use existing repeaters class arm
+        repeatersClassArm = await this.prisma.classArm.findFirst({
+          where: {
+            id: dto.repeatersClassArmId,
+            levelId: sourceClassArm.levelId, // Same level as source
+            academicSessionId: targetSession.id,
+            deletedAt: null,
+          },
+        });
+
+        if (!repeatersClassArm) {
+          throw new BadRequestException('Specified repeaters class arm not found or invalid');
+        }
+      } else {
+        // Create new repeaters class arm
+        const repeatersName = dto.repeatersClassArmName || `${sourceClassArm.name}-Repeaters`;
+        
+        repeatersClassArm = await this.prisma.classArm.create({
+          data: {
+            name: repeatersName,
+            slug: `${repeatersName.toLowerCase()}-${sourceClassArm.level.name.toLowerCase()}-${targetSession.academicYear}`,
+            levelId: sourceClassArm.levelId, // Same level as source
+            academicSessionId: targetSession.id,
+            schoolId: sourceClassArm.schoolId,
+            classTeacherId: sourceClassArm.classTeacherId, // Inherit class teacher
+            location: sourceClassArm.location, // Inherit location
+          },
+        });
+      }
     }
 
     // Perform promotion in transaction
     const result = await this.prisma.$transaction(async (tx) => {
       const promotionResults = [];
 
-      for (const classArmStudent of studentsToPromote) {
+      // Process promoted students
+      for (const classArmStudent of promotedStudents) {
         const student = classArmStudent.student;
 
         // Deactivate current class arm enrollment
@@ -123,7 +174,7 @@ export class StudentPromotionsService extends BaseService {
         });
 
         // Create new class arm enrollment
-        const newClassArmStudent = await tx.classArmStudent.create({
+        await tx.classArmStudent.create({
           data: {
             studentId: student.id,
             classArmId: targetClassArm.id,
@@ -142,7 +193,7 @@ export class StudentPromotionsService extends BaseService {
             toLevelId: nextLevel.id,
             fromAcademicSessionId: sourceClassArm.academicSessionId,
             toAcademicSessionId: targetSession.id,
-            promotionType: dto.promotionType === 'PROMOTE' ? 'MANUAL' : 'REPEAT',
+            promotionType: 'MANUAL',
             promotionDate: new Date(),
             promotedBy: userId,
             notes: dto.notes,
@@ -156,6 +207,53 @@ export class StudentPromotionsService extends BaseService {
           toClassArm: targetClassArm.name,
           fromLevel: sourceClassArm.level.name,
           toLevel: nextLevel.name,
+        });
+      }
+
+      // Process repeater students
+      for (const classArmStudent of repeaterStudents) {
+        const student = classArmStudent.student;
+
+        // Deactivate current class arm enrollment
+        await tx.classArmStudent.update({
+          where: { id: classArmStudent.id },
+          data: { isActive: false, leftAt: new Date() },
+        });
+
+        // Create new class arm enrollment for repeaters
+        await tx.classArmStudent.create({
+          data: {
+            studentId: student.id,
+            classArmId: repeatersClassArm.id,
+            academicSessionId: targetSession.id,
+            isActive: true,
+          },
+        });
+
+        // Record promotion (repeaters stay in same level)
+        await tx.studentPromotion.create({
+          data: {
+            studentId: student.id,
+            fromClassArmId: sourceClassArm.id,
+            toClassArmId: repeatersClassArm.id,
+            fromLevelId: sourceClassArm.levelId,
+            toLevelId: sourceClassArm.levelId, // Same level
+            fromAcademicSessionId: sourceClassArm.academicSessionId,
+            toAcademicSessionId: targetSession.id,
+            promotionType: 'REPEAT',
+            promotionDate: new Date(),
+            promotedBy: userId,
+            notes: dto.notes,
+          },
+        });
+
+        promotionResults.push({
+          studentId: student.id,
+          studentName: `${student.user.firstName} ${student.user.lastName}`,
+          fromClassArm: sourceClassArm.name,
+          toClassArm: repeatersClassArm.name,
+          fromLevel: sourceClassArm.level.name,
+          toLevel: sourceClassArm.level.name, // Same level
         });
       }
 
@@ -181,186 +279,7 @@ export class StudentPromotionsService extends BaseService {
     };
   }
 
-  async createPromotionBatch(
-    userId: string,
-    dto: CreatePromotionBatchDto,
-  ): Promise<PromotionBatchResult> {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
 
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Get current academic session
-    const currentSession = await this.getCurrentAcademicSession(user.schoolId);
-    if (!currentSession) {
-      throw new NotFoundException('No current academic session found');
-    }
-
-    // Validate target session
-    const targetSession = await this.prisma.academicSession.findFirst({
-      where: {
-        id: dto.toAcademicSessionId,
-        schoolId: user.schoolId,
-        deletedAt: null,
-      },
-    });
-
-    if (!targetSession) {
-      throw new NotFoundException('Target academic session not found');
-    }
-
-    // Create promotion batch
-    const batch = await this.prisma.promotionBatch.create({
-      data: {
-        schoolId: user.schoolId,
-        fromAcademicSessionId: currentSession.id,
-        toAcademicSessionId: dto.toAcademicSessionId,
-        status: 'PENDING',
-        totalStudents: 0,
-        processedStudents: 0,
-        successfulPromotions: 0,
-        failedPromotions: 0,
-        createdBy: userId,
-      },
-    });
-
-    // Get students to promote
-    const students = await this.getStudentsForPromotion(currentSession.id, dto.studentIds);
-
-    // Update batch with total students
-    await this.prisma.promotionBatch.update({
-      where: { id: batch.id },
-      data: { totalStudents: students.length },
-    });
-
-    return {
-      batchId: batch.id,
-      totalStudents: students.length,
-      successfulPromotions: 0,
-      failedPromotions: 0,
-      status: 'PENDING',
-      results: [],
-    };
-  }
-
-  /**
-   * Execute promotion batch
-   */
-  async executePromotionBatch(userId: string, batchId: string): Promise<PromotionBatchResult> {
-    const batch = await this.prisma.promotionBatch.findUnique({
-      where: { id: batchId },
-      include: {
-        fromAcademicSession: true,
-        toAcademicSession: true,
-      },
-    });
-
-    if (!batch) {
-      throw new NotFoundException('Promotion batch not found');
-    }
-
-    if (batch.status !== 'PENDING') {
-      throw new BadRequestException('Batch is not in pending status');
-    }
-
-    // Update batch status to processing
-    await this.prisma.promotionBatch.update({
-      where: { id: batchId },
-      data: {
-        status: 'PROCESSING',
-        startedAt: new Date(),
-      },
-    });
-
-    try {
-      // Get students for promotion
-      const students = await this.getStudentsForPromotion(batch.fromAcademicSessionId);
-
-      const results: PromotionResult[] = [];
-      let successfulPromotions = 0;
-      let failedPromotions = 0;
-
-      // Process each student
-      for (const student of students) {
-        try {
-          const result = await this.promoteIndividualStudent(
-            student,
-            batch.fromAcademicSession,
-            batch.toAcademicSession,
-            {
-              promotionType: 'AUTOMATIC',
-              createMissingClassArms: true,
-              maintainGroupings: true,
-            },
-          );
-
-          results.push({
-            studentId: student.id,
-            success: true,
-            fromLevel: result.fromLevel,
-            toLevel: result.toLevel,
-            fromClassArm: result.fromClassArm,
-            toClassArm: result.toClassArm,
-          });
-
-          successfulPromotions++;
-        } catch (error) {
-          results.push({
-            studentId: student.id,
-            success: false,
-            error: error.message,
-          });
-          failedPromotions++;
-        }
-
-        // Update batch progress
-        await this.prisma.promotionBatch.update({
-          where: { id: batchId },
-          data: {
-            processedStudents: results.length,
-            successfulPromotions,
-            failedPromotions,
-          },
-        });
-      }
-
-      // Mark batch as completed
-      await this.prisma.promotionBatch.update({
-        where: { id: batchId },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-        },
-      });
-
-      return {
-        batchId,
-        totalStudents: students.length,
-        successfulPromotions,
-        failedPromotions,
-        status: 'COMPLETED',
-        results,
-        startedAt: batch.startedAt,
-        completedAt: new Date(),
-      };
-    } catch (error) {
-      // Mark batch as failed
-      await this.prisma.promotionBatch.update({
-        where: { id: batchId },
-        data: {
-          status: 'FAILED',
-          completedAt: new Date(),
-        },
-      });
-
-      throw error;
-    }
-  }
 
   /**
    * Promote individual student
@@ -442,61 +361,6 @@ export class StudentPromotionsService extends BaseService {
     };
   }
 
-  /**
-   * Get promotion preview for students
-   */
-  async getPromotionPreview(
-    userId: string,
-    fromSessionId: string,
-    toSessionId: string,
-  ): Promise<StudentPromotionPreview[]> {
-    const students = await this.getStudentsForPromotion(fromSessionId);
-    const previews: StudentPromotionPreview[] = [];
-
-    for (const student of students) {
-      const currentClassArm = await this.prisma.classArm.findUnique({
-        where: { id: student.classArmStudents?.[0]?.classArmId || '' },
-        include: { level: true },
-      });
-
-      if (!currentClassArm) continue;
-
-      // Determine next level
-      const nextLevel = await this.determineNextLevel(currentClassArm.level, student.user.schoolId);
-
-      if (!nextLevel) continue;
-
-      // Find or create appropriate class arm
-      const targetClassArm = await this.findOrCreateClassArm(nextLevel, toSessionId, student);
-
-      const warnings: string[] = [];
-      const errors: string[] = [];
-
-      // Check capacity
-      if (targetClassArm) {
-        const capacityInfo = await this.getClassArmCapacity(targetClassArm.id);
-        if (capacityInfo.isOverCapacity) {
-          warnings.push('Target class is over capacity');
-        }
-      }
-
-      previews.push({
-        studentId: student.id,
-        studentName: `${student.user.firstName} ${student.user.lastName}`,
-        studentNo: student.studentNo,
-        currentLevel: currentClassArm.level.name,
-        currentClassArm: currentClassArm.name,
-        proposedLevel: nextLevel.name,
-        proposedClassArm: targetClassArm?.name || 'To be created',
-        promotionType: 'AUTOMATIC',
-        canPromote: errors.length === 0,
-        warnings,
-        errors,
-      });
-    }
-
-    return previews;
-  }
 
   /**
    * Get student promotion history
@@ -530,129 +394,7 @@ export class StudentPromotionsService extends BaseService {
     });
   }
 
-  /**
-   * Get promotion statistics
-   */
-  async getPromotionStatistics(userId: string, sessionId: string): Promise<PromotionStatistics> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
 
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    const students = await this.getStudentsForPromotion(sessionId);
-    const statistics: PromotionStatistics = {
-      totalStudents: students.length,
-      eligibleForPromotion: 0,
-      requiresManualReview: 0,
-      cannotPromote: 0,
-      byLevel: {},
-      byClassArm: {},
-    };
-
-    for (const student of students) {
-      const classArm = await this.prisma.classArm.findUnique({
-        where: { id: student.classArmStudents?.[0]?.classArmId || '' },
-        include: { level: true },
-      });
-
-      if (!classArm) continue;
-
-      // Count by level
-      statistics.byLevel[classArm.level.name] = (statistics.byLevel[classArm.level.name] || 0) + 1;
-
-      // Count by class arm
-      statistics.byClassArm[classArm.name] = (statistics.byClassArm[classArm.name] || 0) + 1;
-
-      // Determine eligibility
-      const nextLevel = await this.determineNextLevel(classArm.level, user.schoolId);
-
-      if (nextLevel) {
-        statistics.eligibleForPromotion++;
-      } else {
-        statistics.cannotPromote++;
-      }
-    }
-
-    return statistics;
-  }
-
-  /**
-   * Get promotion batch details
-   */
-  async getPromotionBatch(userId: string, batchId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    return this.prisma.promotionBatch.findFirst({
-      where: {
-        id: batchId,
-        schoolId: user.schoolId,
-        deletedAt: null,
-      },
-      include: {
-        fromAcademicSession: true,
-        toAcademicSession: true,
-      },
-    });
-  }
-
-  /**
-   * Get promotion batches for school
-   */
-  async getPromotionBatches(
-    userId: string,
-    options: { status?: string; page: number; limit: number },
-  ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    const whereClause: any = {
-      schoolId: user.schoolId,
-      deletedAt: null,
-    };
-
-    if (options.status) {
-      whereClause.status = options.status;
-    }
-
-    const [batches, total] = await Promise.all([
-      this.prisma.promotionBatch.findMany({
-        where: whereClause,
-        include: {
-          fromAcademicSession: true,
-          toAcademicSession: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: (options.page - 1) * options.limit,
-        take: options.limit,
-      }),
-      this.prisma.promotionBatch.count({ where: whereClause }),
-    ]);
-
-    return {
-      batches,
-      total,
-      page: options.page,
-      limit: options.limit,
-      totalPages: Math.ceil(total / options.limit),
-    };
-  }
 
   /**
    * Create level progression rule
@@ -787,105 +529,7 @@ export class StudentPromotionsService extends BaseService {
     });
   }
 
-  private async getStudentsForPromotion(sessionId: string, studentIds?: string[]) {
-    const whereClause: any = {
-      classArmStudents: {
-        some: {
-          classArm: {
-            academicSessionId: sessionId,
-          },
-        },
-      },
-      status: 'ACTIVE',
-      deletedAt: null,
-    };
 
-    if (studentIds && studentIds.length > 0) {
-      whereClause.id = {
-        in: studentIds,
-      };
-    }
-
-    return this.prisma.student.findMany({
-      where: whereClause,
-      include: {
-        user: true,
-        classArmStudents: {
-          where: { isActive: true },
-          include: {
-            classArm: {
-              include: {
-                level: true,
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  private async promoteIndividualStudent(
-    student: any,
-    fromSession: any,
-    toSession: any,
-    rules: any,
-  ) {
-    const currentClassArm = student.classArmStudents?.[0]?.classArm;
-    if (!currentClassArm) {
-      throw new Error('Student is not enrolled in any class arm');
-    }
-    const nextLevel = await this.determineNextLevel(currentClassArm.level, student.user.schoolId);
-
-    if (!nextLevel) {
-      throw new Error('Cannot determine next level');
-    }
-
-    const targetClassArm = await this.findOrCreateClassArm(nextLevel, toSession, student);
-
-    // Deactivate current class arm enrollment
-    const currentClassArmStudent = student.classArmStudents?.[0];
-    if (currentClassArmStudent) {
-      await this.prisma.classArmStudent.update({
-        where: { id: currentClassArmStudent.id },
-        data: { isActive: false, leftAt: new Date() },
-      });
-    }
-
-    // Create new class arm enrollment
-    await this.prisma.classArmStudent.create({
-      data: {
-        studentId: student.id,
-        classArmId: targetClassArm.id,
-        academicSessionId: toSession.id,
-        isActive: true,
-      },
-    });
-
-    // Record promotion
-    await this.prisma.studentPromotion.create({
-      data: {
-        studentId: student.id, // Original student ID
-        promotedStudentId: null, // No new student record created
-        fromClassArmId: currentClassArm.id,
-        toClassArmId: targetClassArm.id,
-        fromLevelId: currentClassArm.levelId,
-        toLevelId: nextLevel.id,
-        fromAcademicSessionId: fromSession.id,
-        toAcademicSessionId: toSession.id,
-        promotionType: rules.promotionType === 'PROMOTE' ? 'MANUAL' : 'REPEAT',
-        promotionDate: new Date(),
-        promotedBy: 'system',
-        notes: rules.notes,
-      },
-    });
-
-    return {
-      fromLevel: currentClassArm.level.name,
-      toLevel: nextLevel.name,
-      fromClassArm: currentClassArm.name,
-      toClassArm: targetClassArm.name,
-    };
-  }
 
   private async determineNextLevel(currentLevel: any, schoolId: string) {
     // Check for configured progression
@@ -922,41 +566,74 @@ export class StudentPromotionsService extends BaseService {
     });
   }
 
-  private async findOrCreateClassArm(level: any, toSession: any, student: any) {
-    // Find existing class arms in the target level and session
-    const existingClassArms = await this.prisma.classArm.findMany({
+  private async findOrCreateClassArm(
+    level: any, 
+    toSession: any, 
+    sourceClassArm: any, 
+    dto: any
+  ) {
+    // If using existing class arm, find and return it
+    if (dto.useExistingClassArm && dto.existingTargetClassArmId) {
+      const existingClassArm = await this.prisma.classArm.findFirst({
+        where: {
+          id: dto.existingTargetClassArmId,
+          levelId: level.id,
+          academicSessionId: toSession.id,
+          deletedAt: null,
+        },
+      });
+
+      if (!existingClassArm) {
+        throw new BadRequestException('Specified target class arm not found or invalid');
+      }
+
+      return {
+        id: existingClassArm.id,
+        name: existingClassArm.name,
+        levelId: level.id,
+        academicSessionId: toSession.id,
+        schoolId: existingClassArm.schoolId,
+      };
+    }
+
+    // Create new class arm with preserved name
+    const targetClassArmName = dto.targetClassArmName || sourceClassArm.name;
+    
+    // Check if class arm with same name already exists in target level/session
+    const existingClassArm = await this.prisma.classArm.findFirst({
       where: {
+        name: targetClassArmName,
         levelId: level.id,
         academicSessionId: toSession.id,
         deletedAt: null,
       },
-      select: {
-        id: true,
-        name: true,
-        level: {
-          select: { name: true },
-        },
-      },
-      orderBy: { name: 'asc' },
     });
 
-    if (existingClassArms.length === 0) {
+    if (existingClassArm) {
       throw new BadRequestException(
-        `No class arms exist in ${level.name} for the ${toSession.academicYear} academic session. ` +
-          `Please create a class arm in ${level.name} before promoting students.`,
+        `Class arm '${targetClassArmName}' already exists in ${level.name} for ${toSession.academicYear}`
       );
     }
 
-    // For now, return the first available class arm
-    // In the future, this could be enhanced to allow selection of specific class arm
-    const classArm = existingClassArms[0];
+    // Create new class arm
+    const newClassArm = await this.prisma.classArm.create({
+      data: {
+        name: targetClassArmName,
+        slug: `${targetClassArmName.toLowerCase()}-${level.name.toLowerCase()}-${toSession.academicYear}`,
+        levelId: level.id,
+        academicSessionId: toSession.id,
+        schoolId: sourceClassArm.schoolId,
+        classTeacherId: sourceClassArm.classTeacherId, // Inherit class teacher
+        location: sourceClassArm.location, // Inherit location
+      },
+    });
 
     return {
-      id: classArm.id,
-      name: classArm.name,
+      id: newClassArm.id,
+      name: newClassArm.name,
       levelId: level.id,
       academicSessionId: toSession.id,
-      schoolId: String(student.user.schoolId),
+      schoolId: newClassArm.schoolId,
     };
   }
 

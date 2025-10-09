@@ -92,7 +92,6 @@ model School {
   levelProgressions            LevelProgression[]
   levels                       Level[]
   paymentStructures            PaymentStructure[]
-  promotionBatches             PromotionBatch[]
   addresses                    SchoolAddress[]
   primaryAddress               Address?                      @relation("SchoolPrimaryAddress", fields: [primaryAddressId], references: [id])
   subjects                     Subject[]
@@ -127,8 +126,6 @@ model AcademicSession {
   classArmStudents             ClassArmStudent[]
   classArms                    ClassArm[]
   paymentStructures            PaymentStructure[]
-  promotionBatchesFrom         PromotionBatch[]              @relation("BatchFromSession")
-  promotionBatchesTo           PromotionBatch[]              @relation("BatchToSession")
   promotionsFrom               StudentPromotion[]            @relation("PromotionFromSession")
   promotionsTo                 StudentPromotion[]            @relation("PromotionToSession")
   subjectTerms                 SubjectTerm[]
@@ -1270,33 +1267,6 @@ model LevelProgression {
   @@map("level_progressions")
 }
 
-/// *
-/// * PromotionBatch
-/// * --------------
-/// * Tracks bulk promotion operations for monitoring and rollback.
-model PromotionBatch {
-  id                    String          @id @default(uuid())
-  schoolId              String
-  fromAcademicSessionId String
-  toAcademicSessionId   String
-  status                String          @default("PENDING")
-  totalStudents         Int             @default(0)
-  processedStudents     Int             @default(0)
-  successfulPromotions  Int             @default(0)
-  failedPromotions      Int             @default(0)
-  createdBy             String
-  startedAt             DateTime?
-  completedAt           DateTime?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  deletedAt             DateTime?
-  fromAcademicSession   AcademicSession @relation("BatchFromSession", fields: [fromAcademicSessionId], references: [id], onDelete: Cascade)
-  school                School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  toAcademicSession     AcademicSession @relation("BatchToSession", fields: [toAcademicSessionId], references: [id], onDelete: Cascade)
-
-  @@index([schoolId])
-  @@map("promotion_batches")
-}
 
 enum AttendanceStatus {
   PRESENT

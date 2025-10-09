@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { AcademicSessionsRepository } from './academic-sessions.repository';
 import { CreateAcademicSessionDto } from './dto/create-academic-session.dto';
+import { CreateTermForSessionDto } from './dto/create-term-for-session.dto';
 import { UpdateAcademicSessionDto } from './dto/update-academic-session.dto';
 import { AcademicSessionMessages } from './results/messages';
 import { AcademicSession } from './types';
@@ -16,6 +17,17 @@ export class AcademicSessionsService extends BaseService {
     super(AcademicSessionsService.name);
   }
 
+  /**
+   * Creates a new academic session with the following behavior:
+   * - Creates the academic session and assessment structure template
+   * - Creates terms for the session in the same transaction
+   * - Does NOT automatically create class arms (must be done manually or during promotion)
+   * 
+   * @param userId - The ID of the user creating the session
+   * @param dto - The academic session data including terms array
+   * @returns The created academic session
+   * @throws BadRequestException if no terms are provided or if terms array is empty
+   */
   async createAcademicSession(
     userId: string,
     dto: CreateAcademicSessionDto,
@@ -32,13 +44,14 @@ export class AcademicSessionsService extends BaseService {
       );
     }
 
-    // Add schoolId to the DTO
+    // Add schoolId to the DTO and extract terms separately
+    const { terms, ...sessionData } = dto;
     const dataWithSchoolId = {
-      ...dto,
+      ...sessionData,
       schoolId: user.schoolId,
     };
 
-    // Use a transaction to ensure both operations succeed or fail together
+    // Use a transaction to ensure all operations succeed or fail together
     const result = await this.prisma.$transaction(async (tx) => {
       // Create the academic session
       const newSession = await tx.academicSession.create({
@@ -52,8 +65,11 @@ export class AcademicSessionsService extends BaseService {
         newSession.id,
       );
 
-      // Create class arms for the new session
-      await this.createClassArmsForNewSessionInTransaction(tx, user.schoolId, newSession.id);
+      // Create terms for the new session
+      await this.createTermsForNewSessionInTransaction(tx, newSession.id, dto.terms);
+
+      // Note: Class arms are now created manually or during student promotion
+      // Automatic creation has been removed to prevent slug conflicts and allow manual control
 
       return newSession;
     });
@@ -103,6 +119,13 @@ export class AcademicSessionsService extends BaseService {
 
     return this.academicSessionsRepository.findAll({
       where: { schoolId: user.schoolId },
+      include: {
+        terms: {
+          where: {
+            deletedAt: null,
+          },
+        },
+      },
     });
   }
 
@@ -113,7 +136,24 @@ export class AcademicSessionsService extends BaseService {
   ): Promise<AcademicSession> {
     await this.getAcademicSessionById(userId, id);
 
-    return this.academicSessionsRepository.update({ id }, data);
+    // Extract terms from the update data if present
+    const { terms, ...sessionData } = data;
+    
+    // Update the academic session (without terms)
+    const updatedSession = await this.academicSessionsRepository.update({ id }, sessionData);
+    
+    // If terms are provided, update them as well
+    if (terms && terms.length > 0) {
+      // Note: This is a simplified approach. In a real scenario, you might want to:
+      // 1. Delete existing terms and create new ones, or
+      // 2. Update existing terms and create new ones, or
+      // 3. Provide a more sophisticated term management API
+      throw new BadRequestException(
+        'Term updates are not supported through the session update endpoint. Please use the dedicated term management endpoints.',
+      );
+    }
+
+    return updatedSession;
   }
 
   async deleteAcademicSession(userId: string, id: string): Promise<AcademicSession> {
@@ -123,15 +163,21 @@ export class AcademicSessionsService extends BaseService {
     const classArms = await this.prisma.classArm.findMany({
       where: { academicSessionId: id },
       include: {
-        students: true,
+        classArmStudents: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
+        },
         classArmSubjectTeachers: true,
         classArmTeachers: true,
       },
     });
 
+    // If class arms exist, check if they can be safely deleted
     if (classArms.length > 0) {
       // Check if any class arms have students or teacher assignments
-      const hasStudents = classArms.some((classArm) => classArm.students.length > 0);
+      const hasStudents = classArms.some((classArm) => classArm.classArmStudents.length > 0);
       const hasTeacherAssignments = classArms.some(
         (classArm) =>
           classArm.classArmSubjectTeachers.length > 0 || classArm.classArmTeachers.length > 0,
@@ -154,6 +200,7 @@ export class AcademicSessionsService extends BaseService {
         where: { academicSessionId: id },
       });
     }
+    // If no class arms exist, proceed with deletion (this is the case for new sessions)
 
     // Check if academic session has associated subject terms with student enrollments
     const subjectTerms = await this.prisma.subjectTerm.findMany({
@@ -172,8 +219,23 @@ export class AcademicSessionsService extends BaseService {
       }
     }
 
+    // Delete associated assessment structures first (they have foreign key constraints)
+    await this.prisma.assessmentStructure.deleteMany({
+      where: { academicSessionId: id },
+    });
+
     // Delete associated assessment structure templates
     await this.prisma.assessmentStructureTemplate.deleteMany({
+      where: { academicSessionId: id },
+    });
+
+    // Delete associated academic session calendar
+    await this.prisma.academicSessionCalendar.deleteMany({
+      where: { academicSessionId: id },
+    });
+
+    // Delete associated terms
+    await this.prisma.term.deleteMany({
       where: { academicSessionId: id },
     });
 
@@ -548,103 +610,39 @@ export class AcademicSessionsService extends BaseService {
     }
   }
 
-  private async createClassArmsForNewSessionInTransaction(
+  /**
+   * Creates terms for a new academic session within a transaction.
+   * @param tx - The Prisma transaction client
+   * @param academicSessionId - The ID of the academic session
+   * @param terms - Array of term data to create
+   */
+  private async createTermsForNewSessionInTransaction(
     tx: any,
-    schoolId: string,
     academicSessionId: string,
-  ) {
+    terms: CreateTermForSessionDto[],
+  ): Promise<void> {
     try {
-      // Check if class arms already exist for this session
-      const existingClassArms = await tx.classArm.findMany({
-        where: {
-          schoolId,
-          academicSessionId,
-          deletedAt: null,
-        },
-      });
-
-      if (existingClassArms.length > 0) {
-        return;
+      if (!terms || terms.length === 0) {
+        throw new BadRequestException(
+          'At least one term must be provided when creating an academic session.',
+        );
       }
 
-      // Find the most recent session that has class arms with teacher assignments
-      const mostRecentSessionWithClassArms = await tx.academicSession.findFirst({
-        where: {
-          schoolId,
-          id: { not: academicSessionId },
-          classArms: {
-            some: {
-              deletedAt: null,
-              classArmSubjectTeachers: {
-                some: {
-                  deletedAt: null,
-                },
-              },
-            },
+      // Create each term
+      for (const termData of terms) {
+        await tx.term.create({
+          data: {
+            name: termData.name,
+            startDate: new Date(termData.startDate),
+            endDate: new Date(termData.endDate),
+            academicSessionId,
           },
-        },
-        include: {
-          classArms: {
-            where: {
-              deletedAt: null,
-            },
-            include: {
-              level: true,
-              department: true,
-              classArmSubjectTeachers: {
-                where: {
-                  deletedAt: null,
-                },
-                include: {
-                  subject: true,
-                  teacher: {
-                    include: {
-                      user: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-
-      if (mostRecentSessionWithClassArms?.classArms) {
-        // Copy class arms from the previous session
-        for (const classArm of mostRecentSessionWithClassArms.classArms) {
-          const newClassArm = await tx.classArm.create({
-            data: {
-              name: classArm.name,
-              levelId: classArm.levelId,
-              departmentId: classArm.departmentId,
-              schoolId,
-              academicSessionId,
-              // Note: We don't copy classTeacherId and captainId as these are session-specific
-              // Administrators need to assign new class teachers and captains for the new session
-            },
-          });
-
-          // Copy subject teacher assignments for this class arm
-          for (const subjectTeacher of classArm.classArmSubjectTeachers) {
-            await tx.classArmSubjectTeacher.create({
-              data: {
-                classArmId: newClassArm.id,
-                subjectId: subjectTeacher.subjectId,
-                teacherId: subjectTeacher.teacherId,
-              },
-            });
-          }
-        }
-      } else {
-        // If no previous class arms exist, we could create default ones here
-        // For now, we'll leave it to the administrator to set up
+        });
       }
     } catch (error) {
-      console.error('❌ Error creating class arms for new session:', error);
-      // Don't throw error to avoid breaking session creation
+      console.error('❌ Error creating terms for new session:', error);
+      throw error; // Re-throw to ensure transaction rollback
     }
   }
+
 }

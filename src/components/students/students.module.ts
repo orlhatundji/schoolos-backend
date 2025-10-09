@@ -5,6 +5,7 @@ import { StudentsController } from './students.controller';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { StudentsRepository } from './students.repository';
+import { ClassArmStudentService } from './services/class-arm-student.service';
 import { RolesManagerModule } from '../roles-manager';
 import { SchoolsModule } from '../schools';
 import { CounterModule } from '../../common/counter';
@@ -32,12 +33,13 @@ import {
   providers: [
     StudentsService,
     StudentsRepository,
+    ClassArmStudentService,
     PasswordGenerator,
     PasswordHasher,
     BulkUploadService,
     TemplateService,
     StudentImportProcessor,
   ],
-  exports: [StudentsService, BulkUploadService],
+  exports: [StudentsService, BulkUploadService, ClassArmStudentService],
 })
 export class StudentsModule {}

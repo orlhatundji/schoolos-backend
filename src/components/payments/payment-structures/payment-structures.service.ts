@@ -303,9 +303,14 @@ export class PaymentStructuresService {
     return this.prisma.student.findMany({
       where: whereClause,
       include: {
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
           },
         },
       },

@@ -8,6 +8,7 @@ import { PasswordHasher } from '../../utils/hasher/hasher';
 import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { SchoolsService } from '../schools';
+import { ClassArmStudentService } from './services/class-arm-student.service';
 import { UserTypes } from '../users/constants';
 import { UsersService } from '../users/users.service';
 import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto } from './dto';
@@ -25,6 +26,7 @@ export class StudentsService extends BaseService {
     private readonly prisma: PrismaService,
     private readonly passwordGenerator: PasswordGenerator,
     private readonly passwordHasher: PasswordHasher,
+    private readonly classArmStudentService: ClassArmStudentService,
   ) {
     super(StudentsService.name);
   }
@@ -92,7 +94,6 @@ export class StudentsService extends BaseService {
     const studentData = {
       userId: user.id,
       studentNo,
-      classArmId,
       guardianId,
       admissionNo,
       admissionDate: dateTime,
@@ -101,6 +102,26 @@ export class StudentsService extends BaseService {
     const student = await this.studentsRepository.create(studentData, {
       include: { user: true },
     });
+
+    // Get the current academic session for the school
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: {
+        schoolId,
+        isCurrent: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!currentSession) {
+      throw new BadRequestException('No current academic session found for this school');
+    }
+
+    // Create ClassArmStudent relationship
+    await this.classArmStudentService.enrollStudent(
+      student.id,
+      classArmId,
+      currentSession.id
+    );
 
     // Note: guardianInformation, medicalInformation, and address handling
     // These fields are received but not yet processed - requires additional
@@ -148,12 +169,33 @@ export class StudentsService extends BaseService {
       ];
     }
 
-    if (levelId) {
-      where.classArm = { levelId };
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: {
+        schoolId,
+        isCurrent: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!currentSession) {
+      throw new BadRequestException('No current academic session found for this school');
     }
 
-    if (classArmId) {
-      where.classArmId = classArmId;
+    if (levelId || classArmId) {
+      where.classArmStudents = {
+        some: {
+          academicSessionId: currentSession.id,
+          isActive: true,
+          deletedAt: null,
+          ...(levelId && {
+            classArm: { levelId }
+          }),
+          ...(classArmId && {
+            classArmId
+          })
+        }
+      };
     }
 
     if (gender) {
@@ -167,7 +209,9 @@ export class StudentsService extends BaseService {
     } else if (sortBy === 'age') {
       orderBy.user = { dateOfBirth: sortOrder === 'desc' ? 'asc' : 'desc' };
     } else if (sortBy === 'level') {
-      orderBy.classArm = { level: { name: sortOrder } };
+      orderBy.classArmStudents = { 
+        _count: 'desc'
+      };
     } else if (sortBy === 'studentId') {
       orderBy.studentNo = sortOrder;
     } else if (sortBy === 'status') {
@@ -197,9 +241,11 @@ export class StudentsService extends BaseService {
           )
         : 0;
 
-      // Ensure classArm and level are properly included
-      if (!student.classArm?.level) {
-        throw new Error(`ClassArm level not found for student ${student.id}`);
+      // Get the current active class arm for this student
+      const currentClassArmStudent = student.classArmStudents.find(cas => cas.isActive);
+      
+      if (!currentClassArmStudent?.classArm?.level) {
+        throw new Error(`Active ClassArm level not found for student ${student.id}`);
       }
 
       return {
@@ -219,13 +265,13 @@ export class StudentsService extends BaseService {
         admissionNo: student.admissionNo,
         admissionDate: student.admissionDate,
         level: {
-          id: student.classArm.level.id,
-          name: student.classArm.level.name,
+          id: currentClassArmStudent.classArm.level.id,
+          name: currentClassArmStudent.classArm.level.name,
         },
         classArm: {
-          id: student.classArm.id,
-          name: student.classArm.name,
-          fullName: `${student.classArm.level.name} ${student.classArm.name}`,
+          id: currentClassArmStudent.classArm.id,
+          name: currentClassArmStudent.classArm.name,
+          fullName: `${currentClassArmStudent.classArm.level.name} ${currentClassArmStudent.classArm.name}`,
         },
         age,
         gender: student.user.gender,
@@ -302,7 +348,31 @@ export class StudentsService extends BaseService {
   }
 
   findOne(id: string) {
-    return this.studentsRepository.findById(id);
+    return this.studentsRepository.findById(id, {
+      include: {
+        user: true,
+        classArmStudents: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
+          include: {
+            classArm: {
+              include: {
+                level: true,
+                school: true,
+              },
+            },
+            academicSession: true,
+          },
+        },
+        guardian: {
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
   }
 
   async update(id: string, updateStudentDto: UpdateStudentDto) {
@@ -315,11 +385,28 @@ export class StudentsService extends BaseService {
     // Prepare the update data for Prisma
     const updateData: Prisma.StudentUpdateInput = {};
 
-    // Handle classArmId - convert to classArm relation
+    // Handle classArmId - use ClassArmStudent service
     if (updateStudentDto.classArmId) {
-      updateData.classArm = {
-        connect: { id: updateStudentDto.classArmId },
-      };
+      // Get current academic session
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId: existingStudent.user.schoolId,
+          isCurrent: true,
+          deletedAt: null,
+        },
+      });
+
+      if (!currentSession) {
+        throw new BadRequestException('No current academic session found for this school');
+      }
+
+      // Transfer student to new class arm
+      await this.classArmStudentService.transferStudent(
+        id,
+        existingStudent.classArmStudents.find(cas => cas.isActive)?.classArmId || '',
+        updateStudentDto.classArmId,
+        currentSession.id
+      );
     }
 
     // Handle guardianId - convert to guardian relation
@@ -468,7 +555,7 @@ export class StudentsService extends BaseService {
 
     const breakdown: Record<string, number> = {};
     result.forEach((student) => {
-      const levelName = student.classArm.level.name;
+      const levelName = student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A';
       breakdown[levelName] = (breakdown[levelName] || 0) + 1;
     });
 
@@ -776,9 +863,9 @@ export class StudentsService extends BaseService {
           },
           _count: {
             select: {
-              students: {
+              classArmStudents: {
                 where: {
-                  deletedAt: null,
+                  isActive: true,
                 },
               },
             },
@@ -790,8 +877,8 @@ export class StudentsService extends BaseService {
       // Transform class arms data
       const transformedClassArms = classArmsWithCounts.map((classArm) => ({
         id: classArm.id,
-        name: `${classArm.level.name} ${classArm.name}`,
-        studentCount: classArm._count.students,
+        name: `${classArm.level?.name || 'N/A'} ${classArm.name}`,
+        studentCount: classArm._count.classArmStudents,
       }));
 
       // Get actual status breakdown from database

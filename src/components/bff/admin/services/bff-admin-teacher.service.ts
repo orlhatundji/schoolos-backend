@@ -213,14 +213,18 @@ export class BffAdminTeacherService {
           include: {
             classArm: {
               include: {
-                students: true,
+                classArmStudents: {
+                  where: { isActive: true }
+                },
               },
             },
           },
         },
         classArmsAsTeacher: {
           include: {
-            students: true,
+            classArmStudents: {
+              where: { isActive: true }
+            },
           },
         },
       },
@@ -273,8 +277,8 @@ export class BffAdminTeacherService {
 
     // Calculate total students and average class size
     const allStudents = [
-      ...teacher.classArmTeachers.flatMap((cat) => cat.classArm.students),
-      ...teacher.classArmsAsTeacher.flatMap((classArm) => classArm.students),
+      ...teacher.classArmTeachers.flatMap((cat) => cat.classArm.classArmStudents),
+      ...teacher.classArmsAsTeacher.flatMap((classArm) => classArm.classArmStudents),
     ];
     const totalStudents = allStudents.length;
     const averageClassSize =

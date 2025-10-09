@@ -52,9 +52,9 @@ export class BffAdminClassroomService {
         slug: true,
         location: true,
         level: true,
-        students: {
+        classArmStudents: {
           where: {
-            deletedAt: null,
+            isActive: true,
           },
         },
         classTeacher: {
@@ -73,7 +73,7 @@ export class BffAdminClassroomService {
     // Calculate stats (with type assertions until Prisma types fully refresh)
     const totalClassrooms = classArms.length;
     const totalStudents = (classArms as any[]).reduce(
-      (sum, classArm) => sum + classArm.students.length,
+      (sum, classArm) => sum + classArm.classArmStudents.length,
       0,
     );
 
@@ -97,7 +97,7 @@ export class BffAdminClassroomService {
         classCaptain: classArm.captain
           ? `${classArm.captain.user.firstName} ${classArm.captain.user.lastName}`
           : null,
-        studentsCount: classArm.students.length,
+        studentsCount: classArm.classArmStudents.length,
       };
     });
 
@@ -168,7 +168,12 @@ export class BffAdminClassroomService {
     // Get total count of students in the classroom (filtered by current session)
     const totalStudents = await this.prisma.student.count({
       where: {
-        classArmId: classroomId,
+        classArmStudents: {
+          some: {
+            classArmId: classroomId,
+            isActive: true
+          }
+        },
         deletedAt: null,
       },
     });
@@ -179,7 +184,12 @@ export class BffAdminClassroomService {
     // Get paginated students with all their data (filtered by current session)
     const paginatedStudents = await this.prisma.student.findMany({
       where: {
-        classArmId: classroomId,
+        classArmStudents: {
+          some: {
+            classArmId: classroomId,
+            isActive: true
+          }
+        },
         deletedAt: null,
       },
       skip,
@@ -220,7 +230,12 @@ export class BffAdminClassroomService {
     // Get all students for population and top performers calculation (without pagination, filtered by current session)
     const allStudents = await this.prisma.student.findMany({
       where: {
-        classArmId: classroomId,
+        classArmStudents: {
+          some: {
+            classArmId: classroomId,
+            isActive: true
+          }
+        },
         deletedAt: null,
       },
       include: {
@@ -541,13 +556,18 @@ export class BffAdminClassroomService {
     // Get total count of students in the classroom
     const totalStudents = await this.prisma.student.count({
       where: {
-        classArm: {
-          name: classArm,
-          level: {
-            name: level,
-          },
-          schoolId,
-          deletedAt: null,
+        classArmStudents: {
+          some: {
+            classArm: {
+              name: classArm,
+              level: {
+                name: level,
+              },
+              schoolId,
+              deletedAt: null,
+            },
+            isActive: true
+          }
         },
       },
     });
@@ -559,13 +579,18 @@ export class BffAdminClassroomService {
     // Use the level and class name to find students instead of classroom ID
     const students = await this.prisma.student.findMany({
       where: {
-        classArm: {
-          name: classArm,
-          level: {
-            name: level,
-          },
-          schoolId,
-          deletedAt: null,
+        classArmStudents: {
+          some: {
+            classArm: {
+              name: classArm,
+              level: {
+                name: level,
+              },
+              schoolId,
+              deletedAt: null,
+            },
+            isActive: true
+          }
         },
       },
       include: {
@@ -583,6 +608,7 @@ export class BffAdminClassroomService {
     const femaleStudents = students.filter((s) => s.user.gender === 'FEMALE').length;
 
     // Get attendance data (simplified - you might want to implement proper attendance calculation)
+    // TODO: Implement proper attendance calculation
     const attendanceData = {
       totalDays: 180, // Academic year days
       presentDays: 173, // This should be calculated from actual attendance records
@@ -696,7 +722,12 @@ export class BffAdminClassroomService {
     // Get total count of students in the classroom (filtered by current session)
     const totalStudents = await this.prisma.student.count({
       where: {
-        classArmId: classroom.id,
+        classArmStudents: {
+          some: {
+            classArmId: classroom.id,
+            isActive: true
+          }
+        },
         deletedAt: null,
       },
     });
@@ -707,7 +738,12 @@ export class BffAdminClassroomService {
     // Get paginated students with all their data (filtered by current session)
     const paginatedStudents = await this.prisma.student.findMany({
       where: {
-        classArmId: classroom.id,
+        classArmStudents: {
+          some: {
+            classArmId: classroom.id,
+            isActive: true
+          }
+        },
         deletedAt: null,
       },
       skip,
@@ -748,7 +784,12 @@ export class BffAdminClassroomService {
     // Get all students for population and top performers calculation (without pagination, filtered by current session)
     const allStudents = await this.prisma.student.findMany({
       where: {
-        classArmId: classroom.id,
+        classArmStudents: {
+          some: {
+            classArmId: classroom.id,
+            isActive: true
+          }
+        },
         deletedAt: null,
       },
       include: {
@@ -788,8 +829,9 @@ export class BffAdminClassroomService {
     const maleStudents = allStudents.filter((student) => student.user.gender === 'MALE').length;
     const femaleStudents = allStudents.filter((student) => student.user.gender === 'FEMALE').length;
 
-    // Calculate top performers (simplified logic)
+    // Calculate top performers (only include students with assessment data)
     const topPerformers = allStudents
+      .filter((student) => student.subjectTermStudents.length > 0) // Only include students with assessment data
       .map((student) => {
         const totalScore = student.subjectTermStudents.reduce(
           (sum, sts) => sum + sts.totalScore,

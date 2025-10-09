@@ -68,9 +68,9 @@ export class BffAdminSubjectService {
           include: {
             classArm: {
               include: {
-                students: {
+                classArmStudents: {
                   where: {
-                    deletedAt: null,
+                    isActive: true,
                   },
                 },
               },
@@ -111,7 +111,7 @@ export class BffAdminSubjectService {
 
       // Calculate student count (total students in all classes taking this subject)
       const studentCount = subject.classArmSubjectTeachers.reduce(
-        (total, cast) => total + cast.classArm.students.length,
+        (total, cast) => total + cast.classArm.classArmStudents.length,
         0,
       );
 

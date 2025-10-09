@@ -242,14 +242,19 @@ export class ExcelBulkUploadService {
       // This is more flexible and allows teachers to work with subjects they're assigned to
     }
 
-    // Get all students in the class first
-    const classStudents = await this.prisma.student.findMany({
+    // Get all students in the class first using ClassArmStudent relationship
+    const classArmStudents = await this.prisma.classArmStudent.findMany({
       where: {
         classArmId: classArm.id,
+        isActive: true,
         deletedAt: null,
       },
       include: {
-        user: true,
+        student: {
+          include: {
+            user: true,
+          },
+        },
         classArm: {
           include: {
             level: true,
@@ -257,11 +262,13 @@ export class ExcelBulkUploadService {
         },
       },
       orderBy: {
-        studentNo: 'asc',
+        student: {
+          studentNo: 'asc',
+        },
       },
     });
     
-    if (classStudents.length === 0) {
+    if (classArmStudents.length === 0) {
       throw new NotFoundException(`No students found in ${levelName}${classArmName}`);
     }
 
@@ -270,7 +277,13 @@ export class ExcelBulkUploadService {
       where: {
         subjectTermId: subjectTerm.id,
         student: {
-          classArmId: classArm.id,
+          classArmStudents: {
+            some: {
+              classArmId: classArm.id,
+              isActive: true,
+              deletedAt: null,
+            },
+          },
           deletedAt: null,
         },
         deletedAt: null,
@@ -291,9 +304,9 @@ export class ExcelBulkUploadService {
     });
 
     // Create the students array with all class students
-    const students = classStudents.map((student) => ({
-      student,
-      assessments: assessmentsByStudentId.get(student.id) || [],
+    const students = classArmStudents.map((classArmStudent) => ({
+      student: classArmStudent.student,
+      assessments: assessmentsByStudentId.get(classArmStudent.student.id) || [],
     }));
 
 

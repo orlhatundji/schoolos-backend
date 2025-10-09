@@ -13,6 +13,9 @@ async function bootstrap() {
   const corsOptions: CorsOptions = {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   };
 
   if (process.env.NODE_ENV === 'production') {

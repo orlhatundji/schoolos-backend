@@ -44,7 +44,7 @@ async function logSeedActivity(
       category: 'SYSTEM',
     });
   } catch (error) {
-    console.warn(`Failed to log activity: ${error}`);
+    // Activity logging failed - continue with seeding
   }
 }
 
@@ -602,7 +602,17 @@ async function main() {
             studentNo,
             admissionDate,
             admissionNo,
+          },
+        });
+
+        // Create ClassArmStudent relationship
+        await prisma.classArmStudent.create({
+          data: {
+            studentId: student.id,
             classArmId: classArm.id,
+            academicSessionId: sessions[0].id,
+            isActive: true,
+            enrolledAt: new Date(),
           },
         });
 
@@ -694,13 +704,22 @@ async function main() {
   const recentTerm = terms.filter((t) => t.academicSessionId === recentSession.id).at(-1)!;
 
   for (const student of students) {
+    // Get the student's ClassArmStudent relationship
+    const classArmStudent = await prisma.classArmStudent.findFirst({
+      where: {
+        studentId: student.id,
+        academicSessionId: recentSession.id,
+        isActive: true,
+      },
+    });
+
+    if (!classArmStudent) continue;
+
     const presentDays = faker.number.int({ min: 5, max: 10 });
     for (let i = 0; i < presentDays; i++) {
       await prisma.studentAttendance.create({
         data: {
-          studentId: student.id,
-          classArmId: student.classArmId!,
-          academicSessionId: recentSession.id,
+          classArmStudentId: classArmStudent.id,
           termId: recentTerm.id,
           date: faker.date.recent({ days: 30 }),
           status: faker.helpers.arrayElement(['PRESENT', 'ABSENT', 'LATE']),

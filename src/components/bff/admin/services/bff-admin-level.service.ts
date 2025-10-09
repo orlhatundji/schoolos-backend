@@ -34,7 +34,9 @@ export class BffAdminLevelService {
         classArms: {
           where: { deletedAt: null },
           include: {
-            students: true,
+            classArmStudents: {
+              where: { isActive: true }
+            },
           },
         },
       },
@@ -51,7 +53,7 @@ export class BffAdminLevelService {
     const levelsData = levels.map((level) => {
       const classArmsCount = level.classArms.length;
       const studentsCount = level.classArms.reduce(
-        (total, classArm) => total + classArm.students.length,
+        (total, classArm) => total + classArm.classArmStudents.length,
         0,
       );
       const status: 'active' | 'archived' = level.deletedAt ? 'archived' : 'active';

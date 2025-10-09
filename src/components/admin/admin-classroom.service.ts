@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
-import { UpdateClassroomDto } from '../bff/admin/dto/update-classroom.dto';
+import { UpdateClassroomDto } from './update-classroom.dto';
 
 @Injectable()
 export class AdminClassroomService {
@@ -36,8 +36,11 @@ export class AdminClassroomService {
             user: true,
           },
         },
-        students: {
-          where: { deletedAt: null },
+        classArmStudents: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
           select: { id: true },
         },
       },
@@ -60,7 +63,7 @@ export class AdminClassroomService {
             email: classroom.classTeacher.user.email,
           }
         : null,
-      studentsCount: classroom.students.length,
+      studentsCount: classroom.classArmStudents.length,
       location: (classroom as any).location,
       createdAt: classroom.createdAt,
       updatedAt: classroom.updatedAt,
@@ -86,8 +89,11 @@ export class AdminClassroomService {
         deletedAt: null,
       },
       include: {
-        students: {
-          where: { deletedAt: null },
+        classArmStudents: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
         },
         classArmSubjectTeachers: {
           where: { deletedAt: null },
@@ -103,9 +109,9 @@ export class AdminClassroomService {
     }
 
     // Check if classroom has any enrolled students
-    if (classroom.students.length > 0) {
+    if (classroom.classArmStudents.length > 0) {
       throw new BadRequestException(
-        `Cannot delete classroom. It has ${classroom.students.length} enrolled student${classroom.students.length !== 1 ? 's' : ''}. Please remove all students from the classroom first.`,
+        `Cannot delete classroom. It has ${classroom.classArmStudents.length} enrolled student${classroom.classArmStudents.length !== 1 ? 's' : ''}. Please remove all students from the classroom first.`,
       );
     }
 

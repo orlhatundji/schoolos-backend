@@ -58,44 +58,46 @@ model SchoolAddress {
 /// * All other entities (students, staff, sessions, etc.) are associated with a school.
 /// * This model enables multi-school support within the same system.
 model School {
-  id                   String                @id @default(uuid())
-  name                 String
-  code                 String                @unique
-  primaryAddressId     String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  deletedAt            DateTime?
-  logoUrl              String?
-  phone                String?
-  email                String?
-  website              String?
-  motto                String?
-  principalName        String?
-  principalEmail       String?
-  establishedYear      String?
-  schoolType           String?
-  accreditation        String?
-  studentCapacity      String?
-  description          String?
-  colorScheme          String?
-  academicSessions           AcademicSession[]
-  assessmentStructures        AssessmentStructure[]
+  id                           String                        @id @default(uuid())
+  name                         String
+  code                         String                        @unique
+  primaryAddressId             String?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  deletedAt                    DateTime?
+  logoUrl                      String?
+  email                        String?
+  phone                        String?
+  website                      String?
+  accreditation                String?
+  description                  String?
+  establishedYear              String?
+  motto                        String?
+  principalEmail               String?
+  principalName                String?
+  schoolType                   String?
+  studentCapacity              String?
+  colorScheme                  String?
+  academicSessions             AcademicSession[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
-  assessments                 Assessment[]
-  bulkImportJobs       BulkImportJob[]
-  classArms            ClassArm[]
-  counters             Counter[]
-  departments          Department[]
-  gradingModel         GradingModel?
-  levels               Level[]
-  paymentStructures    PaymentStructure[]
-  addresses            SchoolAddress[]
-  primaryAddress       Address?              @relation("SchoolPrimaryAddress", fields: [primaryAddressId], references: [id])
-  subjects             Subject[]
-  categories           Category[]
-  userActivities       UserActivity[]
-  users                User[]
-  complaints           Complaint[]
+  assessmentStructures         AssessmentStructure[]
+  assessments                  Assessment[]
+  bulkImportJobs               BulkImportJob[]
+  categories                   Category[]
+  classArms                    ClassArm[]
+  complaints                   Complaint[]
+  counters                     Counter[]
+  departments                  Department[]
+  gradingModel                 GradingModel?
+  levelProgressions            LevelProgression[]
+  levels                       Level[]
+  paymentStructures            PaymentStructure[]
+  promotionBatches             PromotionBatch[]
+  addresses                    SchoolAddress[]
+  primaryAddress               Address?                      @relation("SchoolPrimaryAddress", fields: [primaryAddressId], references: [id])
+  subjects                     Subject[]
+  userActivities               UserActivity[]
+  users                        User[]
 
   @@map("schools")
 }
@@ -109,24 +111,28 @@ model School {
 /// * This entity is central for grouping all academic activities, such as attendance, grading, and curriculum planning, within a specific school year.
 /// * The isCurrent flag indicates if this is the active session for the school.
 model AcademicSession {
-  id                   String                   @id @default(uuid())
-  academicYear         String
-  startDate            DateTime
-  endDate              DateTime
-  isCurrent            Boolean                  @default(false)
-  schoolId             String
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
-  deletedAt            DateTime?
-  calendar                    AcademicSessionCalendar?
-  school                      School                   @relation(fields: [schoolId], references: [id])
-  assessmentStructures         AssessmentStructure[]
+  id                           String                        @id @default(uuid())
+  academicYear                 String
+  startDate                    DateTime
+  endDate                      DateTime
+  isCurrent                    Boolean                       @default(false)
+  schoolId                     String
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  deletedAt                    DateTime?
+  calendar                     AcademicSessionCalendar?
+  school                       School                        @relation(fields: [schoolId], references: [id])
   assessmentStructureTemplates AssessmentStructureTemplate[]
-  classArms                   ClassArm[]
-  paymentStructures    PaymentStructure[]
-  studentAttendances   StudentAttendance[]
-  subjectTerms         SubjectTerm[]
-  terms                Term[]
+  assessmentStructures         AssessmentStructure[]
+  classArmStudents             ClassArmStudent[]
+  classArms                    ClassArm[]
+  paymentStructures            PaymentStructure[]
+  promotionBatchesFrom         PromotionBatch[]              @relation("BatchFromSession")
+  promotionBatchesTo           PromotionBatch[]              @relation("BatchToSession")
+  promotionsFrom               StudentPromotion[]            @relation("PromotionFromSession")
+  promotionsTo                 StudentPromotion[]            @relation("PromotionToSession")
+  subjectTerms                 SubjectTerm[]
+  terms                        Term[]
 
   @@map("academic_sessions")
 }
@@ -179,12 +185,12 @@ model Term {
   id                 String              @id @default(uuid())
   name               String
   academicSessionId  String
-  startDate          DateTime
-  endDate            DateTime
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   isCurrent          Boolean             @default(false)
+  endDate            DateTime
+  startDate          DateTime
   paymentStructures  PaymentStructure[]
   studentAttendances StudentAttendance[]
   subjectTerms       SubjectTerm[]
@@ -208,8 +214,12 @@ model Level {
   deletedAt         DateTime?
   code              String             @unique
   classArms         ClassArm[]
+  progressionsFrom  LevelProgression[] @relation("ProgressionFromLevel")
+  progressionsTo    LevelProgression[] @relation("ProgressionToLevel")
   school            School             @relation(fields: [schoolId], references: [id])
   paymentStructures PaymentStructure[]
+  promotionsFrom    StudentPromotion[] @relation("PromotionFromLevel")
+  promotionsTo      StudentPromotion[] @relation("PromotionToLevel")
 
   @@map("levels")
 }
@@ -249,17 +259,18 @@ model Department {
 model ClassArm {
   id                      String                   @id @default(uuid())
   name                    String
-  slug                    String                   @unique
   academicSessionId       String
   levelId                 String
   departmentId            String?
   schoolId                String
-  location                String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
   captainId               String?                  @unique
   classTeacherId          String?
+  location                String?
+  slug                    String                   @unique
+  classArmStudents        ClassArmStudent[]
   classArmSubjectTeachers ClassArmSubjectTeacher[]
   classArmTeachers        ClassArmTeacher[]
   academicSession         AcademicSession          @relation(fields: [academicSessionId], references: [id])
@@ -269,8 +280,8 @@ model ClassArm {
   level                   Level                    @relation(fields: [levelId], references: [id])
   school                  School                   @relation(fields: [schoolId], references: [id])
   paymentStructures       PaymentStructure[]
-  studentAttendances      StudentAttendance[]
-  students                Student[]
+  promotionsFrom          StudentPromotion[]       @relation("PromotionFromClassArm")
+  promotionsTo            StudentPromotion[]       @relation("PromotionToClassArm")
 
   @@map("class_arms")
 }
@@ -282,40 +293,40 @@ model ClassArm {
 /// * Stores authentication and profile information, and links to the specific role entity (student, teacher, etc.).
 /// * This model is central for access control, personalization, and communication.
 model User {
-  id                 String          @id @default(uuid())
-  type               UserType
-  email              String?
-  phone              String?
-  password           String
-  phoneVerified      Boolean         @default(false)
-  emailVerified      Boolean         @default(false)
-  firstName          String
-  lastName           String
-  addressId          String?
-  avatarUrl          String?
-  dateOfBirth        DateTime?
-  schoolId           String?
-  mustUpdatePassword Boolean         @default(false)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  deletedAt          DateTime?
-  gender             Gender
-  stateOfOrigin      String?
-  lastLoginAt        DateTime?
-  admin              Admin?
-  bulkImportJobs     BulkImportJob[]
-  guardian           Guardian?
-  student            Student?
-  systemAdmin        SystemAdmin?
-  teacher            Teacher?
-  activities         UserActivity[]
-  tokens             UserToken[]
-  preferences        UserPreferences?
+  id                  String               @id @default(uuid())
+  type                UserType
+  email               String?
+  phone               String?
+  password            String
+  phoneVerified       Boolean              @default(false)
+  emailVerified       Boolean              @default(false)
+  firstName           String
+  lastName            String
+  addressId           String?
+  avatarUrl           String?
+  dateOfBirth         DateTime?
+  schoolId            String?
+  mustUpdatePassword  Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  deletedAt           DateTime?
+  gender              Gender
+  stateOfOrigin       String?
+  lastLoginAt         DateTime?
+  admin               Admin?
+  bulkImportJobs      BulkImportJob[]
   colorSchemePayments ColorSchemePayment[]
-  address            Address?        @relation(fields: [addressId], references: [id])
-  school             School?         @relation(fields: [schoolId], references: [id])
-  complaintsReported Complaint[]      @relation("ComplaintReporter")
-  complaintComments  ComplaintComment[] @relation("ComplaintCommentAuthor")
+  complaintComments   ComplaintComment[]   @relation("ComplaintCommentAuthor")
+  complaintsReported  Complaint[]          @relation("ComplaintReporter")
+  guardian            Guardian?
+  student             Student?
+  systemAdmin         SystemAdmin?
+  teacher             Teacher?
+  activities          UserActivity[]
+  preferences         UserPreferences?
+  tokens              UserToken[]
+  address             Address?             @relation(fields: [addressId], references: [id])
+  school              School?              @relation(fields: [schoolId], references: [id])
 
   @@unique([email, schoolId])
   @@unique([phone, schoolId])
@@ -371,15 +382,15 @@ model Admin {
 /// * manage school signup requests, and oversee the entire system.
 /// * This is different from school admins who manage individual schools.
 model SystemAdmin {
-  id             String                @id @default(uuid())
-  userId         String                @unique
-  role           String
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  deletedAt      DateTime?
-  signupRequests SchoolSignupRequest[]
-  assignedComplaints Complaint[]       @relation("ComplaintAssignee")
-  user           User                  @relation(fields: [userId], references: [id])
+  id                 String                @id @default(uuid())
+  userId             String                @unique
+  role               String
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  deletedAt          DateTime?
+  assignedComplaints Complaint[]           @relation("ComplaintAssignee")
+  signupRequests     SchoolSignupRequest[]
+  user               User                  @relation(fields: [userId], references: [id])
 
   @@map("system_admins")
 }
@@ -442,24 +453,57 @@ model Student {
   studentNo             String                 @unique
   admissionDate         DateTime
   admissionNo           String?                @unique
-  classArmId            String
   guardianId            String?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?
   status                StudentStatus          @default(ACTIVE)
+  classArmStudents      ClassArmStudent[]
   classArmAsCaptain     ClassArm?              @relation("ClassArmCaptain")
   curriculumItemRatings CurriculumItemRating[]
   prefect               Prefect?
-  studentAttendances    StudentAttendance[]
   studentPayments       StudentPayment[]
+  promotedFrom          StudentPromotion[]     @relation("PromotedStudent")
+  promotions            StudentPromotion[]
   statusHistory         StudentStatusHistory[]
-  classArm              ClassArm               @relation(fields: [classArmId], references: [id])
   guardian              Guardian?              @relation(fields: [guardianId], references: [id])
   user                  User                   @relation(fields: [userId], references: [id])
   subjectTermStudents   SubjectTermStudent[]
 
   @@map("students")
+}
+
+/// *
+/// * ClassArmStudent
+/// * ---------------
+/// * Represents the relationship between a student and a class arm for a specific academic session.
+/// * This creates a many-to-many relationship that preserves the complete history of a student's
+/// * journey through different class arms and sessions. When a student is promoted, a new
+/// * ClassArmStudent record is created for the new class arm, while the old records remain
+/// * for historical purposes. This allows the system to maintain complete records when
+/// * switching between different academic sessions and terms.
+model ClassArmStudent {
+  id                 String              @id @default(uuid())
+  studentId          String
+  classArmId         String
+  academicSessionId  String
+  isActive           Boolean             @default(true)
+  enrolledAt         DateTime            @default(now())
+  leftAt             DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+  academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+  classArm           ClassArm            @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  student            Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentAttendances StudentAttendance[]
+
+  @@unique([studentId, classArmId, academicSessionId])
+  @@index([studentId])
+  @@index([classArmId])
+  @@index([academicSessionId])
+  @@index([isActive])
+  @@map("class_arm_students")
 }
 
 /// *
@@ -497,15 +541,15 @@ model Subject {
   name                    String
   schoolId                String
   departmentId            String?
-  categoryId              String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
+  categoryId              String?
   classArmSubjectTeachers ClassArmSubjectTeacher[]
   subjectTerms            SubjectTerm[]
+  category                Category?                @relation(fields: [categoryId], references: [id])
   department              Department?              @relation(fields: [departmentId], references: [id])
   school                  School                   @relation(fields: [schoolId], references: [id])
-  category                Category?                @relation(fields: [categoryId], references: [id])
 
   @@map("subjects")
 }
@@ -603,29 +647,26 @@ model CurriculumItemRating {
 /// * Contains all assessment types (tests, exams, etc.) as embedded data.
 /// * Only one active template per school per session.
 model AssessmentStructureTemplate {
-  id                String          @id @default(uuid())
-  schoolId          String?         // Optional for global defaults
-  academicSessionId String?         // Optional for global defaults
-  name              String          // Template name (e.g., "Standard Assessment Structure")
-  description       String?         // Optional description
-  assessments       Json            // Array of assessment details embedded as JSON
-  isActive          Boolean         @default(true)
-  isGlobalDefault   Boolean         @default(false) // For system-wide defaults
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id                String           @id @default(uuid())
+  schoolId          String?
+  academicSessionId String?
+  name              String
+  description       String?
+  assessments       Json
+  isActive          Boolean          @default(true)
+  isGlobalDefault   Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
   deletedAt         DateTime?
-  
-  // Relationships (optional for global defaults)
-  school            School?         @relation(fields: [schoolId], references: [id])
   academicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id])
+  school            School?          @relation(fields: [schoolId], references: [id])
 
-  @@unique([schoolId, academicSessionId, isActive], name: "unique_active_template_per_session") // Only one active per school/session
+  @@unique([schoolId, academicSessionId, isActive], name: "unique_active_template_per_session")
   @@index([academicSessionId])
   @@index([isGlobalDefault])
   @@map("assessment_structure_templates")
 }
 
-// Keep the old model for backward compatibility during migration
 model AssessmentStructure {
   id                String          @id @default(uuid())
   schoolId          String
@@ -739,22 +780,20 @@ model GradingModel {
 /// * Attendance is linked to the student, class arm, academic session, and term.
 /// * This data is vital for monitoring student engagement and compliance.
 model StudentAttendance {
-  id                String           @id @default(uuid())
-  studentId         String
-  date              DateTime
-  status            AttendanceStatus
-  classArmId        String
-  academicSessionId String
-  termId            String
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  deletedAt         DateTime?
-  academicSession   AcademicSession  @relation(fields: [academicSessionId], references: [id])
-  classArm          ClassArm         @relation(fields: [classArmId], references: [id])
-  student           Student          @relation(fields: [studentId], references: [id])
-  term              Term             @relation(fields: [termId], references: [id])
+  id                   String           @id @default(uuid())
+  date                 DateTime
+  status               AttendanceStatus
+  termId               String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  deletedAt            DateTime?
+  classArmStudentId    String
+  class_arm_student_id String?          @db.Uuid
+  classArmStudent      ClassArmStudent  @relation(fields: [classArmStudentId], references: [id], onDelete: Cascade)
+  term                 Term             @relation(fields: [termId], references: [id])
 
-  @@unique([studentId, date])
+  @@unique([classArmStudentId, date])
+  @@unique([class_arm_student_id, date])
   @@map("student_attendances")
 }
 
@@ -914,7 +953,7 @@ model PaymentStructure {
   school            School           @relation(fields: [schoolId], references: [id])
   term              Term?            @relation(fields: [termId], references: [id])
   studentPayments   StudentPayment[]
-  
+
   @@index([schoolId])
   @@index([academicSessionId])
   @@index([termId])
@@ -947,7 +986,7 @@ model StudentPayment {
   deletedAt          DateTime?
   paymentStructure   PaymentStructure @relation(fields: [paymentStructureId], references: [id])
   student            Student          @relation(fields: [studentId], references: [id])
-  
+
   @@index([studentId])
   @@index([paymentStructureId])
   @@index([dueDate])
@@ -978,7 +1017,7 @@ model UserActivity {
   createdAt   DateTime @default(now())
   school      School   @relation(fields: [schoolId], references: [id])
   user        User     @relation(fields: [userId], references: [id])
-  
+
   @@index([userId])
   @@index([schoolId])
   @@index([action])
@@ -995,12 +1034,10 @@ model UserActivity {
 /// * Stores user preferences for theme, color scheme, and notification settings.
 /// * Allows users to customize their experience while maintaining school branding.
 model UserPreferences {
-  id                 String           @id @default(uuid())
-  userId             String           @unique
-  themeMode          ThemeMode        @default(SYSTEM)
-  colorSchemeType    ColorSchemeType  @default(SCHOOL)
-  schoolColorScheme  String?         @default("default")
-  customColorScheme  String?         @default("default")
+  id                 String          @id @default(uuid())
+  userId             String          @unique
+  themeMode          ThemeMode       @default(SYSTEM)
+  colorSchemeType    ColorSchemeType @default(SCHOOL)
   emailNotifications Boolean         @default(true)
   smsNotifications   Boolean         @default(false)
   pushNotifications  Boolean         @default(true)
@@ -1008,6 +1045,8 @@ model UserPreferences {
   marketingEmails    Boolean         @default(false)
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
+  schoolColorScheme  String?         @default("default")
+  customColorScheme  String?         @default("default")
   user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_preferences")
@@ -1019,19 +1058,19 @@ model UserPreferences {
 /// * Tracks payments for custom color scheme access.
 /// * Users must pay a fee to use custom colors instead of school colors.
 model ColorSchemePayment {
-  id                String        @id @default(uuid())
-  userId            String
-  amount            Decimal       @db.Decimal(10, 2)
-  currency          String        @default("NGN")
-  status            PaymentStatus @default(PENDING)
-  paymentReference  String?
-  paymentProvider   String?
-  authorizationUrl  String?
-  paidAt            DateTime?
-  expiresAt         DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String        @id @default(uuid())
+  userId           String
+  amount           Decimal       @db.Decimal(10, 2)
+  currency         String        @default("NGN")
+  status           PaymentStatus @default(PENDING)
+  paymentReference String?
+  paymentProvider  String?
+  paidAt           DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  authorizationUrl String?
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
@@ -1079,6 +1118,184 @@ model BulkImportError {
   @@index([jobId])
   @@index([rowNumber])
   @@map("bulk_import_errors")
+}
+
+/// *
+/// * Category
+/// * -------
+/// * Represents a subject category that can be created and managed by schools.
+/// * Categories are used to classify subjects (e.g., Core, Elective, Vocational).
+/// * Each school can have its own set of categories, with default ones seeded during school creation.
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  schoolId    String
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subjects    Subject[]
+
+  @@unique([schoolId, name])
+  @@map("categories")
+}
+
+/// *
+/// * Complaint
+/// * ---------
+/// * Represents a complaint or issue reported by users or schools.
+/// * System admins can track, assign, and resolve complaints.
+model Complaint {
+  id           String                @id @default(uuid())
+  title        String
+  description  String
+  category     ComplaintCategory
+  priority     ComplaintPriority     @default(MEDIUM)
+  status       ComplaintStatus       @default(OPEN)
+  reporterId   String?
+  schoolId     String?
+  assignedToId String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  resolvedAt   DateTime?
+  closedAt     DateTime?
+  attachments  ComplaintAttachment[]
+  comments     ComplaintComment[]
+  assignedTo   SystemAdmin?          @relation("ComplaintAssignee", fields: [assignedToId], references: [id])
+  reporter     User?                 @relation("ComplaintReporter", fields: [reporterId], references: [id])
+  school       School?               @relation(fields: [schoolId], references: [id])
+
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([assignedToId])
+  @@map("complaints")
+}
+
+/// *
+/// * ComplaintAttachment
+/// * -------------------
+/// * Stores file attachments for complaints.
+model ComplaintAttachment {
+  id          String    @id @default(uuid())
+  complaintId String
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  mimeType    String
+  createdAt   DateTime  @default(now())
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("complaint_attachments")
+}
+
+/// *
+/// * ComplaintComment
+/// * ----------------
+/// * Stores comments and updates on complaints.
+model ComplaintComment {
+  id          String    @id @default(uuid())
+  complaintId String
+  authorId    String
+  content     String
+  isInternal  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  author      User      @relation("ComplaintCommentAuthor", fields: [authorId], references: [id])
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("complaint_comments")
+}
+
+/// *
+/// * StudentPromotion
+/// * ----------------
+/// * Tracks student promotions between academic sessions and levels.
+/// * Maintains complete history of student academic progression.
+model StudentPromotion {
+  id                    String           @id @default(uuid())
+  studentId             String
+  fromClassArmId        String?
+  toClassArmId          String
+  fromLevelId           String?
+  toLevelId             String
+  fromAcademicSessionId String?
+  toAcademicSessionId   String
+  promotionType         PromotionType
+  promotionDate         DateTime
+  promotedBy            String
+  notes                 String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  deletedAt             DateTime?
+  promotedStudentId     String?
+  fromAcademicSession   AcademicSession? @relation("PromotionFromSession", fields: [fromAcademicSessionId], references: [id])
+  fromClassArm          ClassArm?        @relation("PromotionFromClassArm", fields: [fromClassArmId], references: [id])
+  fromLevel             Level?           @relation("PromotionFromLevel", fields: [fromLevelId], references: [id])
+  promotedStudent       Student?         @relation("PromotedStudent", fields: [promotedStudentId], references: [id], onDelete: Cascade)
+  student               Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  toAcademicSession     AcademicSession  @relation("PromotionToSession", fields: [toAcademicSessionId], references: [id])
+  toClassArm            ClassArm         @relation("PromotionToClassArm", fields: [toClassArmId], references: [id])
+  toLevel               Level            @relation("PromotionToLevel", fields: [toLevelId], references: [id])
+
+  @@index([studentId])
+  @@index([promotedStudentId])
+  @@index([promotionDate])
+  @@map("student_promotions")
+}
+
+/// *
+/// * LevelProgression
+/// * ----------------
+/// * Defines the progression rules between academic levels.
+/// * Configurable per school to support different academic structures.
+model LevelProgression {
+  id               String    @id @default(uuid())
+  schoolId         String
+  fromLevelId      String
+  toLevelId        String
+  isAutomatic      Boolean   @default(true)
+  requiresApproval Boolean   @default(false)
+  order            Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+  fromLevel        Level     @relation("ProgressionFromLevel", fields: [fromLevelId], references: [id], onDelete: Cascade)
+  school           School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  toLevel          Level     @relation("ProgressionToLevel", fields: [toLevelId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("level_progressions")
+}
+
+/// *
+/// * PromotionBatch
+/// * --------------
+/// * Tracks bulk promotion operations for monitoring and rollback.
+model PromotionBatch {
+  id                    String          @id @default(uuid())
+  schoolId              String
+  fromAcademicSessionId String
+  toAcademicSessionId   String
+  status                String          @default("PENDING")
+  totalStudents         Int             @default(0)
+  processedStudents     Int             @default(0)
+  successfulPromotions  Int             @default(0)
+  failedPromotions      Int             @default(0)
+  createdBy             String
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  deletedAt             DateTime?
+  fromAcademicSession   AcademicSession @relation("BatchFromSession", fields: [fromAcademicSessionId], references: [id], onDelete: Cascade)
+  school                School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  toAcademicSession     AcademicSession @relation("BatchToSession", fields: [toAcademicSessionId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("promotion_batches")
 }
 
 enum AttendanceStatus {
@@ -1144,34 +1361,10 @@ enum NotificationType {
   IN_APP
 }
 
-
 enum EmploymentType {
   FULL_TIME
   PART_TIME
   CONTRACT
-}
-
-/// *
-/// * Category
-/// * -------
-/// * Represents a subject category that can be created and managed by schools.
-/// * Categories are used to classify subjects (e.g., Core, Elective, Vocational).
-/// * Each school can have its own set of categories, with default ones seeded during school creation.
-model Category {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  schoolId    String
-  isDefault   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
-  subjects    Subject[]
-
-  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-
-  @@unique([schoolId, name])
-  @@map("categories")
 }
 
 enum SubjectCategory {
@@ -1225,73 +1418,6 @@ enum BulkImportStatus {
   FAILED
 }
 
-/// *
-/// * Complaint
-/// * ---------
-/// * Represents a complaint or issue reported by users or schools.
-/// * System admins can track, assign, and resolve complaints.
-model Complaint {
-  id              String            @id @default(uuid())
-  title           String
-  description     String
-  category        ComplaintCategory
-  priority        ComplaintPriority  @default(MEDIUM)
-  status          ComplaintStatus    @default(OPEN)
-  reporterId      String?            // User who reported the complaint
-  schoolId        String?            // School associated with complaint
-  assignedToId    String?            // System admin assigned to handle
-  reporter        User?              @relation("ComplaintReporter", fields: [reporterId], references: [id])
-  school          School?            @relation(fields: [schoolId], references: [id])
-  assignedTo      SystemAdmin?       @relation("ComplaintAssignee", fields: [assignedToId], references: [id])
-  attachments     ComplaintAttachment[]
-  comments        ComplaintComment[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  resolvedAt      DateTime?
-  closedAt        DateTime?
-
-  @@index([status])
-  @@index([priority])
-  @@index([category])
-  @@index([assignedToId])
-  @@map("complaints")
-}
-
-/// *
-/// * ComplaintAttachment
-/// * -------------------
-/// * Stores file attachments for complaints.
-model ComplaintAttachment {
-  id          String    @id @default(uuid())
-  complaintId String
-  fileName    String
-  fileUrl     String
-  fileSize    Int
-  mimeType    String
-  createdAt   DateTime  @default(now())
-  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
-
-  @@map("complaint_attachments")
-}
-
-/// *
-/// * ComplaintComment
-/// * ----------------
-/// * Stores comments and updates on complaints.
-model ComplaintComment {
-  id          String    @id @default(uuid())
-  complaintId String
-  authorId    String
-  content     String
-  isInternal  Boolean   @default(false) // Internal notes vs public comments
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
-  author      User      @relation("ComplaintCommentAuthor", fields: [authorId], references: [id])
-
-  @@map("complaint_comments")
-}
-
 enum ComplaintCategory {
   TECHNICAL
   BILLING
@@ -1316,4 +1442,12 @@ enum ComplaintStatus {
   RESOLVED
   CLOSED
   CANCELLED
+}
+
+enum PromotionType {
+  AUTOMATIC
+  MANUAL
+  REPEAT
+  GRADUATION
+  TRANSFER
 }

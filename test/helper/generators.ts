@@ -107,6 +107,7 @@ export async function generateClassArm(
   return prisma.classArm.create({
     data: {
       name,
+      slug: `${name.toLowerCase()}-${academicSessionId.slice(-8)}`,
       levelId,
       departmentId,
       schoolId,

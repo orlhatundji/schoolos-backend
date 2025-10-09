@@ -59,7 +59,12 @@ export class PaymentStructuresRepository {
             student: {
               include: {
                 user: true,
-                classArm: true,
+                classArmStudents: {
+                  where: { isActive: true },
+                  include: {
+                    classArm: true,
+                  },
+                },
               },
             },
           },

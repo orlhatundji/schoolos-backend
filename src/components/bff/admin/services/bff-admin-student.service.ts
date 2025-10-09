@@ -107,21 +107,26 @@ export class BffAdminStudentService {
             user: true,
           },
         },
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
+            studentAttendances: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30, // Last 30 attendance records for rate calculation
+            },
           },
         },
         subjectTermStudents: {
           include: {
             assessments: true,
           },
-        },
-        studentAttendances: {
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 30, // Last 30 attendance records for rate calculation
         },
       },
       orderBy: [
@@ -158,10 +163,11 @@ export class BffAdminStudentService {
           : 0;
 
       // Calculate attendance rate
-      const presentCount = student.studentAttendances.filter(
+      const allAttendances = student.classArmStudents.flatMap(cas => cas.studentAttendances);
+      const presentCount = allAttendances.filter(
         (attendance) => attendance.status === 'PRESENT',
       ).length;
-      const totalAttendanceRecords = student.studentAttendances.length;
+      const totalAttendanceRecords = allAttendances.length;
       const attendanceRate =
         totalAttendanceRecords > 0 ? (presentCount / totalAttendanceRecords) * 100 : 0;
 
@@ -187,16 +193,16 @@ export class BffAdminStudentService {
         guardianPhone,
         telephone: student.user.phone,
         className:
-          student.classArm &&
-          student.classArm.academicSessionId === targetSession.id &&
-          !student.classArm.deletedAt
-            ? student.classArm.name
+          student.classArmStudents?.[0]?.classArm &&
+          student.classArmStudents[0].classArm.academicSessionId === targetSession.id &&
+          !student.classArmStudents[0].classArm.deletedAt
+            ? student.classArmStudents[0].classArm.name
             : 'Not assigned',
         classLevel:
-          student.classArm &&
-          student.classArm.academicSessionId === targetSession.id &&
-          !student.classArm.deletedAt
-            ? student.classArm.level.name
+          student.classArmStudents?.[0]?.classArm &&
+          student.classArmStudents[0].classArm.academicSessionId === targetSession.id &&
+          !student.classArmStudents[0].classArm.deletedAt
+            ? student.classArmStudents[0].classArm.level.name
             : 'Not assigned',
         averageGrade: Math.round(averageGrade * 100) / 100,
         isPresent,
@@ -253,21 +259,26 @@ export class BffAdminStudentService {
             user: true,
           },
         },
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
+            studentAttendances: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30, // Last 30 attendance records for rate calculation
+            },
           },
         },
         subjectTermStudents: {
           include: {
             assessments: true,
           },
-        },
-        studentAttendances: {
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 30, // Last 30 attendance records for rate calculation
         },
       },
     });
@@ -294,10 +305,11 @@ export class BffAdminStudentService {
         : 0;
 
     // Calculate attendance rate
-    const presentCount = student.studentAttendances.filter(
+    const allAttendances = student.classArmStudents.flatMap(cas => cas.studentAttendances);
+    const presentCount = allAttendances.filter(
       (attendance) => attendance.status === 'PRESENT',
     ).length;
-    const totalAttendanceRecords = student.studentAttendances.length;
+    const totalAttendanceRecords = allAttendances.length;
     const attendanceRate =
       totalAttendanceRecords > 0 ? (presentCount / totalAttendanceRecords) * 100 : 0;
 
@@ -322,8 +334,8 @@ export class BffAdminStudentService {
       guardianName,
       guardianPhone,
       telephone: student.user.phone,
-      className: student.classArm ? student.classArm.name : 'N/A',
-      classLevel: student.classArm?.level ? student.classArm.level.name : 'N/A',
+      className: student.classArmStudents?.[0]?.classArm ? student.classArmStudents[0].classArm.name : 'N/A',
+      classLevel: student.classArmStudents?.[0]?.classArm?.level ? student.classArmStudents[0].classArm.level.name : 'N/A',
       averageGrade: Math.round(averageGrade * 100) / 100,
       isPresent,
       attendanceRate: Math.round(attendanceRate * 100) / 100,
@@ -392,10 +404,21 @@ export class BffAdminStudentService {
             user: true,
           },
         },
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
-            academicSession: true,
+            classArm: {
+              include: {
+                level: true,
+                academicSession: true,
+              },
+            },
+            studentAttendances: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30, // Last 30 attendance records for rate calculation
+            },
           },
         },
         subjectTermStudents: {
@@ -407,15 +430,6 @@ export class BffAdminStudentService {
           include: {
             assessments: true,
           },
-        },
-        studentAttendances: {
-          where: {
-            academicSessionId: targetSession.id,
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 30, // Last 30 attendance records for rate calculation
         },
       },
     });
@@ -429,11 +443,11 @@ export class BffAdminStudentService {
     // This is a simplified calculation - you might want to adjust based on your logic
     const graduatedStudents = students.filter((student) => {
       // Assuming final year is the highest level
-      const levels = students.map((s) => s.classArm?.level?.name).filter(Boolean);
+      const levels = students.map((s) => s.classArmStudents?.[0]?.classArm?.level?.name).filter(Boolean);
       const maxLevel = Math.max(
         ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
       );
-      return student.classArm?.level?.name?.includes(maxLevel.toString());
+      return student.classArmStudents?.[0]?.classArm?.level?.name?.includes(maxLevel.toString());
     }).length;
 
     // Calculate attendance today (simulated for now)
@@ -466,8 +480,8 @@ export class BffAdminStudentService {
         : 'N/A',
       guardianPhone: student.guardian?.user?.phone || 'N/A',
       telephone: student.user.phone || 'N/A',
-      className: student.classArm?.name || 'N/A',
-      classLevel: student.classArm?.level?.name || 'N/A',
+      className: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
+      classLevel: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
       averageGrade: 0, // This would need to be calculated from actual grades
       isPresent: Math.random() > 0.1, // Simulated attendance
       attendanceRate: Math.floor(Math.random() * 40) + 60, // 60-100% attendance rate
@@ -515,10 +529,21 @@ export class BffAdminStudentService {
             user: true,
           },
         },
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
-            academicSession: true,
+            classArm: {
+              include: {
+                level: true,
+                academicSession: true,
+              },
+            },
+            studentAttendances: {
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30, // Last 30 attendance records for rate calculation
+            },
           },
         },
         subjectTermStudents: {
@@ -530,15 +555,6 @@ export class BffAdminStudentService {
           include: {
             assessments: true,
           },
-        },
-        studentAttendances: {
-          where: {
-            academicSessionId: targetSession.id,
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 30, // Last 30 attendance records for rate calculation
         },
       },
     });
@@ -552,11 +568,11 @@ export class BffAdminStudentService {
     // This is a simplified calculation - you might want to adjust based on your logic
     const graduatedStudents = students.filter((student) => {
       // Assuming final year is the highest level
-      const levels = students.map((s) => s.classArm?.level?.name).filter(Boolean);
+      const levels = students.map((s) => s.classArmStudents?.[0]?.classArm?.level?.name).filter(Boolean);
       const maxLevel = Math.max(
         ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
       );
-      return student.classArm?.level?.name?.includes(maxLevel.toString());
+      return student.classArmStudents?.[0]?.classArm?.level?.name?.includes(maxLevel.toString());
     }).length;
 
     // Calculate attendance today (simulated for now)
@@ -591,10 +607,11 @@ export class BffAdminStudentService {
           : 0;
 
       // Calculate attendance rate
-      const presentCount = student.studentAttendances.filter(
+      const allAttendances = student.classArmStudents.flatMap(cas => cas.studentAttendances);
+      const presentCount = allAttendances.filter(
         (attendance) => attendance.status === 'PRESENT',
       ).length;
-      const totalAttendanceRecords = student.studentAttendances.length;
+      const totalAttendanceRecords = allAttendances.length;
       const attendanceRate =
         totalAttendanceRecords > 0 ? (presentCount / totalAttendanceRecords) * 100 : 0;
 
@@ -620,16 +637,16 @@ export class BffAdminStudentService {
         guardianPhone,
         telephone: student.user.phone,
         className:
-          student.classArm &&
-          student.classArm.academicSessionId === targetSession.id &&
-          !student.classArm.deletedAt
-            ? student.classArm.name
+          student.classArmStudents?.[0]?.classArm &&
+          student.classArmStudents[0].classArm.academicSessionId === targetSession.id &&
+          !student.classArmStudents[0].classArm.deletedAt
+            ? student.classArmStudents[0].classArm.name
             : 'Not assigned',
         classLevel:
-          student.classArm &&
-          student.classArm.academicSessionId === targetSession.id &&
-          !student.classArm.deletedAt
-            ? student.classArm.level.name
+          student.classArmStudents?.[0]?.classArm &&
+          student.classArmStudents[0].classArm.academicSessionId === targetSession.id &&
+          !student.classArmStudents[0].classArm.deletedAt
+            ? student.classArmStudents[0].classArm.level.name
             : 'Not assigned',
         averageGrade: Math.round(averageGrade * 100) / 100,
         isPresent,

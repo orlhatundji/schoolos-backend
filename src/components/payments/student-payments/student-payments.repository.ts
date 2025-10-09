@@ -50,9 +50,14 @@ export class StudentPaymentsRepository {
         student: {
           include: {
             user: true,
-            classArm: {
+            classArmStudents: {
+              where: { isActive: true },
               include: {
-                level: true,
+                classArm: {
+                  include: {
+                    level: true,
+                  },
+                },
               },
             },
           },
@@ -88,9 +93,14 @@ export class StudentPaymentsRepository {
         student: {
           include: {
             user: true,
-            classArm: {
+            classArmStudents: {
+              where: { isActive: true },
               include: {
-                level: true,
+                classArm: {
+                  include: {
+                    level: true,
+                  },
+                },
               },
             },
           },
@@ -153,9 +163,14 @@ export class StudentPaymentsRepository {
         student: {
           include: {
             user: true,
-            classArm: {
+            classArmStudents: {
+              where: { isActive: true },
               include: {
-                level: true,
+                classArm: {
+                  include: {
+                    level: true,
+                  },
+                },
               },
             },
           },

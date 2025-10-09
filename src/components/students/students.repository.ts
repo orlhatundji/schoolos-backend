@@ -41,10 +41,15 @@ export class StudentsRepository extends Repository<
       where: { id },
       include: {
         user: true,
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
-            school: true,
+            classArm: {
+              include: {
+                level: true,
+                school: true,
+              },
+            },
           },
         },
         guardian: {
@@ -86,10 +91,19 @@ export class StudentsRepository extends Repository<
       where: params?.where,
       include: {
         user: true,
-        classArm: {
+        classArmStudents: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
           include: {
-            level: true,
-            school: true,
+            classArm: {
+              include: {
+                level: true,
+                school: true,
+              },
+            },
+            academicSession: true,
           },
         },
         guardian: {

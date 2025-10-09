@@ -453,35 +453,61 @@ export class BffAdminService {
       newAdmissions,
     ] = await Promise.all([
       this.prisma.student.count({
-        where: { classArm: { schoolId } },
+        where: { 
+          classArmStudents: {
+            some: {
+              classArm: { schoolId }
+            }
+          }
+        },
       }),
       this.prisma.student.count({
         where: {
-          classArm: { schoolId },
+          classArmStudents: {
+            some: {
+              classArm: { schoolId }
+            }
+          },
           user: { gender: 'MALE' },
         },
       }),
       this.prisma.student.count({
         where: {
-          classArm: { schoolId },
+          classArmStudents: {
+            some: {
+              classArm: { schoolId }
+            }
+          },
           user: { gender: 'FEMALE' },
         },
       }),
       this.prisma.student.count({
         where: {
-          classArm: { schoolId },
+          classArmStudents: {
+            some: {
+              classArm: { schoolId }
+            }
+          },
           deletedAt: null,
         },
       }),
       this.prisma.student.count({
         where: {
-          classArm: { schoolId },
+          classArmStudents: {
+            some: {
+              classArm: { schoolId }
+            }
+          },
           deletedAt: { not: null },
         },
       }),
       this.prisma.student.count({
         where: {
-          classArm: { schoolId },
+          classArmStudents: {
+            some: {
+              classArm: { schoolId }
+            }
+          },
           admissionDate: {
             gte: new Date(new Date().getFullYear(), 0, 1), // This year
           },
@@ -592,12 +618,12 @@ export class BffAdminService {
           .findMany({
             where: { schoolId, academicSessionId: sessionId },
             include: {
-              _count: { select: { students: true } },
+              _count: { select: { classArmStudents: true } },
             },
           })
           .then((classArms) => {
             const totalStudents = classArms.reduce(
-              (sum, classArm) => sum + classArm._count.students,
+               (sum, classArm) => sum + classArm._count.classArmStudents,
               0,
             );
             return totalStudents / classArms.length || 0;
@@ -605,19 +631,19 @@ export class BffAdminService {
         this.prisma.classArm.findFirst({
           where: { schoolId, academicSessionId: sessionId },
           include: {
-            _count: { select: { students: true } },
+            _count: { select: { classArmStudents: true } },
           },
           orderBy: {
-            students: { _count: 'desc' },
+            classArmStudents: { _count: 'desc' },
           },
         }),
         this.prisma.classArm.findFirst({
           where: { schoolId, academicSessionId: sessionId },
           include: {
-            _count: { select: { students: true } },
+            _count: { select: { classArmStudents: true } },
           },
           orderBy: {
-            students: { _count: 'asc' },
+            classArmStudents: { _count: 'asc' },
           },
         }),
       ]);
@@ -629,11 +655,11 @@ export class BffAdminService {
       averageClassSize: Math.round(averageClassSize || 0),
       largestClass: {
         name: largestClass?.name || 'N/A',
-        size: largestClass?._count.students || 0,
+        size: largestClass?._count.classArmStudents || 0,
       },
       smallestClass: {
         name: smallestClass?.name || 'N/A',
-        size: smallestClass?._count.students || 0,
+        size: smallestClass?._count.classArmStudents || 0,
       },
     };
   }
@@ -750,7 +776,7 @@ export class BffAdminService {
             include: {
               classArms: {
                 include: {
-                  _count: { select: { students: true } },
+                  _count: { select: { classArmStudents: true } },
                 },
               },
             },
@@ -758,7 +784,7 @@ export class BffAdminService {
           .then((levels) => {
             const totalStudents = levels.reduce((sum, level) => {
               const levelStudents = level.classArms.reduce(
-                (levelSum, classArm) => levelSum + classArm._count.students,
+                (levelSum, classArm) => levelSum + classArm._count.classArmStudents,
                 0,
               );
               return sum + levelStudents;
@@ -816,8 +842,9 @@ export class BffAdminService {
     today.setHours(0, 0, 0, 0);
 
     const whereClause = {
-      classArm: { schoolId },
-      academicSessionId: sessionId,
+      classArmStudent: {
+        classArm: { schoolId },
+      },
       ...(termId && { termId }),
     };
 
@@ -884,7 +911,13 @@ export class BffAdminService {
     ]);
 
     const totalStudents = await this.prisma.student.count({
-      where: { classArm: { schoolId, academicSessionId: sessionId } },
+        where: { 
+          classArmStudents: {
+            some: {
+              classArm: { schoolId, academicSessionId: sessionId }
+            }
+          }
+        },
     });
 
     return {
@@ -913,56 +946,110 @@ export class BffAdminService {
     ] = await Promise.all([
       this.prisma.studentPayment.count({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
         },
       }),
       this.prisma.studentPayment.count({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'PAID',
         },
       }),
       this.prisma.studentPayment.count({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'PENDING',
         },
       }),
       this.prisma.studentPayment.count({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'OVERDUE',
         },
       }),
       this.prisma.studentPayment.count({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'PARTIAL',
         },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
         },
         _sum: { amount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'PAID',
         },
         _sum: { paidAmount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'PENDING',
         },
         _sum: { amount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'OVERDUE',
         },
         _sum: { amount: true },
@@ -1057,28 +1144,52 @@ export class BffAdminService {
     const [totalRevenue, totalIncome, totalExpenseAmount, totalIncomeAmount] = await Promise.all([
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: { in: ['PAID', 'PARTIAL'] },
         },
         _sum: { amount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: { in: ['PAID', 'PARTIAL'] },
         },
         _sum: { amount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: 'PENDING',
         },
         _sum: { amount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: { in: ['PAID', 'PARTIAL'] },
         },
         _sum: { amount: true },
@@ -1123,7 +1234,13 @@ export class BffAdminService {
         where: { user: { schoolId } },
       }),
       this.prisma.student.count({
-        where: { classArm: { schoolId, academicSessionId: sessionId } },
+        where: { 
+          classArmStudents: {
+            some: {
+              classArm: { schoolId, academicSessionId: sessionId }
+            }
+          }
+        },
       }),
       this.prisma.classArm.count({
         where: { schoolId, academicSessionId: sessionId },
@@ -1148,25 +1265,45 @@ export class BffAdminService {
       }),
       this.prisma.studentAttendance.count({
         where: {
-          classArm: { schoolId, academicSessionId: sessionId },
+          classArmStudent: {
+            classArm: { schoolId, academicSessionId: sessionId }
+          },
         },
       }),
       this.prisma.studentPayment.count({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: { in: ['PAID', 'PARTIAL'] },
         },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: { in: ['PAID', 'PARTIAL'] },
         },
         _sum: { amount: true },
       }),
       this.prisma.studentPayment.aggregate({
         where: {
-          student: { classArm: { schoolId, academicSessionId: sessionId } },
+          student: { 
+            classArmStudents: {
+              some: {
+                classArm: { schoolId, academicSessionId: sessionId }
+              }
+            }
+          },
           status: { in: ['PAID', 'PARTIAL'] },
         },
         _sum: { amount: true },

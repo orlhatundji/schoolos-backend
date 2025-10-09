@@ -29,9 +29,14 @@ export class StudentService extends BaseService {
       where: { userId },
       include: {
         user: true,
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
           },
         },
       },
@@ -78,7 +83,9 @@ export class StudentService extends BaseService {
     // Get attendance rate for current term
     const attendanceRecords = await this.prisma.studentAttendance.findMany({
       where: {
-        studentId: student.id,
+        classArmStudent: {
+          studentId: student.id,
+        },
         termId: currentTerm?.id,
       },
     });
@@ -219,11 +226,11 @@ export class StudentService extends BaseService {
         fullName: `${student.user.firstName} ${student.user.lastName}`,
         avatarUrl: student.user.avatarUrl,
         classArm: {
-          id: student.classArm.id,
-          name: student.classArm.name,
+          id: student.classArmStudents?.[0]?.classArm?.id || '',
+          name: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
           level: {
-            id: student.classArm.level.id,
-            name: student.classArm.level.name,
+            id: student.classArmStudents?.[0]?.classArm?.level?.id || '',
+            name: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
           },
         },
       },
@@ -265,9 +272,14 @@ export class StudentService extends BaseService {
       where: { userId },
       include: {
         user: true,
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
           },
         },
       },
@@ -448,14 +460,19 @@ export class StudentService extends BaseService {
       include: {
         student: {
           include: {
-            classArm: true,
+            classArmStudents: {
+              where: { isActive: true },
+              include: {
+                classArm: true,
+              },
+            },
           },
         },
       },
     });
 
     const classStudents = allClassStudents.filter(
-      (sts) => sts.student.classArmId === student.classArmId,
+      (sts) => sts.student.classArmStudents?.[0]?.classArmId === student.classArmStudents?.[0]?.classArmId,
     );
 
     const sortedStudents = classStudents.sort((a, b) => b.totalScore - a.totalScore);
@@ -467,11 +484,11 @@ export class StudentService extends BaseService {
         studentNo: student.studentNo,
         fullName: `${student.user.firstName} ${student.user.lastName}`,
         classArm: {
-          id: student.classArm.id,
-          name: student.classArm.name,
+          id: student.classArmStudents?.[0]?.classArm?.id || '',
+          name: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
           level: {
-            id: student.classArm.level.id,
-            name: student.classArm.level.name,
+            id: student.classArmStudents?.[0]?.classArm?.level?.id || '',
+            name: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
           },
         },
       },
@@ -503,9 +520,14 @@ export class StudentService extends BaseService {
       where: { userId },
       include: {
         user: true,
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
+            classArm: {
+              include: {
+                level: true,
+              },
+            },
           },
         },
         guardian: {
@@ -539,11 +561,11 @@ export class StudentService extends BaseService {
         avatarUrl: student.user.avatarUrl,
       },
       classArm: {
-        id: student.classArm.id,
-        name: student.classArm.name,
+        id: student.classArmStudents?.[0]?.classArm?.id || '',
+        name: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
         level: {
-          id: student.classArm.level.id,
-          name: student.classArm.level.name,
+          id: student.classArmStudents?.[0]?.classArm?.level?.id || '',
+          name: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
         },
       },
       guardian: student.guardian
@@ -650,9 +672,9 @@ export class StudentService extends BaseService {
           {
             classArms: {
               some: {
-                students: {
+                classArmStudents: {
                   some: {
-                    id: student.id,
+                    studentId: student.id,
                   },
                 },
               },

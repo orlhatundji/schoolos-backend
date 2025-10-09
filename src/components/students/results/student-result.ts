@@ -33,7 +33,7 @@ export class StudentEntity extends UserEntity {
     const studentEntity = new StudentEntity();
     studentEntity.id = student.id;
     studentEntity.studentNo = student.studentNo;
-    studentEntity.classArmId = student.classArmId;
+    studentEntity.classArmId = student.classArmStudents?.find(cas => cas.isActive)?.classArmId || '';
     studentEntity.guardianId = student.guardianId;
     studentEntity.admissionNo = student.admissionNo;
     studentEntity.admissionDate = student.admissionDate;

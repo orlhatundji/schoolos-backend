@@ -1,5 +1,6 @@
 import {
   ClassArm,
+  ClassArmStudent,
   CurriculumItemRating,
   Guardian,
   Student as PrismaStudent,
@@ -13,7 +14,7 @@ import { User } from '../../users/types';
 
 export interface Student extends PrismaStudent {
   user?: User;
-  classArm?: ClassArm;
+  classArmStudents?: ClassArmStudent[];
   subjectTermStudents?: SubjectTermStudent[];
   guardian?: Guardian;
   curriculumItemRatings?: CurriculumItemRating[];
@@ -24,10 +25,12 @@ export interface Student extends PrismaStudent {
 // Type for Student with nested includes for the list endpoint
 export interface StudentWithIncludes extends PrismaStudent {
   user: PrismaUser;
-  classArm: ClassArm & {
-    level: Level;
-    school: School;
-  };
+  classArmStudents: (ClassArmStudent & {
+    classArm: ClassArm & {
+      level: Level;
+      school: School;
+    };
+  })[];
   guardian?: Guardian & {
     user: PrismaUser;
   };

@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StrategyEnum } from '../auth/strategies';
 import { GetCurrentUserId } from '../../common/decorators';
 import { AdminClassroomService } from './admin-classroom.service';
-import { UpdateClassroomDto } from '../bff/admin/dto/update-classroom.dto';
+import { UpdateClassroomDto } from './update-classroom.dto';
 
 @Controller('admin/classrooms')
 @ApiTags('Admin - Classrooms')

@@ -432,8 +432,12 @@ export class AssessmentStructuresService {
       where: {
         subjectTermStudent: {
           student: {
-            classArm: {
-              schoolId: schoolId,
+            classArmStudents: {
+              some: {
+                classArm: {
+                  schoolId: schoolId,
+                },
+              },
             },
           },
         },

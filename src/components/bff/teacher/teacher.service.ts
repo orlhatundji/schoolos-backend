@@ -94,7 +94,7 @@ export class TeacherService {
 
     // Calculate core statistics only
     const totalStudents = uniqueClasses.reduce(
-      (sum, classArm) => sum + classArm.students.length,
+      (sum, classArm) => sum + classArm.classArmStudents.length,
       0,
     );
     const averageClassSize = uniqueClasses.length > 0 ? totalStudents / uniqueClasses.length : 0;
@@ -145,7 +145,7 @@ export class TeacherService {
       name: classArm.name,
       level: classArm.level.name,
       subject: 'Class Teacher', // Always "Class Teacher" since this endpoint only returns class teacher assignments
-      studentsCount: classArm.students.length,
+      studentsCount: classArm.classArmStudents.length,
       nextClassTime: this.getNextClassTime(classArm.id),
       location: (classArm as any).location || undefined,
       isClassTeacher: true, // Always true since this endpoint only returns class teacher assignments
@@ -162,7 +162,7 @@ export class TeacherService {
       name: cast.classArm.name,
       level: cast.classArm.level.name,
       subject: cast.subject.name,
-      studentsCount: cast.classArm.students.length,
+      studentsCount: cast.classArm.classArmStudents.length,
       nextClassTime: this.getNextClassTime(cast.classArm.id),
       location: (cast.classArm as any).location || undefined,
       isClassTeacher: teacher.classArmsAsTeacher.some((cat) => cat.id === cast.classArm.id),
@@ -193,7 +193,7 @@ export class TeacherService {
         ).length,
         totalStudents: teacher.classArmSubjectTeachers
           .filter((cast) => cast.subjectId === subject.id)
-          .reduce((sum, cast) => sum + cast.classArm.students.length, 0),
+          .reduce((sum, cast) => sum + cast.classArm.classArmStudents.length, 0),
         averageScore: await this.getSubjectAverageScore(subject.id, currentSession.id),
       })),
     );
@@ -202,7 +202,7 @@ export class TeacherService {
   // Get recent activities
   async getRecentActivities(userId: string, limit: number = 10): Promise<RecentActivity[]> {
     const teacher = await this.getTeacherWithRelations(userId);
-    
+
     if (!teacher) {
       return [];
     }
@@ -226,7 +226,6 @@ export class TeacherService {
         },
       },
     });
-
 
     // Transform activities to RecentActivity format
     return activities.map((activity) => {
@@ -316,10 +315,8 @@ export class TeacherService {
             classArm: {
               include: {
                 level: true,
-                students: {
-                  where: {
-                    deletedAt: null,
-                  },
+                classArmStudents: {
+                  where: { isActive: true },
                 },
               },
             },
@@ -339,10 +336,8 @@ export class TeacherService {
             classArm: {
               include: {
                 level: true,
-                students: {
-                  where: {
-                    deletedAt: null,
-                  },
+                classArmStudents: {
+                  where: { isActive: true },
                 },
               },
             },
@@ -357,10 +352,8 @@ export class TeacherService {
           },
           include: {
             level: true,
-            students: {
-              where: {
-                deletedAt: null,
-              },
+            classArmStudents: {
+              where: { isActive: true },
             },
           },
         },
@@ -622,10 +615,9 @@ export class TeacherService {
         },
       });
 
-      console.log('Paystack Response:', JSON.stringify(paystackResponse, null, 2));
+      // Paystack response received
 
       if (!paystackResponse.data || !paystackResponse.data.authorization_url) {
-        console.error('Paystack response missing authorization_url:', paystackResponse);
         throw new Error('Failed to get authorization URL from Paystack');
       }
 
@@ -651,7 +643,6 @@ export class TeacherService {
         authorizationUrl: paystackResponse.data.authorization_url,
       };
     } catch (error) {
-      console.error('Paystack initialization error:', error);
       throw new Error(`Failed to initialize payment: ${error.message}`);
     }
   }
@@ -834,15 +825,20 @@ export class TeacherService {
             user: true,
           },
         },
-        students: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            user: true,
-          },
-        },
-        studentAttendances: {
-          where: {
-            date: {
-              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+            student: {
+              include: {
+                user: true,
+              },
+            },
+            studentAttendances: {
+              where: {
+                date: {
+                  gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+                },
+              },
             },
           },
         },
@@ -859,7 +855,7 @@ export class TeacherService {
     }
 
     // Calculate statistics
-    const students = classArmData.students;
+    const students = classArmData.classArmStudents.map(cas => cas.student);
     const maleStudents = students.filter((s) => s.user.gender === 'MALE').length;
     const femaleStudents = students.filter((s) => s.user.gender === 'FEMALE').length;
 
@@ -887,7 +883,8 @@ export class TeacherService {
       999,
     );
 
-    const todayAttendanceRecords = classArmData.studentAttendances.filter((attendance) => {
+    const allAttendances = classArmData.classArmStudents.flatMap(cas => cas.studentAttendances);
+    const todayAttendanceRecords = allAttendances.filter((attendance) => {
       const attendanceDate = new Date(attendance.date);
       return attendanceDate >= startOfToday && attendanceDate <= endOfToday;
     });
@@ -950,12 +947,17 @@ export class TeacherService {
         deletedAt: null,
       },
       include: {
-        students: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            user: true,
-            guardian: {
+            student: {
               include: {
                 user: true,
+                guardian: {
+                  include: {
+                    user: true,
+                  },
+                },
               },
             },
           },
@@ -997,7 +999,8 @@ export class TeacherService {
       );
     }
 
-    return classArmData.students.map((student) => {
+    return classArmData.classArmStudents.map((classArmStudent) => {
+      const student = classArmStudent.student;
       return {
         id: student.id,
         studentNo: student.studentNo,
@@ -1044,32 +1047,37 @@ export class TeacherService {
       },
       include: {
         level: true,
-        students: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            user: true,
-            subjectTermStudents: {
-              where: {
-                subjectTerm: {
-                  subject: {
-                    name: {
-                      equals: subjectName,
-                      mode: 'insensitive',
+            student: {
+              include: {
+                user: true,
+                subjectTermStudents: {
+                  where: {
+                    subjectTerm: {
+                      subject: {
+                        name: {
+                          equals: subjectName,
+                          mode: 'insensitive',
+                        },
+                      },
+                      academicSession: {
+                        isCurrent: true,
+                      },
                     },
                   },
-                  academicSession: {
-                    isCurrent: true,
-                  },
-                },
-              },
-              include: {
-                subjectTerm: {
                   include: {
-                    subject: true,
-                    academicSession: true,
-                    term: true,
+                    subjectTerm: {
+                      include: {
+                        subject: true,
+                        academicSession: true,
+                        term: true,
+                      },
+                    },
+                    assessments: true,
                   },
                 },
-                assessments: true,
               },
             },
           },
@@ -1131,7 +1139,8 @@ export class TeacherService {
 
     // Process student assessment data
     const studentsWithScores = await Promise.all(
-      (classArmData as any).students.map(async (student: any) => {
+      (classArmData as any).classArmStudents.map(async (classArmStudent: any) => {
+        const student = classArmStudent.student;
         const subjectTermStudent = student.subjectTermStudents[0];
 
         if (!subjectTermStudent) {
@@ -1359,10 +1368,15 @@ export class TeacherService {
       },
       include: {
         user: true,
-        classArm: {
+        classArmStudents: {
+          where: { isActive: true },
           include: {
-            level: true,
-            academicSession: true,
+            classArm: {
+              include: {
+                level: true,
+                academicSession: true,
+              },
+            },
           },
         },
       },
@@ -1407,7 +1421,7 @@ export class TeacherService {
     // Verify teacher is assigned to teach this subject in this class
     const classArmSubjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
-        classArmId: student.classArmId,
+        classArmId: student.classArmStudents?.[0]?.classArmId || '',
         subjectId: subjectTerm.subjectId,
         teacherId: teacher.id,
       },
@@ -1514,7 +1528,15 @@ export class TeacherService {
         subjectTermStudent: {
           include: {
             student: {
-              include: { user: true },
+              include: { 
+                user: true,
+                classArmStudents: {
+                  where: { isActive: true },
+                  include: {
+                    classArm: true,
+                  },
+                },
+              },
             },
             subjectTerm: {
               include: {
@@ -1539,7 +1561,7 @@ export class TeacherService {
     // Verify teacher is assigned to teach this subject in this class
     const classArmSubjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
-        classArmId: existingAssessment.subjectTermStudent.student.classArmId,
+        classArmId: existingAssessment.subjectTermStudent.student.classArmStudents?.[0]?.classArmId || '',
         subjectId: existingAssessment.subjectTermStudent.subjectTerm.subjectId,
         teacherId: teacher.id,
       },
@@ -1608,7 +1630,15 @@ export class TeacherService {
         subjectTermStudent: {
           include: {
             student: {
-              include: { user: true },
+              include: { 
+                user: true,
+                classArmStudents: {
+                  where: { isActive: true },
+                  include: {
+                    classArm: true,
+                  },
+                },
+              },
             },
             subjectTerm: {
               include: {
@@ -1633,7 +1663,7 @@ export class TeacherService {
     // Verify teacher is assigned to teach this subject in this class
     const classArmSubjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
-        classArmId: existingAssessment.subjectTermStudent.student.classArmId,
+        classArmId: existingAssessment.subjectTermStudent.student.classArmStudents?.[0]?.classArmId || '',
         subjectId: existingAssessment.subjectTermStudent.subjectTerm.subjectId,
         teacherId: teacher.id,
       },
@@ -1945,7 +1975,9 @@ export class TeacherService {
     const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
       where: {
         teacherId: teacher.id,
-        classArmId: dto.classArmId,
+        classArm: {
+          id: dto.classArmId,
+        },
         deletedAt: null,
       },
     });
@@ -1997,7 +2029,12 @@ export class TeacherService {
     // Get students in the class arm
     const students = await this.prisma.student.findMany({
       where: {
-        classArmId: dto.classArmId,
+        classArmStudents: {
+          some: {
+            classArmId: dto.classArmId,
+            isActive: true,
+          },
+        },
         deletedAt: null,
       },
       include: {
@@ -2021,25 +2058,21 @@ export class TeacherService {
       // Upsert attendance record
       const attendanceRecord = await this.prisma.studentAttendance.upsert({
         where: {
-          studentId_date: {
-            studentId: studentAttendance.studentId,
+          classArmStudentId_date: {
+            classArmStudentId: studentAttendance.studentId,
             date: attendanceDate,
           },
         },
         update: {
           status: studentAttendance.status,
           ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
-          classArmId: dto.classArmId,
-          academicSessionId: dto.academicSessionId,
           termId: dto.termId,
         },
         create: {
-          studentId: studentAttendance.studentId,
+          classArmStudentId: studentAttendance.studentId,
           date: attendanceDate,
           status: studentAttendance.status,
           ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
-          classArmId: dto.classArmId,
-          academicSessionId: dto.academicSessionId,
           termId: dto.termId,
         },
       });
@@ -2106,7 +2139,9 @@ export class TeacherService {
       where: {
         teacherId: teacher.id,
         subjectId: dto.subjectId,
-        classArmId: dto.classArmId,
+        classArm: {
+          id: dto.classArmId,
+        },
         deletedAt: null,
       },
     });
@@ -2173,7 +2208,12 @@ export class TeacherService {
     // Get students in the class arm
     const students = await this.prisma.student.findMany({
       where: {
-        classArmId: dto.classArmId,
+        classArmStudents: {
+          some: {
+            classArmId: dto.classArmId,
+            isActive: true,
+          },
+        },
         deletedAt: null,
       },
       include: {
@@ -2197,25 +2237,21 @@ export class TeacherService {
       // Upsert attendance record
       const attendanceRecord = await this.prisma.studentAttendance.upsert({
         where: {
-          studentId_date: {
-            studentId: studentAttendance.studentId,
+          classArmStudentId_date: {
+            classArmStudentId: studentAttendance.studentId,
             date: attendanceDate,
           },
         },
         update: {
           status: studentAttendance.status,
           ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
-          classArmId: dto.classArmId,
-          academicSessionId: dto.academicSessionId,
           termId: dto.termId,
         },
         create: {
-          studentId: studentAttendance.studentId,
+          classArmStudentId: studentAttendance.studentId,
           date: attendanceDate,
           status: studentAttendance.status,
           ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
-          classArmId: dto.classArmId,
-          academicSessionId: dto.academicSessionId,
           termId: dto.termId,
         },
       });
@@ -2366,7 +2402,9 @@ export class TeacherService {
     // Check if any attendance records exist for this class on this date
     const attendanceCount = await this.prisma.studentAttendance.count({
       where: {
-        classArmId,
+        classArmStudent: {
+          classArmId,
+        },
         date: {
           gte: startOfDay,
           lte: endOfDay,
@@ -2432,14 +2470,24 @@ export class TeacherService {
 
     // Get all students in the class
     const students = await this.prisma.student.findMany({
-      where: { classArmId, deletedAt: null },
+      where: { 
+        classArmStudents: {
+          some: {
+            classArmId,
+            isActive: true,
+          },
+        },
+        deletedAt: null 
+      },
       include: { user: true },
     });
 
     // Get attendance records for this date
     const attendanceRecords = await this.prisma.studentAttendance.findMany({
       where: {
-        classArmId,
+        classArmStudent: {
+          classArmId,
+        },
         date: {
           gte: startOfDay,
           lte: endOfDay,
@@ -2450,7 +2498,7 @@ export class TeacherService {
 
     // Create attendance data for all students
     const attendanceData = students.map((student) => {
-      const attendanceRecord = attendanceRecords.find((record) => record.studentId === student.id);
+      const attendanceRecord = attendanceRecords.find((record) => record.classArmStudentId === student.id);
       return {
         studentId: student.id,
         studentName: `${student.user.firstName} ${student.user.lastName}`,

@@ -7,8 +7,11 @@ import {
   IsUUID,
   IsBoolean,
   IsOptional,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { CreateTermForSessionDto } from './create-term-for-session.dto';
 
 export class CreateAcademicSessionDto {
   @ApiProperty({
@@ -39,5 +42,27 @@ export class CreateAcademicSessionDto {
   @IsDate()
   @IsNotEmpty()
   endDate: Date;
+
+  @ApiProperty({
+    description: 'Array of terms to create for this academic session',
+    type: [CreateTermForSessionDto],
+    example: [
+      {
+        name: 'First Term',
+        startDate: '2024-09-01T00:00:00.000Z',
+        endDate: '2024-12-15T00:00:00.000Z',
+      },
+      {
+        name: 'Second Term',
+        startDate: '2025-01-15T00:00:00.000Z',
+        endDate: '2025-04-15T00:00:00.000Z',
+      },
+    ],
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTermForSessionDto)
+  @IsNotEmpty()
+  terms: CreateTermForSessionDto[];
 
 }

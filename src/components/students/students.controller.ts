@@ -24,6 +24,7 @@ import { StrategyEnum } from '../auth/strategies';
 import { CheckPolicies, PoliciesGuard } from '../roles-manager';
 import { UserMessages } from '../users/results';
 import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto, TransferStudentClassDto } from './dto';
+import { ImportStudentsDto, CopyClassroomsDto } from './dto/import-students.dto';
 import {
   ManageStudentPolicyHandler,
   ReadStudentPolicyHandler,
@@ -306,5 +307,40 @@ export class StudentsController {
   @CheckPolicies(new ManageStudentPolicyHandler())
   remove(@Param('id') id: string) {
     return this.studentsService.remove(id);
+  }
+
+  // Class arm promotion endpoints
+  @Post('class-arms/copy-from-previous-session')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Copy classrooms from previous session',
+  })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async copyClassroomsFromPreviousSession(@Body() copyDto: CopyClassroomsDto, @Request() req: any) {
+    const schoolId = req.user.schoolId;
+    return this.studentsService.copyClassroomsFromPreviousSession(schoolId, copyDto.targetSessionId);
+  }
+
+  @Get('class-arms/:classArmId/available-for-import')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get students available for import from source class arm',
+  })
+  @CheckPolicies(new ReadStudentPolicyHandler())
+  async getStudentsForImport(
+    @Param('classArmId') classArmId: string,
+    @Query('targetSessionId') targetSessionId: string,
+  ) {
+    return this.studentsService.getStudentsForImport(classArmId, targetSessionId);
+  }
+
+  @Post('class-arms/import-students')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Import selected students to target class arm',
+  })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async importStudentsToClassArm(@Body() importDto: ImportStudentsDto) {
+    return this.studentsService.importStudentsToClassArm(importDto);
   }
 }

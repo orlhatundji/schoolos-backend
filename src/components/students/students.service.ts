@@ -1146,4 +1146,29 @@ export class StudentsService extends BaseService {
       },
     };
   }
+
+  /**
+   * Copy classrooms from previous session to target session
+   */
+  async copyClassroomsFromPreviousSession(schoolId: string, targetSessionId: string) {
+    return this.classArmStudentService.copyClassroomsFromPreviousSession(schoolId, targetSessionId);
+  }
+
+  /**
+   * Get students from source class arm with their promotion status in target session
+   */
+  async getStudentsForImport(sourceClassArmId: string, targetSessionId: string) {
+    return this.classArmStudentService.getStudentsForImport(sourceClassArmId, targetSessionId);
+  }
+
+  /**
+   * Import selected students to target class arm
+   */
+  async importStudentsToClassArm(dto: {
+    targetClassArmId: string;
+    studentIds: string[];
+    sourceClassArmId?: string;
+  }) {
+    return this.classArmStudentService.importStudentsToClassArm(dto);
+  }
 }

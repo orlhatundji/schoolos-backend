@@ -306,6 +306,7 @@ export interface LevelInfo {
   id: string;
   name: string;
   code: string;
+  order: number;
   classArmsCount: number;
   studentsCount: number;
   status: 'active' | 'archived';

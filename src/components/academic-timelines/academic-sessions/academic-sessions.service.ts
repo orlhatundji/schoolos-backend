@@ -200,7 +200,33 @@ export class AcademicSessionsService extends BaseService {
         where: { academicSessionId: id },
       });
     }
-    // If no class arms exist, proceed with deletion (this is the case for new sessions)
+    // If no class arms exist or they have been cleaned up, proceed with session deletion
+
+    // Check if academic session has terms
+    const terms = await this.prisma.term.findMany({
+      where: { academicSessionId: id },
+    });
+
+    // If session has terms, we need to be more careful about deletion
+    if (terms.length > 0) {
+      // Check if any terms have associated data that would prevent deletion
+      const termsWithData = await this.prisma.term.findMany({
+        where: { 
+          academicSessionId: id,
+          OR: [
+            { subjectTerms: { some: {} } },
+            { studentAttendances: { some: {} } },
+            { paymentStructures: { some: {} } }
+          ]
+        },
+      });
+
+      if (termsWithData.length > 0) {
+        throw new BadRequestException(
+          'Cannot delete academic session. It has terms with associated data (subjects, assessments, or attendance records). Please remove all associated data first.',
+        );
+      }
+    }
 
     // Check if academic session has associated subject terms with student enrollments
     const subjectTerms = await this.prisma.subjectTerm.findMany({
@@ -229,6 +255,15 @@ export class AcademicSessionsService extends BaseService {
       where: { academicSessionId: id },
     });
 
+    // Delete associated academic session calendar items first
+    await this.prisma.academicSessionCalendarItem.deleteMany({
+      where: { 
+        calendar: {
+          academicSessionId: id
+        }
+      },
+    });
+
     // Delete associated academic session calendar
     await this.prisma.academicSessionCalendar.deleteMany({
       where: { academicSessionId: id },
@@ -237,6 +272,24 @@ export class AcademicSessionsService extends BaseService {
     // Delete associated terms
     await this.prisma.term.deleteMany({
       where: { academicSessionId: id },
+    });
+
+    // Delete any remaining related data
+    await this.prisma.subjectTerm.deleteMany({
+      where: { academicSessionId: id },
+    });
+
+    await this.prisma.paymentStructure.deleteMany({
+      where: { academicSessionId: id },
+    });
+
+    await this.prisma.studentPromotion.deleteMany({
+      where: {
+        OR: [
+          { fromAcademicSessionId: id },
+          { toAcademicSessionId: id }
+        ]
+      },
     });
 
     return this.academicSessionsRepository.delete({ id });

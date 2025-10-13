@@ -62,6 +62,7 @@ export class BffAdminLevelService {
         id: level.id,
         name: level.name,
         code: level.code,
+        order: level.order,
         classArmsCount,
         studentsCount,
         status,

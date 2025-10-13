@@ -5,9 +5,10 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { Encryptor } from '../../utils/encryptor';
 import { RolesManagerModule } from '../roles-manager/roles-manager.module';
 import { StudentsModule } from '../students/students.module';
+import { ActivityLogModule } from '../../common/modules/activity-log.module';
 
 @Module({
-  imports: [PrismaModule, RolesManagerModule, StudentsModule],
+  imports: [PrismaModule, RolesManagerModule, StudentsModule, ActivityLogModule],
   controllers: [StudentPromotionsController],
   providers: [StudentPromotionsService, Encryptor],
   exports: [StudentPromotionsService]

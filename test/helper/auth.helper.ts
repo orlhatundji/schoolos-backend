@@ -9,6 +9,7 @@ const userLoginEndpointMap: Record<UserType, string> = {
   TEACHER: '/auth/login',
   GUARDIAN: '/auth/login',
   STUDENT: '/auth/student/login',
+  SYSTEM_ADMIN: '/auth/login',
 };
 
 export async function getUserTokens(app: INestApplication, userType: UserType) {

@@ -83,10 +83,19 @@ export async function generateGuardian(userId: string) {
 }
 
 export async function generateLevel(schoolId: string, name = 'SS1') {
+  // Get the next order value for this school
+  const maxOrder = await prisma.level.findFirst({
+    where: { schoolId },
+    orderBy: { order: 'desc' },
+    select: { order: true },
+  });
+  const nextOrder = (maxOrder?.order || 0) + 1;
+
   return prisma.level.create({
     data: {
       name,
       schoolId,
+      order: nextOrder,
     },
   });
 }

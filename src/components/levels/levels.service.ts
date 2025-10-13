@@ -18,10 +18,19 @@ export class LevelsService {
       throw new Error('User not associated with a school');
     }
 
+    // Get the next order value for this school
+    const maxOrder = await this.prisma.level.findFirst({
+      where: { schoolId: user.schoolId },
+      orderBy: { order: 'desc' },
+      select: { order: true },
+    });
+    const nextOrder = (maxOrder?.order || 0) + 1;
+
     const level = await this.prisma.level.create({
       data: {
         ...createLevelDto,
         schoolId: user.schoolId,
+        order: nextOrder,
       },
     });
 

@@ -820,7 +820,7 @@ export class StudentsService extends BaseService {
           },
         },
         orderBy: {
-          name: 'asc',
+          order: 'asc',
         },
       });
 
@@ -847,6 +847,145 @@ export class StudentsService extends BaseService {
       // Return empty structure if database query fails
       return {
         levels: [],
+      };
+    }
+  }
+
+  /**
+   * Get higher levels for promotion (levels with order greater than the source level)
+   */
+  async getHigherLevelsForPromotion(schoolId: string, sourceLevelId: string) {
+    try {
+      // First get the source level to find its order
+      const sourceLevel = await this.prisma.level.findUnique({
+        where: { id: sourceLevelId },
+        select: { order: true },
+      });
+
+      if (!sourceLevel) {
+        throw new Error('Source level not found');
+      }
+
+      // Get all levels with order greater than the source level
+      const higherLevels = await this.prisma.level.findMany({
+        where: {
+          schoolId,
+          deletedAt: null,
+          order: {
+            gt: sourceLevel.order,
+          },
+        },
+        include: {
+          classArms: {
+            where: {
+              schoolId,
+              deletedAt: null,
+            },
+            include: {
+              _count: {
+                select: {
+                  classArmStudents: {
+                    where: {
+                      isActive: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              name: 'asc',
+            },
+          },
+        },
+        orderBy: {
+          order: 'asc',
+        },
+      });
+
+      // Transform the data to match the expected API response format
+      const transformedLevels = higherLevels.map((level) => ({
+        id: level.id,
+        name: level.name,
+        order: level.order,
+        classArms: level.classArms.map((classArm) => ({
+          id: classArm.id,
+          name: classArm.name,
+          studentCount: classArm._count.classArmStudents,
+          currentCapacity: classArm._count.classArmStudents,
+          maxCapacity: 30, // Default capacity, could be made configurable
+        })),
+      }));
+
+      return {
+        levels: transformedLevels,
+      };
+    } catch (error) {
+      console.error('Error fetching higher levels for promotion:', error);
+      return {
+        levels: [],
+      };
+    }
+  }
+
+  /**
+   * Get class arms for a specific academic session and level
+   */
+  async getClassArmsBySessionLevel(schoolId: string, academicSessionId: string, levelId: string) {
+    try {
+      const classArms = await this.prisma.classArm.findMany({
+        where: {
+          schoolId,
+          academicSessionId,
+          levelId,
+          deletedAt: null, // Only get non-deleted class arms
+        },
+        include: {
+          level: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          academicSession: {
+            select: {
+              id: true,
+              academicYear: true,
+            },
+          },
+          _count: {
+            select: {
+              classArmStudents: {
+                where: {
+                  isActive: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+      const transformedClassArms = classArms.map((classArm) => ({
+        id: classArm.id,
+        name: classArm.name,
+        levelId: classArm.levelId,
+        levelName: classArm.level.name,
+        academicSessionId: classArm.academicSessionId,
+        academicSessionName: classArm.academicSession.academicYear,
+        currentCapacity: classArm._count.classArmStudents,
+        maxCapacity: 50, // Default capacity since maxCapacity doesn't exist in schema
+        isActive: true, // Class arms are considered active if they exist and aren't deleted
+      }));
+
+      return {
+        classArms: transformedClassArms,
+      };
+    } catch (error) {
+      console.error('Error fetching class arms by session and level:', error);
+      return {
+        classArms: [],
       };
     }
   }

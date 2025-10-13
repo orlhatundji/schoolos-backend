@@ -97,8 +97,29 @@ model School {
   subjects                     Subject[]
   userActivities               UserActivity[]
   users                        User[]
+  academicPromotionSettings    AcademicPromotionSettings?
 
   @@map("schools")
+}
+
+/// *
+/// * AcademicPromotionSettings
+/// * -------------------------
+/// * Stores academic promotion settings for each school, including core subjects,
+/// * minimum requirements, and attendance criteria for student promotion.
+model AcademicPromotionSettings {
+  id                     String   @id @default(uuid())
+  schoolId               String   @unique
+  coreSubjects           String[] // Array of subject names that must be passed
+  totalSubjectsPassed    Int      // Minimum number of subjects to pass
+  totalAverage           Int      // Minimum overall average required
+  useAttendance          Boolean  @default(true) // Whether to include attendance criteria
+  minimumAttendanceRate  Int      // Minimum attendance rate (if attendance is enabled)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  school                 School   @relation(fields: [schoolId], references: [id])
+
+  @@map("academic_promotion_settings")
 }
 
 /// *
@@ -206,6 +227,7 @@ model Level {
   id                String             @id @default(uuid())
   name              String
   schoolId          String
+  order             Int
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?
@@ -280,6 +302,7 @@ model ClassArm {
   promotionsFrom          StudentPromotion[]       @relation("PromotionFromClassArm")
   promotionsTo            StudentPromotion[]       @relation("PromotionToClassArm")
 
+  @@unique([name, levelId, academicSessionId, schoolId], name: "unique_class_arm_per_level_session")
   @@map("class_arms")
 }
 

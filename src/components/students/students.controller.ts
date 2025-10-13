@@ -106,6 +106,53 @@ export class StudentsController {
     return this.studentsService.getLevelsWithClassArms(schoolId);
   }
 
+  @Get('levels/higher')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get higher levels for promotion based on source level',
+  })
+  @CheckPolicies(new ReadStudentPolicyHandler())
+  async getHigherLevelsForPromotion(
+    @Request() req: any,
+    @Query('sourceLevelId') sourceLevelId: string,
+  ) {
+    // Extract schoolId from the authenticated user's context
+    const schoolId = req.user?.schoolId;
+    if (!schoolId) {
+      throw new Error('School ID not found in user context');
+    }
+
+    if (!sourceLevelId) {
+      throw new Error('sourceLevelId is required');
+    }
+
+    return this.studentsService.getHigherLevelsForPromotion(schoolId, sourceLevelId);
+  }
+
+  @Get('class-arms')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get class arms for a specific academic session and level',
+  })
+  @CheckPolicies(new ReadStudentPolicyHandler())
+  async getClassArmsBySessionLevel(
+    @Request() req: any,
+    @Query('academicSessionId') academicSessionId: string,
+    @Query('levelId') levelId: string,
+  ) {
+    // Extract schoolId from the authenticated user's context
+    const schoolId = req.user?.schoolId;
+    if (!schoolId) {
+      throw new Error('School ID not found in user context');
+    }
+
+    if (!academicSessionId || !levelId) {
+      throw new Error('academicSessionId and levelId are required');
+    }
+
+    return this.studentsService.getClassArmsBySessionLevel(schoolId, academicSessionId, levelId);
+  }
+
   @Get('filters')
   @ApiResponse({
     status: HttpStatus.OK,

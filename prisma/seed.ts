@@ -283,14 +283,21 @@ async function main() {
   console.log('Creating levels...');
   const levels = await Promise.all(
     [
-      { name: 'JSS1', code: 'JSS1' },
-      { name: 'JSS2', code: 'JSS2' },
-      { name: 'JSS3', code: 'JSS3' },
-      { name: 'SS1', code: 'SS1' },
-      { name: 'SS2', code: 'SS2' },
-      { name: 'SS3', code: 'SS3' },
+      { name: 'JSS1', code: 'JSS1', order: 1 },
+      { name: 'JSS2', code: 'JSS2', order: 2 },
+      { name: 'JSS3', code: 'JSS3', order: 3 },
+      { name: 'SS1', code: 'SS1', order: 4 },
+      { name: 'SS2', code: 'SS2', order: 5 },
+      { name: 'SS3', code: 'SS3', order: 6 },
     ].map((level) =>
-      prisma.level.create({ data: { name: level.name, code: level.code, schoolId: school.id } }),
+      prisma.level.create({ 
+        data: { 
+          name: level.name, 
+          code: level.code, 
+          schoolId: school.id,
+          order: level.order
+        } 
+      }),
     ),
   );
 

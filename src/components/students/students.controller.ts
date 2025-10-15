@@ -23,7 +23,13 @@ import {
 import { StrategyEnum } from '../auth/strategies';
 import { CheckPolicies, PoliciesGuard } from '../roles-manager';
 import { UserMessages } from '../users/results';
-import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto, TransferStudentClassDto } from './dto';
+import {
+  CreateStudentDto,
+  StudentQueryDto,
+  UpdateStudentDto,
+  UpdateStudentStatusDto,
+  TransferStudentClassDto,
+} from './dto';
 import { ImportStudentsDto, CopyClassroomsDto } from './dto/import-students.dto';
 import {
   ManageStudentPolicyHandler,
@@ -37,13 +43,17 @@ import {
   StudentResult,
 } from './results';
 import { StudentsService } from './students.service';
+import { ActivityLogService } from '../../common/services/activity-log.service';
 
 @Controller('students')
 @ApiTags('Student')
 @ApiBearerAuth(StrategyEnum.JWT)
 @UseGuards(PoliciesGuard)
 export class StudentsController {
-  constructor(private readonly studentsService: StudentsService) {}
+  constructor(
+    private readonly studentsService: StudentsService,
+    private readonly activityLogService: ActivityLogService,
+  ) {}
 
   @Post()
   @ApiResponse({
@@ -105,6 +115,93 @@ export class StudentsController {
     }
 
     return this.studentsService.getLevelsWithClassArms(schoolId);
+  }
+
+  @Get('levels/session/:sessionId')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get list of all levels with class arms for a specific session',
+  })
+  @CheckPolicies(new ReadStudentPolicyHandler())
+  async getLevelsForSession(@Param('sessionId') sessionId: string, @Request() req: any) {
+    // Extract schoolId from the authenticated user's context
+    const schoolId = req.user?.schoolId;
+    if (!schoolId) {
+      throw new Error('School ID not found in user context');
+    }
+
+    return this.studentsService.getLevelsWithClassArmsForSession(schoolId, sessionId);
+  }
+
+  @Get('debug/student-counts')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Debug endpoint to check student counts in database',
+  })
+  @CheckPolicies(new ReadStudentPolicyHandler())
+  async debugStudentCounts(@Request() req: any) {
+    const schoolId = req.user?.schoolId;
+    if (!schoolId) {
+      throw new Error('School ID not found in user context');
+    }
+
+    // Get current session
+    const currentSession = await this.studentsService['prisma'].academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      return { error: 'No current session found' };
+    }
+
+    // Get all class arms with student counts
+    const classArms = await this.studentsService['prisma'].classArm.findMany({
+      where: {
+        schoolId,
+        academicSessionId: currentSession.id,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+        _count: {
+          select: {
+            classArmStudents: {
+              where: { isActive: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Get total students in school
+    const totalStudents = await this.studentsService['prisma'].student.count({
+      where: {
+        user: { schoolId },
+        deletedAt: null,
+      },
+    });
+
+    // Get total class arm students
+    const totalClassArmStudents = await this.studentsService['prisma'].classArmStudent.count({
+      where: {
+        classArm: { schoolId, academicSessionId: currentSession.id },
+        isActive: true,
+      },
+    });
+
+    return {
+      schoolId,
+      currentSessionId: currentSession.id,
+      currentSessionYear: currentSession.academicYear,
+      totalStudents,
+      totalClassArmStudents,
+      classArms: classArms.map((ca) => ({
+        id: ca.id,
+        name: ca.name,
+        level: ca.level.name,
+        studentCount: ca._count.classArmStudents,
+      })),
+    };
   }
 
   @Get('levels/higher')
@@ -295,7 +392,10 @@ export class StudentsController {
     description: 'Transfer student to different class arm',
   })
   @CheckPolicies(new UpdateStudentPolicyHandler())
-  async transferStudentClass(@Param('id') id: string, @Body() transferDto: TransferStudentClassDto) {
+  async transferStudentClass(
+    @Param('id') id: string,
+    @Body() transferDto: TransferStudentClassDto,
+  ) {
     return this.studentsService.transferStudentClass(id, transferDto);
   }
 
@@ -318,7 +418,10 @@ export class StudentsController {
   @CheckPolicies(new ManageStudentPolicyHandler())
   async copyClassroomsFromPreviousSession(@Body() copyDto: CopyClassroomsDto, @Request() req: any) {
     const schoolId = req.user.schoolId;
-    return this.studentsService.copyClassroomsFromPreviousSession(schoolId, copyDto.targetSessionId);
+    return this.studentsService.copyClassroomsFromPreviousSession(
+      schoolId,
+      copyDto.targetSessionId,
+    );
   }
 
   @Get('class-arms/:classArmId/available-for-import')
@@ -330,8 +433,9 @@ export class StudentsController {
   async getStudentsForImport(
     @Param('classArmId') classArmId: string,
     @Query('targetSessionId') targetSessionId: string,
+    @Query('targetClassArmId') targetClassArmId?: string,
   ) {
-    return this.studentsService.getStudentsForImport(classArmId, targetSessionId);
+    return this.studentsService.getStudentsForImport(classArmId, targetSessionId, targetClassArmId);
   }
 
   @Post('class-arms/import-students')
@@ -340,7 +444,38 @@ export class StudentsController {
     description: 'Import selected students to target class arm',
   })
   @CheckPolicies(new ManageStudentPolicyHandler())
-  async importStudentsToClassArm(@Body() importDto: ImportStudentsDto) {
-    return this.studentsService.importStudentsToClassArm(importDto);
+  async importStudentsToClassArm(@Body() importDto: ImportStudentsDto, @Request() req: any) {
+    const result = await this.studentsService.importStudentsToClassArm(importDto);
+
+    // Get class arm names for better description
+    const targetClassArm = await this.studentsService.getClassArmName(importDto.targetClassArmId);
+    const sourceClassArm = importDto.sourceClassArmId
+      ? await this.studentsService.getClassArmName(importDto.sourceClassArmId)
+      : null;
+
+    // Log the import activity
+    await this.activityLogService.logActivity({
+      userId: req.user?.sub,
+      schoolId: req.user?.schoolId,
+      action: 'STUDENTS_IMPORTED',
+      entityType: 'STUDENT',
+      entityId: importDto.targetClassArmId,
+      details: {
+        targetClassArmId: importDto.targetClassArmId,
+        sourceClassArmId: importDto.sourceClassArmId,
+        studentIds: importDto.studentIds,
+        importedCount: result.importedCount,
+        skippedCount: result.skippedCount,
+        targetClassArmName: targetClassArm,
+        sourceClassArmName: sourceClassArm,
+      },
+      description: sourceClassArm
+        ? `Imported ${result.importedCount} students from '${sourceClassArm}' to '${targetClassArm}'`
+        : `Imported ${result.importedCount} students to '${targetClassArm}'`,
+      category: 'STUDENT_MANAGEMENT',
+      severity: 'INFO',
+    });
+
+    return result;
   }
 }

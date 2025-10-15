@@ -11,7 +11,13 @@ import { SchoolsService } from '../schools';
 import { ClassArmStudentService } from './services/class-arm-student.service';
 import { UserTypes } from '../users/constants';
 import { UsersService } from '../users/users.service';
-import { CreateStudentDto, StudentQueryDto, UpdateStudentDto, UpdateStudentStatusDto, TransferStudentClassDto } from './dto';
+import {
+  CreateStudentDto,
+  StudentQueryDto,
+  UpdateStudentDto,
+  UpdateStudentStatusDto,
+  TransferStudentClassDto,
+} from './dto';
 import { StudentMessages } from './results';
 import { StudentsRepository } from './students.repository';
 import { Student, StudentWithIncludes } from './types';
@@ -117,11 +123,7 @@ export class StudentsService extends BaseService {
     }
 
     // Create ClassArmStudent relationship
-    await this.classArmStudentService.enrollStudent(
-      student.id,
-      classArmId,
-      currentSession.id
-    );
+    await this.classArmStudentService.enrollStudent(student.id, classArmId, currentSession.id);
 
     // Note: guardianInformation, medicalInformation, and address handling
     // These fields are received but not yet processed - requires additional
@@ -189,12 +191,12 @@ export class StudentsService extends BaseService {
           isActive: true,
           deletedAt: null,
           ...(levelId && {
-            classArm: { levelId }
+            classArm: { levelId },
           }),
           ...(classArmId && {
-            classArmId
-          })
-        }
+            classArmId,
+          }),
+        },
       };
     }
 
@@ -209,8 +211,8 @@ export class StudentsService extends BaseService {
     } else if (sortBy === 'age') {
       orderBy.user = { dateOfBirth: sortOrder === 'desc' ? 'asc' : 'desc' };
     } else if (sortBy === 'level') {
-      orderBy.classArmStudents = { 
-        _count: 'desc'
+      orderBy.classArmStudents = {
+        _count: 'desc',
       };
     } else if (sortBy === 'studentId') {
       orderBy.studentNo = sortOrder;
@@ -242,8 +244,8 @@ export class StudentsService extends BaseService {
         : 0;
 
       // Get the current active class arm for this student
-      const currentClassArmStudent = student.classArmStudents.find(cas => cas.isActive);
-      
+      const currentClassArmStudent = student.classArmStudents.find((cas) => cas.isActive);
+
       if (!currentClassArmStudent?.classArm?.level) {
         throw new Error(`Active ClassArm level not found for student ${student.id}`);
       }
@@ -403,9 +405,9 @@ export class StudentsService extends BaseService {
       // Transfer student to new class arm
       await this.classArmStudentService.transferStudent(
         id,
-        existingStudent.classArmStudents.find(cas => cas.isActive)?.classArmId || '',
+        existingStudent.classArmStudents.find((cas) => cas.isActive)?.classArmId || '',
         updateStudentDto.classArmId,
-        currentSession.id
+        currentSession.id,
       );
     }
 
@@ -791,7 +793,33 @@ export class StudentsService extends BaseService {
 
   async getLevelsWithClassArms(schoolId: string) {
     try {
-      // Query levels and their associated class arms from the database
+      // Get current academic session
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: { schoolId, isCurrent: true },
+      });
+
+      if (!currentSession) {
+        // Return empty structure if no current session
+        return {
+          levels: [],
+        };
+      }
+
+      return this.getLevelsWithClassArmsForSession(schoolId, currentSession.id);
+    } catch (error) {
+      // Log the error for debugging
+      console.error('Error fetching levels and class arms:', error);
+
+      // Return empty structure if database query fails
+      return {
+        levels: [],
+      };
+    }
+  }
+
+  async getLevelsWithClassArmsForSession(schoolId: string, sessionId: string) {
+    try {
+      // Query levels and their associated class arms from the database (filtered by specific session)
       const levels = await this.prisma.level.findMany({
         where: {
           schoolId,
@@ -801,6 +829,7 @@ export class StudentsService extends BaseService {
           classArms: {
             where: {
               schoolId,
+              academicSessionId: sessionId,
               deletedAt: null,
             },
             include: {
@@ -828,6 +857,7 @@ export class StudentsService extends BaseService {
       const transformedLevels = levels.map((level) => ({
         id: level.id,
         name: level.name,
+        order: level.order, // Include order field for filtering
         classArms: level.classArms.map((classArm) => ({
           id: classArm.id,
           name: classArm.name,
@@ -842,7 +872,7 @@ export class StudentsService extends BaseService {
       };
     } catch (error) {
       // Log the error for debugging
-      console.error('Error fetching levels and class arms:', error);
+      console.error('Error fetching levels and class arms for session:', error);
 
       // Return empty structure if database query fails
       return {
@@ -1116,7 +1146,9 @@ export class StudentsService extends BaseService {
 
     // Validate that target class arm is in the same academic session
     if (targetClassArm.academicSessionId !== currentClassArm.academicSessionId) {
-      throw new BadRequestException('Cannot transfer student to a class arm in a different academic session');
+      throw new BadRequestException(
+        'Cannot transfer student to a class arm in a different academic session',
+      );
     }
 
     // Check if student is already in the target class arm
@@ -1125,11 +1157,11 @@ export class StudentsService extends BaseService {
     }
 
     // Use the existing transfer method from ClassArmStudentService
-    const result = await this.classArmStudentService.transferStudent(
+    await this.classArmStudentService.transferStudent(
       studentId,
       currentClassArm.id,
       targetClassArm.id,
-      currentClassArm.academicSessionId
+      currentClassArm.academicSessionId,
     );
 
     return {
@@ -1157,8 +1189,16 @@ export class StudentsService extends BaseService {
   /**
    * Get students from source class arm with their promotion status in target session
    */
-  async getStudentsForImport(sourceClassArmId: string, targetSessionId: string) {
-    return this.classArmStudentService.getStudentsForImport(sourceClassArmId, targetSessionId);
+  async getStudentsForImport(
+    sourceClassArmId: string,
+    targetSessionId: string,
+    targetClassArmId?: string,
+  ) {
+    return this.classArmStudentService.getStudentsForImport(
+      sourceClassArmId,
+      targetSessionId,
+      targetClassArmId,
+    );
   }
 
   /**
@@ -1170,5 +1210,20 @@ export class StudentsService extends BaseService {
     sourceClassArmId?: string;
   }) {
     return this.classArmStudentService.importStudentsToClassArm(dto);
+  }
+
+  async getClassArmName(classArmId: string): Promise<string> {
+    const classArm = await this.prisma.classArm.findUnique({
+      where: { id: classArmId },
+      include: {
+        level: true,
+      },
+    });
+
+    if (!classArm) {
+      return 'Unknown Class';
+    }
+
+    return `${classArm.level.name} ${classArm.name}`;
   }
 }

@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { StudentsService } from '../../students.service';
+import { ActivityLogService } from '../../../../common/services/activity-log.service';
 import { BulkUploadJobData, StudentCreationResult } from '../types';
 
 @Processor('student-import')
@@ -14,6 +15,7 @@ export class StudentImportProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly studentsService: StudentsService,
+    private readonly activityLogService: ActivityLogService,
   ) {
     super();
   }
@@ -88,6 +90,38 @@ export class StudentImportProcessor extends WorkerHost {
         `Completed bulk import job ${jobId}: ${totalSuccessful} successful, ${totalFailed} failed`,
       );
 
+      // Log the completion activity
+      try {
+        // Get the user who started the job (if available)
+        const jobData = await this.prisma.bulkImportJob.findUnique({
+          where: { id: jobId },
+          select: { userId: true },
+        });
+
+        if (jobData?.userId) {
+          await this.activityLogService.logActivity({
+            userId: jobData.userId,
+            schoolId,
+            action: 'BULK_IMPORT_COMPLETED',
+            entityType: 'STUDENT',
+            entityId: jobId,
+            details: {
+              jobId,
+              totalProcessed,
+              totalSuccessful,
+              totalFailed,
+              successRate: totalProcessed > 0 ? (totalSuccessful / totalProcessed) * 100 : 0,
+              errorCount: allErrors.length,
+            },
+            description: `Completed bulk import: ${totalSuccessful} students imported successfully, ${totalFailed} failed`,
+            category: 'STUDENT_MANAGEMENT',
+            severity: totalFailed > 0 ? 'WARNING' : 'INFO',
+          });
+        }
+      } catch (logError) {
+        this.logger.error('Failed to log bulk import completion activity:', logError);
+      }
+
       return {
         jobId,
         totalProcessed,
@@ -102,6 +136,34 @@ export class StudentImportProcessor extends WorkerHost {
       await this.updateJobStatus(jobId, 'FAILED', {
         errors: [{ error: error.message, details: error.stack }],
       });
+
+      // Log the failure activity
+      try {
+        const jobData = await this.prisma.bulkImportJob.findUnique({
+          where: { id: jobId },
+          select: { userId: true },
+        });
+
+        if (jobData?.userId) {
+          await this.activityLogService.logActivity({
+            userId: jobData.userId,
+            schoolId,
+            action: 'BULK_IMPORT_FAILED',
+            entityType: 'STUDENT',
+            entityId: jobId,
+            details: {
+              jobId,
+              error: error.message,
+              errorStack: error.stack,
+            },
+            description: `Bulk import failed: ${error.message}`,
+            category: 'STUDENT_MANAGEMENT',
+            severity: 'ERROR',
+          });
+        }
+      } catch (logError) {
+        this.logger.error('Failed to log bulk import failure activity:', logError);
+      }
 
       throw error;
     }
@@ -383,10 +445,21 @@ export class StudentImportProcessor extends WorkerHost {
     if (!className) return null;
 
     try {
-      // Find all class arms for this school to search through
+      // Get current academic session
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: { schoolId, isCurrent: true },
+      });
+
+      if (!currentSession) {
+        this.logger.warn('No current academic session found for class name mapping');
+        return null;
+      }
+
+      // Find class arms for this school and current session only
       const classArms = await this.prisma.classArm.findMany({
         where: {
           schoolId,
+          academicSessionId: currentSession.id,
           deletedAt: null,
         },
         include: {

@@ -85,6 +85,28 @@ export function UnarchiveLevelSwagger() {
   );
 }
 
+export function ReorderLevelSwagger() {
+  return applyDecorators(
+    ApiOperation({ summary: 'Reorder a level up or down in the hierarchy' }),
+    ApiResponse({
+      status: 200,
+      description: 'Level reordered successfully',
+    }),
+    ApiResponse({
+      status: 400,
+      description: 'Bad request - Cannot move level (already at boundary)',
+    }),
+    ApiResponse({
+      status: 401,
+      description: 'Unauthorized',
+    }),
+    ApiResponse({
+      status: 404,
+      description: 'Level not found',
+    }),
+  );
+}
+
 export function DeleteLevelSwagger() {
   return applyDecorators(
     ApiOperation({ summary: 'Delete a level' }),

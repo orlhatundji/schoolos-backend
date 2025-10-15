@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLevelDto } from './dto/create-level.dto';
 import { UpdateLevelDto } from './dto/update-level.dto';
+import { ReorderLevelDto, ReorderDirection } from './dto/reorder-level.dto';
 
 @Injectable()
 export class LevelsService {
@@ -18,19 +19,26 @@ export class LevelsService {
       throw new Error('User not associated with a school');
     }
 
-    // Get the next order value for this school
-    const maxOrder = await this.prisma.level.findFirst({
-      where: { schoolId: user.schoolId },
-      orderBy: { order: 'desc' },
-      select: { order: true },
+    // Check if order already exists for this school
+    const existingLevel = await this.prisma.level.findFirst({
+      where: {
+        schoolId: user.schoolId,
+        order: createLevelDto.order,
+        deletedAt: null,
+      },
     });
-    const nextOrder = (maxOrder?.order || 0) + 1;
 
+    if (existingLevel) {
+      throw new BadRequestException(
+        `Order ${createLevelDto.order} is already taken by level "${existingLevel.name}". Please choose a different order.`
+      );
+    }
+
+    // Use the provided order value
     const level = await this.prisma.level.create({
       data: {
         ...createLevelDto,
         schoolId: user.schoolId,
-        order: nextOrder,
       },
     });
 
@@ -169,5 +177,180 @@ export class LevelsService {
     });
 
     return { message: 'Level deleted successfully' };
+  }
+
+  async reorderLevel(userId: string, levelId: string, reorderLevelDto: ReorderLevelDto) {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new Error('User not associated with a school');
+    }
+
+    // Get the current level
+    const currentLevel = await this.prisma.level.findFirst({
+      where: {
+        id: levelId,
+        schoolId: user.schoolId,
+        deletedAt: null, // Only allow reordering of active levels
+      },
+    });
+
+    if (!currentLevel) {
+      throw new NotFoundException('Level not found or access denied');
+    }
+
+    // Get all levels for the school, sorted by order, then by creation date for consistent ordering
+    const allLevels = await this.prisma.level.findMany({
+      where: {
+        schoolId: user.schoolId,
+        deletedAt: null,
+      },
+      orderBy: [
+        { order: 'asc' },
+        { createdAt: 'asc' }
+      ],
+    });
+
+    const currentIndex = allLevels.findIndex(level => level.id === levelId);
+    
+    if (currentIndex === -1) {
+      throw new NotFoundException('Level not found');
+    }
+
+    // Determine target index based on direction
+    let targetIndex: number;
+    if (reorderLevelDto.direction === ReorderDirection.UP) {
+      targetIndex = currentIndex - 1;
+    } else {
+      targetIndex = currentIndex + 1;
+    }
+
+    // Check if move is valid (not at boundaries)
+    if (targetIndex < 0 || targetIndex >= allLevels.length) {
+      throw new BadRequestException(
+        `Cannot move level ${reorderLevelDto.direction}. Already at ${reorderLevelDto.direction === ReorderDirection.UP ? 'top' : 'bottom'} of the list.`
+      );
+    }
+
+    const targetLevel = allLevels[targetIndex];
+
+    // Check if there are duplicate orders and fix them first
+    const orderCounts = new Map<number, number>();
+    allLevels.forEach(level => {
+      orderCounts.set(level.order, (orderCounts.get(level.order) || 0) + 1);
+    });
+
+    // If there are duplicate orders, reassign them with unique values
+    if (Array.from(orderCounts.values()).some(count => count > 1)) {
+      // Reassign all levels with unique orders
+      const updates = allLevels.map((level, index) => 
+        this.prisma.level.update({
+          where: { id: level.id },
+          data: { order: index + 1 },
+        })
+      );
+      
+      await this.prisma.$transaction(updates);
+      
+      // Now get the updated levels
+      const updatedLevels = await this.prisma.level.findMany({
+        where: {
+          schoolId: user.schoolId,
+          deletedAt: null,
+        },
+        orderBy: { order: 'asc' },
+      });
+
+      const newCurrentIndex = updatedLevels.findIndex(level => level.id === levelId);
+      const newTargetIndex = reorderLevelDto.direction === ReorderDirection.UP 
+        ? newCurrentIndex - 1 
+        : newCurrentIndex + 1;
+
+      if (newTargetIndex < 0 || newTargetIndex >= updatedLevels.length) {
+        throw new BadRequestException(
+          `Cannot move level ${reorderLevelDto.direction}. Already at ${reorderLevelDto.direction === ReorderDirection.UP ? 'top' : 'bottom'} of the list.`
+        );
+      }
+
+      const newTargetLevel = updatedLevels[newTargetIndex];
+      const newCurrentLevel = updatedLevels[newCurrentIndex];
+
+      // Swap the order values
+      await this.prisma.$transaction([
+        this.prisma.level.update({
+          where: { id: newCurrentLevel.id },
+          data: { order: newTargetLevel.order },
+        }),
+        this.prisma.level.update({
+          where: { id: newTargetLevel.id },
+          data: { order: newCurrentLevel.order },
+        }),
+      ]);
+    } else {
+      // No duplicates, proceed with normal swap
+      await this.prisma.$transaction([
+        this.prisma.level.update({
+          where: { id: currentLevel.id },
+          data: { order: targetLevel.order },
+        }),
+        this.prisma.level.update({
+          where: { id: targetLevel.id },
+          data: { order: currentLevel.order },
+        }),
+      ]);
+    }
+
+    // Return the updated level data
+    const updatedLevel = await this.prisma.level.findUnique({
+      where: { id: levelId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        order: true,
+      },
+    });
+
+    return updatedLevel;
+  }
+
+  async fixDuplicateOrders(userId: string) {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new Error('User not associated with a school');
+    }
+
+    // Get all levels for the school, sorted by order, then by creation date
+    const allLevels = await this.prisma.level.findMany({
+      where: {
+        schoolId: user.schoolId,
+        deletedAt: null,
+      },
+      orderBy: [
+        { order: 'asc' },
+        { createdAt: 'asc' }
+      ],
+    });
+
+    // Reassign all levels with unique orders
+    const updates = allLevels.map((level, index) => 
+      this.prisma.level.update({
+        where: { id: level.id },
+        data: { order: index + 1 },
+      })
+    );
+    
+    await this.prisma.$transaction(updates);
+
+    return { message: 'Duplicate orders fixed successfully' };
   }
 }

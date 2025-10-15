@@ -75,6 +75,7 @@ export interface ClassroomDetailsData {
     name: string;
     level: string;
     location: string | null;
+    academicSessionId: string;
   };
   population: ClassroomPopulation;
   attendance: AttendanceStats;
@@ -207,8 +208,6 @@ export interface StudentsViewData {
   stats: StudentStats;
   students: StudentDetailInfo[];
 }
-
-import { SubjectCategory } from '@prisma/client';
 
 // Subjects View types
 export interface SubjectStats {

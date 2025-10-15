@@ -11,6 +11,7 @@ import { SchoolsModule } from '../schools';
 import { CounterModule } from '../../common/counter';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { PasswordHasher } from '../../utils/hasher/hasher';
+import { ActivityLogService } from '../../common/services/activity-log.service';
 import {
   BulkUploadController,
   BulkUploadService,
@@ -36,6 +37,7 @@ import {
     ClassArmStudentService,
     PasswordGenerator,
     PasswordHasher,
+    ActivityLogService,
     BulkUploadService,
     TemplateService,
     StudentImportProcessor,

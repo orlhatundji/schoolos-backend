@@ -20,6 +20,7 @@ import { BulkUploadOptionsDto } from './dto';
 import { StrategyEnum } from '../../auth/strategies';
 import { CheckPolicies } from '../../roles-manager/policies/check-policies.decorator';
 import { ManageStudentPolicyHandler } from '../policies/student-policy.handler';
+import { ActivityLogService } from '../../../common/services/activity-log.service';
 
 @Controller('students/bulk-import')
 @ApiTags('Student Bulk Import')
@@ -28,6 +29,7 @@ export class BulkUploadController {
   constructor(
     private readonly bulkUploadService: BulkUploadService,
     private readonly templateService: TemplateService,
+    private readonly activityLogService: ActivityLogService,
   ) {}
 
   @Get('template')
@@ -233,6 +235,24 @@ export class BulkUploadController {
     }
 
     const result = await this.bulkUploadService.uploadFile(file, options, schoolId, userId);
+
+    // Log the bulk import activity
+    await this.activityLogService.logActivity({
+      userId,
+      schoolId,
+      action: 'BULK_IMPORT_STARTED',
+      entityType: 'STUDENT',
+      entityId: result.jobId,
+      details: {
+        fileName: file.originalname,
+        fileSize: file.size,
+        recordCount: result.progress.totalRecords,
+        options: options,
+      },
+      description: `Started bulk import of ${result.progress.totalRecords} students from file "${file.originalname}"`,
+      category: 'STUDENT_MANAGEMENT',
+      severity: 'INFO',
+    });
 
     return {
       success: true,

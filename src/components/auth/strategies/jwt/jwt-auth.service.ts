@@ -16,11 +16,12 @@ export class JwtAuthService extends BaseService {
     super(JwtAuthService.name);
   }
 
-  async getTokens(partialUser: Pick<User, 'id' | 'email' | 'type'>): Promise<AuthTokens> {
+  async getTokens(partialUser: Pick<User, 'id' | 'email' | 'type' | 'schoolId'>): Promise<AuthTokens> {
     const payload: IJwtPayload = {
       email: partialUser.email,
       sub: partialUser.id,
       type: partialUser.type,
+      schoolId: partialUser.schoolId,
     };
 
     const [accessToken, refreshToken] = await this._getTokensFromPayload(payload);

@@ -446,7 +446,7 @@ export class ActivityLogService {
       }
     }
 
-    if (userName) {
+    if (userName && !details?.skipUserName) {
       message += ` by ${userName}`;
     }
 

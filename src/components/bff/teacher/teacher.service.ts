@@ -855,7 +855,7 @@ export class TeacherService {
     }
 
     // Calculate statistics
-    const students = classArmData.classArmStudents.map(cas => cas.student);
+    const students = classArmData.classArmStudents.map((cas) => cas.student);
     const maleStudents = students.filter((s) => s.user.gender === 'MALE').length;
     const femaleStudents = students.filter((s) => s.user.gender === 'FEMALE').length;
 
@@ -883,7 +883,7 @@ export class TeacherService {
       999,
     );
 
-    const allAttendances = classArmData.classArmStudents.flatMap(cas => cas.studentAttendances);
+    const allAttendances = classArmData.classArmStudents.flatMap((cas) => cas.studentAttendances);
     const todayAttendanceRecords = allAttendances.filter((attendance) => {
       const attendanceDate = new Date(attendance.date);
       return attendanceDate >= startOfToday && attendanceDate <= endOfToday;
@@ -1528,7 +1528,7 @@ export class TeacherService {
         subjectTermStudent: {
           include: {
             student: {
-              include: { 
+              include: {
                 user: true,
                 classArmStudents: {
                   where: { isActive: true },
@@ -1561,7 +1561,8 @@ export class TeacherService {
     // Verify teacher is assigned to teach this subject in this class
     const classArmSubjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
-        classArmId: existingAssessment.subjectTermStudent.student.classArmStudents?.[0]?.classArmId || '',
+        classArmId:
+          existingAssessment.subjectTermStudent.student.classArmStudents?.[0]?.classArmId || '',
         subjectId: existingAssessment.subjectTermStudent.subjectTerm.subjectId,
         teacherId: teacher.id,
       },
@@ -1630,7 +1631,7 @@ export class TeacherService {
         subjectTermStudent: {
           include: {
             student: {
-              include: { 
+              include: {
                 user: true,
                 classArmStudents: {
                   where: { isActive: true },
@@ -1663,7 +1664,8 @@ export class TeacherService {
     // Verify teacher is assigned to teach this subject in this class
     const classArmSubjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
-        classArmId: existingAssessment.subjectTermStudent.student.classArmStudents?.[0]?.classArmId || '',
+        classArmId:
+          existingAssessment.subjectTermStudent.student.classArmStudents?.[0]?.classArmId || '',
         subjectId: existingAssessment.subjectTermStudent.subjectTerm.subjectId,
         teacherId: teacher.id,
       },
@@ -2026,7 +2028,7 @@ export class TeacherService {
       throw new NotFoundException('Term not found');
     }
 
-    // Get students in the class arm
+    // Get students in the class arm with their ClassArmStudent records
     const students = await this.prisma.student.findMany({
       where: {
         classArmStudents: {
@@ -2039,6 +2041,12 @@ export class TeacherService {
       },
       include: {
         user: true,
+        classArmStudents: {
+          where: {
+            classArmId: dto.classArmId,
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -2055,11 +2063,21 @@ export class TeacherService {
         );
       }
 
+      // Get the ClassArmStudent record for this student and class
+      const classArmStudent = student.classArmStudents.find(
+        (cas) => cas.classArmId === dto.classArmId && cas.isActive,
+      );
+      if (!classArmStudent) {
+        throw new NotFoundException(
+          `Student with ID ${studentAttendance.studentId} is not enrolled in this class`,
+        );
+      }
+
       // Upsert attendance record
       const attendanceRecord = await this.prisma.studentAttendance.upsert({
         where: {
           classArmStudentId_date: {
-            classArmStudentId: studentAttendance.studentId,
+            classArmStudentId: classArmStudent.id,
             date: attendanceDate,
           },
         },
@@ -2069,7 +2087,7 @@ export class TeacherService {
           termId: dto.termId,
         },
         create: {
-          classArmStudentId: studentAttendance.studentId,
+          classArmStudentId: classArmStudent.id,
           date: attendanceDate,
           status: studentAttendance.status,
           ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
@@ -2095,7 +2113,7 @@ export class TeacherService {
 
     return {
       classArmId: dto.classArmId,
-      classArmName: classArm.name,
+      classArmName: `${classArm.level.name} ${classArm.name}`,
       date: attendanceDate,
       academicSessionId: dto.academicSessionId,
       termId: dto.termId,
@@ -2383,11 +2401,25 @@ export class TeacherService {
       throw new ForbiddenException('You are not authorized to mark attendance for this class');
     }
 
-    const attendanceDate = new Date(date);
+    // Parse the date string and create proper date boundaries
+    // Handle both 'YYYY-MM-DD' format and full ISO strings
+    let attendanceDate: Date;
+    if (date.includes('T')) {
+      // Full ISO string
+      attendanceDate = new Date(date);
+    } else {
+      // Date string like '2025-10-17' - create in local timezone
+      const [year, month, day] = date.split('-').map(Number);
+      attendanceDate = new Date(year, month - 1, day); // month is 0-indexed
+    }
     const startOfDay = new Date(
       attendanceDate.getFullYear(),
       attendanceDate.getMonth(),
       attendanceDate.getDate(),
+      0,
+      0,
+      0,
+      0,
     );
     const endOfDay = new Date(
       attendanceDate.getFullYear(),
@@ -2470,14 +2502,14 @@ export class TeacherService {
 
     // Get all students in the class
     const students = await this.prisma.student.findMany({
-      where: { 
+      where: {
         classArmStudents: {
           some: {
             classArmId,
             isActive: true,
           },
         },
-        deletedAt: null 
+        deletedAt: null,
       },
       include: { user: true },
     });
@@ -2498,7 +2530,9 @@ export class TeacherService {
 
     // Create attendance data for all students
     const attendanceData = students.map((student) => {
-      const attendanceRecord = attendanceRecords.find((record) => record.classArmStudentId === student.id);
+      const attendanceRecord = attendanceRecords.find(
+        (record) => record.classArmStudentId === student.id,
+      );
       return {
         studentId: student.id,
         studentName: `${student.user.firstName} ${student.user.lastName}`,

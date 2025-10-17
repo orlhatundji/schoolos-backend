@@ -319,7 +319,10 @@ export class TeacherController {
   @ApiOperation({ summary: 'Initiate color scheme customization payment' })
   @ApiResponse({ status: 201, description: 'Payment initiated successfully' })
   @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
-  @ApiResponse({ status: 409, description: 'Payment already exists or user already has custom colors' })
+  @ApiResponse({
+    status: 409,
+    description: 'Payment already exists or user already has custom colors',
+  })
   async initiateColorSchemePayment(
     @GetCurrentUserId() userId: string,
     @Body() colorData: InitiateColorSchemePaymentDto,
@@ -344,8 +347,6 @@ export class TeacherController {
   ) {
     return this.teacherService.verifyColorSchemePayment(userId, body.reference);
   }
-
-
 
   // Student Assessment Score Management Endpoints
   @Post('student-assessment-scores')
@@ -534,16 +535,30 @@ export class TeacherController {
   @LogActivity({
     action: 'MARK_CLASS_ATTENDANCE',
     entityType: 'STUDENT_ATTENDANCE',
-    description: (args) => {
-      const dto = args[1] as MarkClassAttendanceDto;
-      return `Class attendance marked for class ${dto.classArmId}`;
-    },
+    // Remove description to let the system use the notification message from details.message
     details: (args, result) => {
-      const dto = args[1] as MarkClassAttendanceDto;
+      // Extract the DTO from the request body
+      const request = args[0];
+      const dto = request.body as MarkClassAttendanceDto;
+
+      // Get class name from result, fallback to a generic message if not available
+      const classArmName = result?.data?.classArmName;
+      const message = classArmName
+        ? `Class attendance marked for class ${classArmName}`
+        : 'Class attendance marked';
+
       return {
+        message: message,
         classArmId: dto.classArmId,
+        classArmName: classArmName || 'Unknown',
         date: dto.date,
-        studentCount: dto.studentAttendances.length,
+        studentCount: dto.studentAttendances?.length || 0,
+        presentCount: result?.presentCount || 0,
+        absentCount: result?.absentCount || 0,
+        lateCount: result?.lateCount || 0,
+        excusedCount: result?.excusedCount || 0,
+        // Add a flag to indicate this message should not include user name
+        skipUserName: true,
       };
     },
     category: 'TEACHER',
@@ -583,7 +598,7 @@ export class TeacherController {
       const dto = args[1] as MarkSubjectAttendanceDto;
       return `Subject attendance marked for class ${dto.classArmId}`;
     },
-    details: (args, result) => {
+    details: (args) => {
       const dto = args[1] as MarkSubjectAttendanceDto;
       return {
         subjectId: dto.subjectId,

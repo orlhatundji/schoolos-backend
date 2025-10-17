@@ -344,6 +344,24 @@ export class AdminClassroomService {
       throw error;
     }
 
+    // Handle ClassArmTeacher relationship sync
+    if (updateClassroomDto.classTeacherId !== undefined) {
+      // Delete existing ClassArmTeacher for this classroom
+      await this.prisma.classArmTeacher.deleteMany({
+        where: { classArmId: classroomId },
+      });
+      
+      // Create new ClassArmTeacher if a teacher was assigned
+      if (updateClassroomDto.classTeacherId) {
+        await this.prisma.classArmTeacher.create({
+          data: {
+            teacherId: updateClassroomDto.classTeacherId,
+            classArmId: classroomId,
+          },
+        });
+      }
+    }
+
     return {
       id: updatedClassroom.id,
       name: updatedClassroom.name,

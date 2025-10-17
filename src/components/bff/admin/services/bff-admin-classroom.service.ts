@@ -511,6 +511,16 @@ export class BffAdminClassroomService {
       },
     });
 
+    // Create ClassArmTeacher record if a teacher was assigned
+    if (createClassroomDto.classTeacherId) {
+      await this.prisma.classArmTeacher.create({
+        data: {
+          teacherId: createClassroomDto.classTeacherId,
+          classArmId: classroom.id,
+        },
+      });
+    }
+
     return {
       id: classroom.id,
       name: classroom.name,

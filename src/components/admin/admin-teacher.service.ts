@@ -174,6 +174,14 @@ export class AdminTeacherService {
             where: { id: createTeacherDto.classArmId },
             data: { classTeacherId: teacher.id },
           });
+
+          // Create corresponding ClassArmTeacher record
+          await tx.classArmTeacher.create({
+            data: {
+              teacherId: teacher.id,
+              classArmId: createTeacherDto.classArmId,
+            },
+          });
         }
 
         // Return teacher with all related data

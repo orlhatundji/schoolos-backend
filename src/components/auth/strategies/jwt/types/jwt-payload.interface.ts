@@ -4,4 +4,5 @@ export interface IJwtPayload {
   email: string;
   sub: string;
   type: UserType;
+  schoolId: string;
 }

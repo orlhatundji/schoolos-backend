@@ -66,6 +66,7 @@ export class TokensService extends BaseService {
       id: userId,
       email: user.email,
       type: user.type,
+      schoolId: user.schoolId,
     });
 
     await this.saveRefreshToken({

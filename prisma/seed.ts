@@ -43,7 +43,7 @@ async function logSeedActivity(
       severity: 'INFO',
       category: 'SYSTEM',
     });
-  } catch (error) {
+  } catch {
     // Activity logging failed - continue with seeding
   }
 }
@@ -283,14 +283,21 @@ async function main() {
   console.log('Creating levels...');
   const levels = await Promise.all(
     [
-      { name: 'JSS1', code: 'JSS1' },
-      { name: 'JSS2', code: 'JSS2' },
-      { name: 'JSS3', code: 'JSS3' },
-      { name: 'SS1', code: 'SS1' },
-      { name: 'SS2', code: 'SS2' },
-      { name: 'SS3', code: 'SS3' },
+      { name: 'JSS1', code: 'JSS1', order: 1 },
+      { name: 'JSS2', code: 'JSS2', order: 2 },
+      { name: 'JSS3', code: 'JSS3', order: 3 },
+      { name: 'SS1', code: 'SS1', order: 4 },
+      { name: 'SS2', code: 'SS2', order: 5 },
+      { name: 'SS3', code: 'SS3', order: 6 },
     ].map((level) =>
-      prisma.level.create({ data: { name: level.name, code: level.code, schoolId: school.id } }),
+      prisma.level.create({
+        data: {
+          name: level.name,
+          code: level.code,
+          schoolId: school.id,
+          order: level.order,
+        },
+      }),
     ),
   );
 
@@ -320,7 +327,7 @@ async function main() {
         data: {
           academicYear,
           schoolId: school.id,
-          isCurrent: academicYear === currentAcademicYear,
+          isCurrent: academicYear === previousAcademicYear,
           startDate: faker.date.past(),
           endDate: faker.date.future(),
         },
@@ -471,10 +478,10 @@ async function main() {
   }
 
   // Ensure current session is properly set
-  console.log('Ensuring current session is set...');
-  const year = new Date().getFullYear();
-  const nextYearValue = year + 1;
-  const targetAcademicYear = `${year}/${nextYearValue}`;
+  // console.log('Ensuring current session is set...');
+  // const year = new Date().getFullYear();
+  // const nextYearValue = year + 1;
+  // const targetAcademicYear = `${year}/${nextYearValue}`;
 
   // First, unset all current sessions for this school
   await prisma.academicSession.updateMany({
@@ -483,22 +490,22 @@ async function main() {
   });
 
   // Then set the current year session as current
-  const targetSession = await prisma.academicSession.findFirst({
-    where: {
-      schoolId: school.id,
-      academicYear: targetAcademicYear,
-    },
-  });
+  // const targetSession = await prisma.academicSession.findFirst({
+  //   where: {
+  //     schoolId: school.id,
+  //     academicYear: targetAcademicYear,
+  //   },
+  // });
 
-  if (targetSession) {
-    await prisma.academicSession.update({
-      where: { id: targetSession.id },
-      data: { isCurrent: true },
-    });
-    console.log(`✅ Set current session to: ${targetAcademicYear}`);
-  } else {
-    console.log(`⚠️  Current session ${targetAcademicYear} not found`);
-  }
+  // if (targetSession) {
+  //   await prisma.academicSession.update({
+  //     where: { id: targetSession.id },
+  //     data: { isCurrent: true },
+  //   });
+  //   console.log(`✅ Set current session to: ${targetAcademicYear}`);
+  // } else {
+  //   console.log(`⚠️  Current session ${targetAcademicYear} not found`);
+  // }
 
   console.log('Assigning class teachers...');
   // Assign class teachers with direct references

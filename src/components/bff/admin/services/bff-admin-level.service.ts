@@ -62,6 +62,7 @@ export class BffAdminLevelService {
         id: level.id,
         name: level.name,
         code: level.code,
+        order: level.order,
         classArmsCount,
         studentsCount,
         status,
@@ -126,12 +127,21 @@ export class BffAdminLevelService {
       throw new ConflictException(`Level with code '${createLevelDto.code}' already exists`);
     }
 
+    // Get the next order value for this school
+    const maxOrder = await this.prisma.level.findFirst({
+      where: { schoolId },
+      orderBy: { order: 'desc' },
+      select: { order: true },
+    });
+    const nextOrder = (maxOrder?.order || 0) + 1;
+
     // Create the level
     const level = await this.prisma.level.create({
       data: {
         name: createLevelDto.name,
         code: createLevelDto.code.toUpperCase(),
         schoolId,
+        order: nextOrder,
       },
     });
 

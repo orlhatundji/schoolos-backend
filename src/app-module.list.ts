@@ -5,6 +5,7 @@ import { TerminusModule } from '@nestjs/terminus';
 import { ThrottlerModule } from '@nestjs/throttler';
 
 import { AcademicTimelinesModule } from './components/academic-timelines/academic-timelines.module';
+import { AcademicSettingsModule } from './components/settings/academic-settings.module';
 import { AdminModule } from './components/admin/admin.module';
 import { AssessmentStructuresModule } from './components/assessment-structures/assessment-structures.module';
 import { AssessmentsModule } from './components/assessments/assessments.module';
@@ -56,6 +57,7 @@ export const AppModuleList = [
   UsersModule,
   SchoolsModule,
   SettingsModule,
+  AcademicSettingsModule,
   StudentsModule,
   StudentPromotionsModule,
   AuthModule,

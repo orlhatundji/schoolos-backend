@@ -11,8 +11,15 @@ export interface ClassroomInfo {
   slug: string;
   level: string;
   location: string | null;
-  classTeacher: string | null;
-  classCaptain: string | null;
+  classTeacher: {
+    teacherNo: string;
+    name: string;
+  } | null;
+  classCaptain: {
+    id: string;
+    name: string;
+    studentNo: string;
+  } | null;
   studentsCount: number;
 }
 
@@ -75,6 +82,7 @@ export interface ClassroomDetailsData {
     name: string;
     level: string;
     location: string | null;
+    academicSessionId: string;
   };
   population: ClassroomPopulation;
   attendance: AttendanceStats;
@@ -208,8 +216,6 @@ export interface StudentsViewData {
   students: StudentDetailInfo[];
 }
 
-import { SubjectCategory } from '@prisma/client';
-
 // Subjects View types
 export interface SubjectStats {
   totalSubjects: number;
@@ -306,6 +312,7 @@ export interface LevelInfo {
   id: string;
   name: string;
   code: string;
+  order: number;
   classArmsCount: number;
   studentsCount: number;
   status: 'active' | 'archived';

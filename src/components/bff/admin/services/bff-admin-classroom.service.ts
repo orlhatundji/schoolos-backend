@@ -58,13 +58,26 @@ export class BffAdminClassroomService {
           },
         },
         classTeacher: {
-          include: {
-            user: true,
+          select: {
+            teacherNo: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
         captain: {
-          include: {
-            user: true,
+          select: {
+            id: true,
+            studentNo: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
@@ -91,11 +104,18 @@ export class BffAdminClassroomService {
         slug: classArm.slug,
         level: classArm.level.name,
         location: classArm.location,
-        classTeacher: classArm.classTeacher
-          ? `${classArm.classTeacher.user.firstName} ${classArm.classTeacher.user.lastName}`
-          : null,
+        classTeacher: {
+          teacherNo: classArm.classTeacher?.teacherNo || null,
+          name: classArm.classTeacher?.user
+            ? `${classArm.classTeacher?.user?.firstName} ${classArm.classTeacher?.user?.lastName}`
+            : '',
+        },
         classCaptain: classArm.captain
-          ? `${classArm.captain.user.firstName} ${classArm.captain.user.lastName}`
+          ? {
+              id: classArm.captain?.id || null,
+              name: `${classArm.captain?.user?.firstName} ${classArm.captain?.user?.lastName}`,
+              studentNo: classArm.captain?.studentNo || null,
+            }
           : null,
         studentsCount: classArm.classArmStudents.length,
       };
@@ -171,8 +191,8 @@ export class BffAdminClassroomService {
         classArmStudents: {
           some: {
             classArmId: classroomId,
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         deletedAt: null,
       },
@@ -187,8 +207,8 @@ export class BffAdminClassroomService {
         classArmStudents: {
           some: {
             classArmId: classroomId,
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         deletedAt: null,
       },
@@ -233,8 +253,8 @@ export class BffAdminClassroomService {
         classArmStudents: {
           some: {
             classArmId: classroomId,
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         deletedAt: null,
       },
@@ -361,6 +381,7 @@ export class BffAdminClassroomService {
         name: classroom.name,
         level: (classroom as any).level.name,
         location: (classroom as any).location,
+        academicSessionId: classroom.academicSessionId,
       },
       population: {
         total: totalStudents,
@@ -566,8 +587,8 @@ export class BffAdminClassroomService {
               schoolId,
               deletedAt: null,
             },
-            isActive: true
-          }
+            isActive: true,
+          },
         },
       },
     });
@@ -589,8 +610,8 @@ export class BffAdminClassroomService {
               schoolId,
               deletedAt: null,
             },
-            isActive: true
-          }
+            isActive: true,
+          },
         },
       },
       include: {
@@ -628,6 +649,7 @@ export class BffAdminClassroomService {
         name: classroom.name,
         level: classroom.level.name,
         location: (classroom as any).location,
+        academicSessionId: classroom.academicSessionId,
       },
       population: {
         total: totalStudents,
@@ -702,6 +724,7 @@ export class BffAdminClassroomService {
       },
       include: {
         level: true,
+        academicSession: true,
         classTeacher: {
           include: {
             user: true,
@@ -720,17 +743,17 @@ export class BffAdminClassroomService {
     }
 
     // Get total count of students in the classroom (filtered by current session)
-    const totalStudents = await this.prisma.student.count({
-      where: {
-        classArmStudents: {
-          some: {
-            classArmId: classroom.id,
-            isActive: true
-          }
-        },
-        deletedAt: null,
-      },
-    });
+    // const totalStudents = await this.prisma.student.count({
+    //   where: {
+    //     classArmStudents: {
+    //       some: {
+    //         classArmId: classroom.id,
+    //         isActive: true,
+    //       },
+    //     },
+    //     deletedAt: null,
+    //   },
+    // });
 
     // Calculate pagination
     const skip = (page - 1) * limit;
@@ -741,8 +764,8 @@ export class BffAdminClassroomService {
         classArmStudents: {
           some: {
             classArmId: classroom.id,
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         deletedAt: null,
       },
@@ -787,8 +810,8 @@ export class BffAdminClassroomService {
         classArmStudents: {
           some: {
             classArmId: classroom.id,
-            isActive: true
-          }
+            isActive: true,
+          },
         },
         deletedAt: null,
       },
@@ -856,6 +879,7 @@ export class BffAdminClassroomService {
         name: classroom.name,
         level: classroom.level.name,
         location: classroom.location,
+        academicSessionId: classroom.academicSession.id,
       },
       population: {
         total: allStudents.length,
@@ -890,10 +914,14 @@ export class BffAdminClassroomService {
         id: student.id,
         name: `${student.user.firstName} ${student.user.lastName}`,
         gender: student.user.gender,
-        age: student.user.dateOfBirth ? new Date().getFullYear() - new Date(student.user.dateOfBirth).getFullYear() : 0,
+        age: student.user.dateOfBirth
+          ? new Date().getFullYear() - new Date(student.user.dateOfBirth).getFullYear()
+          : 0,
         admissionNumber: student.studentNo,
         guardianPhone: student.guardian?.user.phone || null,
-        guardianName: student.guardian ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}` : '',
+        guardianName: student.guardian
+          ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+          : '',
         stateOfOrigin: student.user.stateOfOrigin || 'Not provided',
       })),
       topPerformers: topPerformers,

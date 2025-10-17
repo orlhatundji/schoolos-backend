@@ -66,6 +66,28 @@ export class TermsService extends BaseService {
       }
     }
 
+    // Check if term has student attendance records
+    const attendanceRecords = await this.prisma.studentAttendance.count({
+      where: { termId: id },
+    });
+
+    if (attendanceRecords > 0) {
+      throw new BadRequestException(
+        'Cannot delete term. It has student attendance records. Please remove all attendance records first.',
+      );
+    }
+
+    // Check if term has payment structures
+    const paymentStructures = await this.prisma.paymentStructure.count({
+      where: { termId: id },
+    });
+
+    if (paymentStructures > 0) {
+      throw new BadRequestException(
+        'Cannot delete term. It has payment structures. Please remove all payment structures first.',
+      );
+    }
+
     return this.termsRepository.delete({ id });
   }
 

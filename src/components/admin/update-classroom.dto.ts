@@ -30,6 +30,15 @@ export class UpdateClassroomDto {
   classTeacherId?: string;
 
   @ApiProperty({
+    description: 'Class captain ID (optional)',
+    example: 'uuid-of-student',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  captainId?: string;
+
+  @ApiProperty({
     description: 'Location of the classroom (optional)',
     example: 'Room 101, Block A',
     required: false,

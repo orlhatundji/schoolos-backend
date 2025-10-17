@@ -25,9 +25,16 @@ class ClassroomInfoResult implements ClassroomInfo {
   @ApiProperty({ nullable: true })
   location: string | null;
   @ApiProperty({ nullable: true })
-  classTeacher: string | null;
+  classTeacher: {
+    teacherNo: string;
+    name: string;
+  } | null;
   @ApiProperty({ nullable: true })
-  classCaptain: string | null;
+  classCaptain: {
+    id: string;
+    name: string;
+    studentNo: string;
+  } | null;
   @ApiProperty()
   studentsCount: number;
 }

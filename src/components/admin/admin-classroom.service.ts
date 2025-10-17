@@ -232,6 +232,63 @@ export class AdminClassroomService {
       }
     }
 
+    // Validate class captain if provided
+    if (updateClassroomDto.captainId) {
+      const student = await this.prisma.student.findFirst({
+        where: {
+          id: updateClassroomDto.captainId,
+          deletedAt: null,
+          user: {
+            schoolId,
+          },
+          classArmStudents: {
+            some: {
+              classArmId: classroomId,
+              isActive: true,
+            },
+          },
+        },
+      });
+
+      if (!student) {
+        throw new BadRequestException(
+          'Student not found, does not belong to this school, or is not enrolled in this class',
+        );
+      }
+
+      // Get the current academic session for the school
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId,
+          isCurrent: true,
+          deletedAt: null,
+        },
+      });
+
+      if (!currentSession) {
+        throw new BadRequestException('No current academic session found for this school');
+      }
+
+      // Check if student is already a captain of another class in the current session
+      const existingCaptainClass = await this.prisma.classArm.findFirst({
+        where: {
+          captainId: updateClassroomDto.captainId,
+          id: { not: classroomId },
+          academicSessionId: currentSession.id,
+          deletedAt: null,
+        },
+        include: {
+          level: true,
+        },
+      });
+
+      if (existingCaptainClass) {
+        throw new BadRequestException(
+          `Student is already a captain of ${existingCaptainClass.level.name} ${existingCaptainClass.name} in the current academic session. A student can only be a captain of one class at a time.`,
+        );
+      }
+    }
+
     // Update the classroom
     const updateData: any = {
       ...(updateClassroomDto.name && { name: updateClassroomDto.name }),
@@ -250,18 +307,42 @@ export class AdminClassroomService {
       }
     }
 
-    const updatedClassroom = await this.prisma.classArm.update({
-      where: { id: classroomId },
-      data: updateData,
-      include: {
-        level: true,
-        classTeacher: {
-          include: {
-            user: true,
+    // Handle captain assignment separately if needed
+    if (updateClassroomDto.captainId !== undefined) {
+      if (updateClassroomDto.captainId) {
+        updateData.captainId = updateClassroomDto.captainId;
+      } else {
+        updateData.captainId = null;
+      }
+    }
+
+    let updatedClassroom;
+    try {
+      updatedClassroom = await this.prisma.classArm.update({
+        where: { id: classroomId },
+        data: updateData,
+        include: {
+          level: true,
+          classTeacher: {
+            include: {
+              user: true,
+            },
+          },
+          captain: {
+            include: {
+              user: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (error.code === 'P2002' && error.meta?.target?.includes('captainId')) {
+        throw new BadRequestException(
+          'This student is already a captain of another class. A student can only be a captain of one class at a time.',
+        );
+      }
+      throw error;
+    }
 
     return {
       id: updatedClassroom.id,
@@ -271,6 +352,13 @@ export class AdminClassroomService {
         ? {
             id: updatedClassroom.classTeacher.id,
             name: `${updatedClassroom.classTeacher.user.firstName} ${updatedClassroom.classTeacher.user.lastName}`,
+          }
+        : null,
+      captain: updatedClassroom.captain
+        ? {
+            id: updatedClassroom.captain.id,
+            name: `${updatedClassroom.captain.user.firstName} ${updatedClassroom.captain.user.lastName}`,
+            studentNo: updatedClassroom.captain.studentNo,
           }
         : null,
       updatedAt: updatedClassroom.updatedAt,

@@ -58,13 +58,26 @@ export class BffAdminClassroomService {
           },
         },
         classTeacher: {
-          include: {
-            user: true,
+          select: {
+            teacherNo: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
         captain: {
-          include: {
-            user: true,
+          select: {
+            id: true,
+            studentNo: true,
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
@@ -91,11 +104,18 @@ export class BffAdminClassroomService {
         slug: classArm.slug,
         level: classArm.level.name,
         location: classArm.location,
-        classTeacher: classArm.classTeacher
-          ? `${classArm.classTeacher.user.firstName} ${classArm.classTeacher.user.lastName}`
-          : null,
+        classTeacher: {
+          teacherNo: classArm.classTeacher?.teacherNo || null,
+          name: classArm.classTeacher?.user
+            ? `${classArm.classTeacher?.user?.firstName} ${classArm.classTeacher?.user?.lastName}`
+            : '',
+        },
         classCaptain: classArm.captain
-          ? `${classArm.captain.user.firstName} ${classArm.captain.user.lastName}`
+          ? {
+              id: classArm.captain?.id || null,
+              name: `${classArm.captain?.user?.firstName} ${classArm.captain?.user?.lastName}`,
+              studentNo: classArm.captain?.studentNo || null,
+            }
           : null,
         studentsCount: classArm.classArmStudents.length,
       };

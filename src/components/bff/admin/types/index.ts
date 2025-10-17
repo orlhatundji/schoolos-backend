@@ -11,8 +11,15 @@ export interface ClassroomInfo {
   slug: string;
   level: string;
   location: string | null;
-  classTeacher: string | null;
-  classCaptain: string | null;
+  classTeacher: {
+    teacherNo: string;
+    name: string;
+  } | null;
+  classCaptain: {
+    id: string;
+    name: string;
+    studentNo: string;
+  } | null;
   studentsCount: number;
 }
 

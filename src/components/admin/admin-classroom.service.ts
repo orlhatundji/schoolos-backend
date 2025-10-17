@@ -289,6 +289,63 @@ export class AdminClassroomService {
       }
     }
 
+    // Validate class captain if provided
+    if (updateClassroomDto.captainId) {
+      const student = await this.prisma.student.findFirst({
+        where: {
+          id: updateClassroomDto.captainId,
+          deletedAt: null,
+          user: {
+            schoolId,
+          },
+          classArmStudents: {
+            some: {
+              classArmId: classroomId,
+              isActive: true,
+            },
+          },
+        },
+      });
+
+      if (!student) {
+        throw new BadRequestException(
+          'Student not found, does not belong to this school, or is not enrolled in this class',
+        );
+      }
+
+      // Get the current academic session for the school
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId,
+          isCurrent: true,
+          deletedAt: null,
+        },
+      });
+
+      if (!currentSession) {
+        throw new BadRequestException('No current academic session found for this school');
+      }
+
+      // Check if student is already a captain of another class in the current session
+      const existingCaptainClass = await this.prisma.classArm.findFirst({
+        where: {
+          captainId: updateClassroomDto.captainId,
+          id: { not: classroomId },
+          academicSessionId: currentSession.id,
+          deletedAt: null,
+        },
+        include: {
+          level: true,
+        },
+      });
+
+      if (existingCaptainClass) {
+        throw new BadRequestException(
+          `Student is already a captain of ${existingCaptainClass.level.name} ${existingCaptainClass.name} in the current academic session. A student can only be a captain of one class at a time.`,
+        );
+      }
+    }
+
     // Update the classroom
     const updateData: any = {
       ...(updateClassroomDto.name && { name: updateClassroomDto.name }),
@@ -370,6 +427,13 @@ export class AdminClassroomService {
         ? {
             id: updatedClassroom.classTeacher.id,
             name: `${updatedClassroom.classTeacher.user.firstName} ${updatedClassroom.classTeacher.user.lastName}`,
+          }
+        : null,
+      captain: updatedClassroom.captain
+        ? {
+            id: updatedClassroom.captain.id,
+            name: `${updatedClassroom.captain.user.firstName} ${updatedClassroom.captain.user.lastName}`,
+            studentNo: updatedClassroom.captain.studentNo,
           }
         : null,
       captain: updatedClassroom.captain

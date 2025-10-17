@@ -436,13 +436,6 @@ export class AdminClassroomService {
             studentNo: updatedClassroom.captain.studentNo,
           }
         : null,
-      captain: updatedClassroom.captain
-        ? {
-            id: updatedClassroom.captain.id,
-            name: `${updatedClassroom.captain.user.firstName} ${updatedClassroom.captain.user.lastName}`,
-            studentNo: updatedClassroom.captain.studentNo,
-          }
-        : null,
       updatedAt: updatedClassroom.updatedAt,
     };
   }

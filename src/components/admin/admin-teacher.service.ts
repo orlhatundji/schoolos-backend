@@ -515,6 +515,53 @@ export class AdminTeacherService {
           });
         }
 
+        // Update subjects if provided
+        if (updateTeacherDto.subjectIds !== undefined) {
+          // Delete all existing subject assignments for this teacher
+          await tx.classArmSubjectTeacher.deleteMany({
+            where: { teacherId },
+          });
+
+          // If subjectIds array is provided and not empty, create new assignments
+          if (updateTeacherDto.subjectIds.length > 0) {
+            // Validate that all subjects exist and belong to the school
+            const subjects = await tx.subject.findMany({
+              where: {
+                id: { in: updateTeacherDto.subjectIds },
+                schoolId: user.schoolId,
+              },
+            });
+
+            if (subjects.length !== updateTeacherDto.subjectIds.length) {
+              throw new BadRequestException(
+                'One or more subjects not found or do not belong to this school',
+              );
+            }
+
+            // Get class arms for the school
+            const classArms = await tx.classArm.findMany({
+              where: { schoolId: user.schoolId },
+            });
+
+            if (classArms.length === 0) {
+              throw new BadRequestException('No class arms found for this school');
+            }
+
+            // Create subject assignments for each class arm
+            for (const classArm of classArms) {
+              for (const subjectId of updateTeacherDto.subjectIds) {
+                await tx.classArmSubjectTeacher.create({
+                  data: {
+                    classArmId: classArm.id,
+                    subjectId,
+                    teacherId,
+                  },
+                });
+              }
+            }
+          }
+        }
+
         // Return updated teacher
         return tx.teacher.findUnique({
           where: { id: teacherId },

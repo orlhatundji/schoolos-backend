@@ -153,7 +153,7 @@ jobs:
           npx prisma migrate deploy
           
           # Restart the application with PM2 (staging process name)
-          pm2 restart schoolos-backend-staging || pm2 start dist/src/main.js --name schoolos-backend-staging
+          pm2 restart schoolos-backend || pm2 start dist/src/main.js --name schoolos-backend
           
           # Save PM2 configuration
           pm2 save

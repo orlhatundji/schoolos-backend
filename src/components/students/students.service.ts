@@ -67,8 +67,8 @@ export class StudentsService extends BaseService {
       ...userData
     } = createStudentDto;
 
-    // Generate default password
-    const defaultPassword = this.passwordGenerator.generate();
+    // Use fixed default password for all students
+    const defaultPassword = 'default123';
     const hashedPassword = await this.passwordHasher.hash(defaultPassword);
 
     // Create user data with only User model fields
@@ -77,7 +77,7 @@ export class StudentsService extends BaseService {
       password: hashedPassword,
       type: UserType.STUDENT,
       schoolId: schoolId,
-      mustUpdatePassword: true, // Force password change on first login
+      mustUpdatePassword: false, // Allow students to use default password without forcing change
       dateOfBirth: userData.dateOfBirth || new Date().toISOString().split('T')[0], // Provide default date string if not set
       email:
         userData.email ||

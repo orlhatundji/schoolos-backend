@@ -19,14 +19,14 @@ async function bootstrap() {
   };
 
   if (process.env.NODE_ENV === 'production') {
-    // Allow all subdomains of schos.ng in production
-    corsOptions.origin = (origin, callback) => {
-      if (!origin || origin.endsWith('.schos.ng') || origin === 'https://schos.ng') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    };
+    corsOptions.origin = [
+      'https://api.schos.ng',
+      'https://admin.schos.ng',
+      'https://teacher.schos.ng',
+      'https://student.schos.ng',
+      'https://www.schos.ng',
+      'https://platform.schos.ng',
+    ];
   } else if (process.env.NODE_ENV === 'staging') {
     corsOptions.origin = [
       'https://devapi.schos.ng',

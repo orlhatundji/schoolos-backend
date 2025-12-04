@@ -3,7 +3,7 @@ name: Deploy to Lightsail
 on:
   push:
     branches: [main, staging]
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: # Allow manual  trigger
     inputs:
       environment:
         description: 'Environment to deploy to'

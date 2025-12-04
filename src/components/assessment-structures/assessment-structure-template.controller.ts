@@ -5,7 +5,11 @@ import { PoliciesGuard } from '../../components/roles-manager/policies/policies.
 import { GetCurrentUserId } from '../../common/decorators/get-current-user-id.decorator';
 import { CheckPolicies } from '../../components/roles-manager/policies/check-policies.decorator';
 import { AssessmentStructureTemplateService } from './assessment-structure-template.service';
-import { CreateAssessmentStructureTemplateDto, UpdateAssessmentStructureTemplateDto, AssessmentStructureTemplateResponseDto } from './dto/assessment-structure-template.dto';
+import {
+  CreateAssessmentStructureTemplateDto,
+  UpdateAssessmentStructureTemplateDto,
+  AssessmentStructureTemplateResponseDto,
+} from './dto/assessment-structure-template.dto';
 
 @ApiTags('Assessment Structure Templates')
 @ApiBearerAuth()
@@ -42,21 +46,17 @@ export class AssessmentStructureTemplateController {
   @ApiResponse({ status: 200, description: 'Assessment structure template retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  @ApiResponse({ status: 404, description: 'Not found - no template exists for this session' })
+  @ApiResponse({ status: 200, description: 'Template will be created automatically if missing' })
   async getActive(
     @GetCurrentUserId() userId: string,
     @Query('academicSessionId') academicSessionId: string,
   ) {
-    const template = await this.assessmentStructureTemplateService.findActiveForSession(userId, academicSessionId);
-    
-    if (!template) {
-      return {
-        status: 404,
-        message: 'No assessment structure template found for this academic session',
-        data: null,
-      };
-    }
-    
+    // Service will automatically create template if it doesn't exist
+    const template = await this.assessmentStructureTemplateService.findActiveForSession(
+      userId,
+      academicSessionId,
+    );
+
     return {
       status: 200,
       message: 'Assessment structure template retrieved successfully',
@@ -93,10 +93,7 @@ export class AssessmentStructureTemplateController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Not found - template does not exist' })
   @ApiResponse({ status: 409, description: 'Conflict - template is in use and cannot be deleted' })
-  async delete(
-    @GetCurrentUserId() userId: string,
-    @Param('id') id: string,
-  ) {
+  async delete(@GetCurrentUserId() userId: string, @Param('id') id: string) {
     const result = await this.assessmentStructureTemplateService.delete(userId, id);
     return {
       status: 200,

@@ -27,6 +27,15 @@ async function bootstrap() {
         callback(new Error('Not allowed by CORS'));
       }
     };
+  } else if (process.env.NODE_ENV === 'staging') {
+    corsOptions.origin = [
+      'https://devapi.schos.ng',
+      'https://dev-admin.schos.ng',
+      'https://dev-teacher.schos.ng',
+      'https://dev-student.schos.ng',
+      'https://dev-website.schos.ng',
+      'https://dev-platform.schos.ng',
+    ];
   } else {
     // Allow localhost in development
     corsOptions.origin = [

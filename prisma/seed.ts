@@ -233,9 +233,14 @@ async function main() {
       },
     });
 
+    // Generate adminNo for super admin
+    const currentYear = new Date().getFullYear().toString().slice(-2);
+    const adminNo = `${school.code}/SA/${currentYear}/0001`;
+
     const superAdmin = await prisma.admin.create({
       data: {
         userId: adminUser.id,
+        adminNo,
         isSuper: true,
       },
     });

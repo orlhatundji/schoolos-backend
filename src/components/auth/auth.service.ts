@@ -49,17 +49,35 @@ export class AuthService extends BaseService {
     return { tokens, student };
   }
 
-  async login(
-    dto: LoginDto,
-  ): Promise<{
+  async login(dto: LoginDto): Promise<{
     tokens: AuthTokens;
     user?: User;
     student?: Student;
     teacher?: Teacher;
+    admin?: { id: string; adminNo: string; isSuper: boolean };
     preferences?: any;
   }> {
-    const { email, password } = dto;
-    const user = await this.userService.findByEmail(email);
+    const { email, userNo, userType, password } = dto;
+    let user: User | null = null;
+    let student: Student | undefined;
+    let teacher: Teacher | undefined;
+    let admin: { id: string; adminNo: string; isSuper: boolean } | undefined;
+
+    // Determine login method: email or userNo+userType
+    if (email) {
+      // Email-based login (for system/platform admins)
+      user = await this.userService.findByEmail(email);
+    } else if (userNo && userType) {
+      // UserNo-based login (for students, teachers, admins)
+      const result = await this._findUserByUserNo(userNo, userType);
+      user = result.user;
+      student = result.student;
+      teacher = result.teacher;
+      admin = result.admin;
+    } else {
+      throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
+    }
+
     if (!user) {
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
     }
@@ -73,7 +91,7 @@ export class AuthService extends BaseService {
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);
 
-    // Get school's color scheme (only for users with a school)
+    // Get school's color scheme
     let schoolColorScheme = 'default';
     if (user.schoolId) {
       const school = await this.prisma.school.findUnique({
@@ -83,12 +101,11 @@ export class AuthService extends BaseService {
       schoolColorScheme = school?.colorScheme || 'default';
     }
 
-    // Fetch user preferences
+    // Fetch or create user preferences
     let preferences = await this.prisma.userPreferences.findUnique({
       where: { userId: user.id },
     });
 
-    // Create default preferences if they don't exist
     if (!preferences) {
       preferences = await this.prisma.userPreferences.create({
         data: {
@@ -103,31 +120,94 @@ export class AuthService extends BaseService {
           marketingEmails: false,
         },
       });
-    } else {
-      // Always update school color scheme to reflect current school's color scheme
-      if (preferences.schoolColorScheme !== schoolColorScheme) {
-        preferences = await this.prisma.userPreferences.update({
+    } else if (preferences.schoolColorScheme !== schoolColorScheme) {
+      preferences = await this.prisma.userPreferences.update({
+        where: { userId: user.id },
+        data: { schoolColorScheme: schoolColorScheme },
+      });
+    }
+
+    // For email-based login, fetch additional data based on user type
+    if (email && !student && !teacher && !admin) {
+      if (user.type === UserType.TEACHER) {
+        teacher = (await this.teachersService.getTeacherByUserId(user.id)) || undefined;
+      } else if (user.type === UserType.STUDENT) {
+        student = (await this.studentService.getStudentByUserId(user.id)) || undefined;
+      } else if (user.type === UserType.ADMIN || user.type === UserType.SUPER_ADMIN) {
+        const adminData = await this.prisma.admin.findUnique({
           where: { userId: user.id },
-          data: { schoolColorScheme: schoolColorScheme },
         });
+        if (adminData) {
+          admin = {
+            id: adminData.id,
+            adminNo: adminData.adminNo,
+            isSuper: adminData.isSuper,
+          };
+        }
       }
     }
 
-    // Return appropriate data based on user type
-    if (user.type === UserType.TEACHER) {
-      const teacher = await this.teachersService.getTeacherByUserId(user.id);
-      if (teacher) {
-        return { tokens, teacher, preferences };
-      }
-    } else if (user.type === UserType.STUDENT) {
-      const student = await this.studentService.getStudentByUserId(user.id);
-      if (student) {
-        return { tokens, student, preferences };
-      }
-    }
+    return {
+      tokens,
+      user,
+      student,
+      teacher,
+      admin,
+      preferences,
+    };
+  }
 
-    // Fallback to regular user data
-    return { tokens, user, preferences };
+  private async _findUserByUserNo(
+    userNo: string,
+    userType: UserType,
+  ): Promise<{
+    user: User | null;
+    student?: Student;
+    teacher?: Teacher;
+    admin?: { id: string; adminNo: string; isSuper: boolean };
+  }> {
+    switch (userType) {
+      case UserType.STUDENT: {
+        const studentData = await this.studentService.getStudentByStudentNo(userNo);
+        if (studentData) {
+          return { user: studentData.user, student: studentData };
+        }
+        return { user: null };
+      }
+      case UserType.TEACHER: {
+        const teacherData = await this.teachersService.getTeacherByTeacherNo(userNo);
+        if (teacherData) {
+          return { user: teacherData.user, teacher: teacherData };
+        }
+        return { user: null };
+      }
+      case UserType.ADMIN:
+      case UserType.SUPER_ADMIN: {
+        const adminData = await this.prisma.admin.findUnique({
+          where: { adminNo: userNo },
+          include: {
+            user: {
+              include: {
+                school: true,
+              },
+            },
+          },
+        });
+        if (adminData) {
+          return {
+            user: adminData.user,
+            admin: {
+              id: adminData.id,
+              adminNo: adminData.adminNo,
+              isSuper: adminData.isSuper,
+            },
+          };
+        }
+        return { user: null };
+      }
+      default:
+        return { user: null };
+    }
   }
 
   private async _validate(password: string, user: User) {

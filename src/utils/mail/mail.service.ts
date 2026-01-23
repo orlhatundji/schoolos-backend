@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { IMailService, SendEmailInputType } from './types';
 import { BaseService } from '../../common/base-service';
-import { MailjetService } from './mailjet/mailjet.service';
+import { ResendService } from './resend/resend.service';
 
 @Injectable()
 export class MailService extends BaseService implements IMailService {
-  constructor(private readonly _mailerService: MailjetService) {
+  constructor(private readonly _mailerService: ResendService) {
     super(MailService.name);
   }
 

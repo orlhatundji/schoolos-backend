@@ -9,10 +9,17 @@ import { Student } from '../../students/types';
 import { TeacherEntity } from '../../teachers/results';
 import { Teacher } from '../../teachers/types';
 
+interface AdminInfo {
+  id: string;
+  adminNo: string;
+  isSuper: boolean;
+}
+
 interface IAuthResultInput {
   user?: User;
   student?: Student;
   teacher?: Teacher;
+  admin?: AdminInfo;
   preferences?: any;
   tokens: AuthTokens;
   message: string;
@@ -23,6 +30,7 @@ class AuthResultData {
   user?: UserEntity;
   student?: StudentEntity;
   teacher?: TeacherEntity;
+  admin?: AdminInfo;
   preferences?: any;
   tokens: AuthTokens;
 }
@@ -35,6 +43,7 @@ export class AuthResult extends BaseResultWithData {
     user,
     student,
     teacher,
+    admin,
     preferences,
     tokens,
     message,
@@ -50,6 +59,10 @@ export class AuthResult extends BaseResultWithData {
       data.teacher = TeacherEntity.fromTeacher(teacher);
     } else {
       data.user = UserEntity.from(user);
+    }
+
+    if (admin) {
+      data.admin = admin;
     }
 
     return new AuthResult(status, message, data);

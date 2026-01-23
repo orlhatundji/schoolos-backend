@@ -27,11 +27,60 @@ export const getNextUserEntityNoFormatted = (
   return `${schoolCode}/${entityMap[entityType]}/${twoDigitYear}/${paddedNextSeq}`;
 };
 
-export const USER_ENTITY_PREFIX: Record<UserType, string> = {
-  SUPER_ADMIN: 'SUP-ADM',
-  ADMIN: 'ADM',
-  GUARDIAN: 'GUA',
-  STUDENT: 'STU',
-  TEACHER: 'TEA',
-  SYSTEM_ADMIN: 'SYS-ADM',
+/**
+ * Common words to skip when generating acronyms
+ */
+const SKIP_WORDS = new Set([
+  'the',
+  'of',
+  'and',
+  'for',
+  'a',
+  'an',
+  'in',
+  'at',
+  'to',
+  'is',
+]);
+
+/**
+ * Generates an acronym from a school name by taking the first letter of each significant word.
+ * Skips common words like "the", "of", "and", etc.
+ * @param schoolName - The full name of the school (e.g., "Bright Future High School")
+ * @param maxLength - Maximum length of the acronym (default: 4)
+ * @returns The acronym in uppercase (e.g., "BFHS")
+ */
+export const generateSchoolAcronym = (
+  schoolName: string,
+  maxLength: number = 4,
+): string => {
+  if (!schoolName || typeof schoolName !== 'string') {
+    return 'SCH'; // Default fallback
+  }
+
+  const acronym = schoolName
+    .split(/\s+/)
+    .filter((word) => word.length > 0 && !SKIP_WORDS.has(word.toLowerCase()))
+    .map((word) => word[0].toUpperCase())
+    .join('')
+    .slice(0, maxLength);
+
+  // Ensure we have at least 2 characters
+  return acronym.length >= 2 ? acronym : 'SCH';
+};
+
+/**
+ * Generates a unique school code by combining the school name acronym with a sequence number.
+  * Format: {ACRONYM}{2-DIGIT-SEQ} (e.g., "BFH01", "LA02")
+ * @param schoolName - The full name of the school
+ * @param sequenceNo - The sequence number from the global counter
+ * @returns The formatted school code
+ */
+export const generateSchoolCode = (
+  schoolName: string,
+  sequenceNo: number,
+): string => {
+  const acronym = generateSchoolAcronym(schoolName);
+  const paddedSeq = sequenceNo.toString().padStart(2, '0');
+  return `${acronym}${paddedSeq}`;
 };

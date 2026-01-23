@@ -6,6 +6,8 @@ import { RejectSignupDto } from '../dto/reject-signup.dto';
 import { PasswordGenerator } from '../../../utils/password/password.generator';
 import { PasswordHasher } from '../../../utils/hasher/hasher';
 import { MailService } from '../../../utils/mail/mail.service';
+import { CounterService } from '../../../common/counter';
+import { getNextUserEntityNoFormatted } from '../../../utils/misc';
 
 @Injectable()
 export class SignupApprovalService {
@@ -14,6 +16,7 @@ export class SignupApprovalService {
     private readonly passwordGenerator: PasswordGenerator,
     private readonly passwordHasher: PasswordHasher,
     private readonly mailService: MailService,
+    private readonly counterService: CounterService,
   ) {}
 
   async getSignupRequests(params: { page?: number; limit?: number; status?: string }) {
@@ -135,6 +138,7 @@ export class SignupApprovalService {
 
       // 4. Generate secure admin password
       const adminPassword = this.passwordGenerator.generate();
+      console.log('[SignupApprovalService] Admin password:', adminPassword);
       const hashedPassword = await this.passwordHasher.hash(adminPassword);
 
       // 5. Create admin user
@@ -154,10 +158,19 @@ export class SignupApprovalService {
         },
       });
 
-      // 6. Create admin record with super admin privileges
+      // 6. Generate admin number and create admin record with super admin privileges
+      const adminSeq = await this.counterService.getNextSequenceNo(UserType.SUPER_ADMIN, school.id, tx);
+      const adminNo = getNextUserEntityNoFormatted(
+        UserType.SUPER_ADMIN,
+        school.code,
+        new Date(),
+        adminSeq,
+      );
+
       await tx.admin.create({
         data: {
           userId: adminUser.id,
+          adminNo,
           isSuper: true,
         },
       });
@@ -180,6 +193,7 @@ export class SignupApprovalService {
         schoolId: school.id,
         schoolCode: school.code,
         adminUserId: adminUser.id,
+        adminNo,
         approvedAt: updatedRequest.reviewedAt,
         message:
           'School account created successfully. Admin credentials sent to the contact person.',

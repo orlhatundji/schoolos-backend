@@ -1372,26 +1372,55 @@ export class TeacherService {
       throw new Error('Student not found or not in your school');
     }
 
-    // Find the subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
+    // Find the subject
+    const subject = await this.prisma.subject.findFirst({
       where: {
-        subject: {
-          name: {
-            equals: createDto.subjectName,
-            mode: 'insensitive',
+        name: {
+          equals: createDto.subjectName,
+          mode: 'insensitive',
+        },
+        schoolId: teacher.user.schoolId,
+      },
+    });
+
+    if (!subject) {
+      throw new Error(`Subject "${createDto.subjectName}" not found`);
+    }
+
+    // Find the current academic session and term
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: {
+        isCurrent: true,
+        schoolId: teacher.user.schoolId,
+      },
+      include: {
+        terms: {
+          where: {
+            name: {
+              equals: createDto.termName,
+              mode: 'insensitive',
+            },
+            deletedAt: null,
           },
-          schoolId: teacher.user.schoolId,
         },
-        term: {
-          name: {
-            equals: createDto.termName,
-            mode: 'insensitive',
-          },
-        },
-        academicSession: {
-          isCurrent: true,
-          schoolId: teacher.user.schoolId,
-        },
+      },
+    });
+
+    if (!currentSession) {
+      throw new Error('No current academic session found');
+    }
+
+    const term = currentSession.terms[0];
+    if (!term) {
+      throw new Error(`Term "${createDto.termName}" not found in current academic session`);
+    }
+
+    // Find or create the subject term
+    let subjectTerm = await this.prisma.subjectTerm.findFirst({
+      where: {
+        subjectId: subject.id,
+        termId: term.id,
+        academicSessionId: currentSession.id,
       },
       include: {
         subject: true,
@@ -1401,7 +1430,19 @@ export class TeacherService {
     });
 
     if (!subjectTerm) {
-      throw new Error('Subject term not found');
+      // Auto-create SubjectTerm if it doesn't exist
+      subjectTerm = await this.prisma.subjectTerm.create({
+        data: {
+          subjectId: subject.id,
+          termId: term.id,
+          academicSessionId: currentSession.id,
+        },
+        include: {
+          subject: true,
+          term: true,
+          academicSession: true,
+        },
+      });
     }
 
     // Verify teacher is assigned to teach this subject in this class

@@ -120,8 +120,8 @@ export class ExcelBulkUploadService {
       throw new NotFoundException(`Term '${termName}' not found for session '${sessionName}'. Available terms: ${termNames}`);
     }
 
-    // Get subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
+    // Get or create subject term
+    let subjectTerm = await this.prisma.subjectTerm.findFirst({
       where: {
         subjectId: subject.id,
         termId: term.id,
@@ -136,7 +136,19 @@ export class ExcelBulkUploadService {
     });
 
     if (!subjectTerm) {
-      throw new NotFoundException(`Subject term not found. Subject '${subjectName}' may not be offered in term '${termName}' for session '${sessionName}'`);
+      // Auto-create SubjectTerm if it doesn't exist
+      subjectTerm = await this.prisma.subjectTerm.create({
+        data: {
+          subjectId: subject.id,
+          termId: term.id,
+          academicSessionId: academicSession.id,
+        },
+        include: {
+          subject: true,
+          term: true,
+          academicSession: true,
+        },
+      });
     }
 
     // Check if level exists (case-insensitive)
@@ -914,8 +926,8 @@ export class ExcelBulkUploadService {
       throw new NotFoundException(`Term '${termName}' not found for session '${sessionName}'`);
     }
 
-    // Get subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
+    // Get or create subject term
+    let subjectTerm = await this.prisma.subjectTerm.findFirst({
       where: {
         subjectId: subject.id,
         termId: term.id,
@@ -925,7 +937,14 @@ export class ExcelBulkUploadService {
     });
 
     if (!subjectTerm) {
-      throw new NotFoundException('Subject term not found');
+      // Auto-create SubjectTerm if it doesn't exist
+      subjectTerm = await this.prisma.subjectTerm.create({
+        data: {
+          subjectId: subject.id,
+          termId: term.id,
+          academicSessionId: academicSession.id,
+        },
+      });
     }
 
     // Get or create subject term student

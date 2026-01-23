@@ -71,7 +71,7 @@ export const generateSchoolAcronym = (
 
 /**
  * Generates a unique school code by combining the school name acronym with a sequence number.
-  * Format: {ACRONYM}{2-DIGIT-SEQ} (e.g., "BFH01", "LA02")
+ * Format: {ACRONYM} for first school, {ACRONYM}{SEQ} for subsequent (e.g., "BFH", "BFH2", "BFH81")
  * @param schoolName - The full name of the school
  * @param sequenceNo - The sequence number from the global counter
  * @returns The formatted school code
@@ -81,6 +81,9 @@ export const generateSchoolCode = (
   sequenceNo: number,
 ): string => {
   const acronym = generateSchoolAcronym(schoolName);
-  const paddedSeq = sequenceNo.toString().padStart(2, '0');
-  return `${acronym}${paddedSeq}`;
+  // First school with this acronym gets just the prefix, subsequent ones get prefix + number
+  if (sequenceNo === 1) {
+    return acronym;
+  }
+  return `${acronym}${sequenceNo}`;
 };

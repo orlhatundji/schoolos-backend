@@ -799,16 +799,13 @@ export class TeacherService {
   }
 
   // Get class details for class teachers
-  async getClassDetails(userId: string, level: string, classArm: string): Promise<ClassDetails> {
+  async getClassDetails(userId: string, classArmId: string): Promise<ClassDetails> {
     const teacher = await this.getTeacherWithRelations(userId);
 
     // Find the specific class arm
     const classArmData = await this.prisma.classArm.findFirst({
       where: {
-        name: classArm,
-        level: {
-          name: level,
-        },
+        id: classArmId,
         schoolId: teacher.user.schoolId,
         deletedAt: null,
       },
@@ -929,20 +926,13 @@ export class TeacherService {
   }
 
   // Get students in a specific class for class teachers
-  async getClassStudents(
-    userId: string,
-    level: string,
-    classArm: string,
-  ): Promise<ClassStudentInfo[]> {
+  async getClassStudents(userId: string, classArmId: string): Promise<ClassStudentInfo[]> {
     const teacher = await this.getTeacherWithRelations(userId);
 
     // Find the specific class arm
     const classArmData = await this.prisma.classArm.findFirst({
       where: {
-        name: classArm,
-        level: {
-          name: level,
-        },
+        id: classArmId,
         schoolId: teacher.user.schoolId,
         deletedAt: null,
       },

@@ -93,23 +93,16 @@ export class TeacherController {
 
   @Get('class-details')
   @ApiQuery({
-    name: 'level',
+    name: 'classArmId',
     required: true,
     type: String,
-    description: 'Level name (e.g., JSS1, JSS2, SS1)',
-  })
-  @ApiQuery({
-    name: 'classArm',
-    required: true,
-    type: String,
-    description: 'Class arm name (e.g., A, B, Alpha)',
+    description: 'Class arm ID',
   })
   async getClassDetails(
     @GetCurrentUserId() userId: string,
-    @Query('level') level: string,
-    @Query('classArm') classArm: string,
+    @Query('classArmId') classArmId: string,
   ) {
-    const classDetails = await this.teacherService.getClassDetails(userId, level, classArm);
+    const classDetails = await this.teacherService.getClassDetails(userId, classArmId);
     return new ClassDetailsResult(classDetails);
   }
 
@@ -150,23 +143,16 @@ export class TeacherController {
 
   @Get('class-students')
   @ApiQuery({
-    name: 'level',
+    name: 'classArmId',
     required: true,
     type: String,
-    description: 'Level name (e.g., JSS1, JSS2, SS1)',
-  })
-  @ApiQuery({
-    name: 'classArm',
-    required: true,
-    type: String,
-    description: 'Class arm name (e.g., A, B, Alpha)',
+    description: 'Class arm ID',
   })
   async getClassStudents(
     @GetCurrentUserId() userId: string,
-    @Query('level') level: string,
-    @Query('classArm') classArm: string,
+    @Query('classArmId') classArmId: string,
   ) {
-    const students = await this.teacherService.getClassStudents(userId, level, classArm);
+    const students = await this.teacherService.getClassStudents(userId, classArmId);
     return new ClassStudentsResult(students);
   }
 

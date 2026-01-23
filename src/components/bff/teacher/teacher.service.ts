@@ -983,7 +983,7 @@ export class TeacherService {
       throw new ForbiddenException(
         `You are not authorized to access this class's student information. ` +
           `You must be either the class teacher or assigned to teach any subject in this class. ` +
-          `Looking for: teacherId=${teacher.id} in ${level}${classArm}. ` +
+          `Looking for: teacherId=${teacher.id} in classArmId=${classArmId}. ` +
           `Class teacher: ${classArmData.classTeacherId || 'None assigned'}. ` +
           `Available subject assignments: ${availableAssignments}`,
       );

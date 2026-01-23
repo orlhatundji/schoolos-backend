@@ -1016,23 +1016,16 @@ export class TeacherService {
   // Get subject assessment scores for a specific class
   async getSubjectAssessmentScores(
     userId: string,
-    level: string,
-    classArm: string,
+    classArmId: string,
     subjectName: string,
   ): Promise<SubjectAssessmentScores> {
     const teacher = await this.getTeacherWithRelations(userId);
 
-    // Find the specific class arm in the current academic session
+    // Find the specific class arm by ID
     const classArmData = await this.prisma.classArm.findFirst({
       where: {
-        name: classArm,
-        level: {
-          name: level,
-        },
+        id: classArmId,
         schoolId: teacher.user.schoolId,
-        academicSession: {
-          isCurrent: true,
-        },
         deletedAt: null,
       },
       include: {
@@ -1095,7 +1088,7 @@ export class TeacherService {
 
     if (!classArmData) {
       throw new NotFoundException(
-        `Class ${level} ${classArm} not found in the current academic session. Please contact the administrator to set up class arms for the current session.`,
+        `Class arm with ID ${classArmId} not found. Please contact the administrator.`,
       );
     }
 
@@ -1116,7 +1109,7 @@ export class TeacherService {
       throw new ForbiddenException(
         `You are not authorized to access this subject's assessment scores. ` +
           `You must be either the class teacher or assigned to teach this subject. ` +
-          `Looking for: teacherId=${teacher.id}, subjectName=${subjectName} in ${level}${classArm}. ` +
+          `Looking for: teacherId=${teacher.id}, subjectName=${subjectName}. ` +
           `Class teacher: ${classArmData.classTeacherId || 'None assigned'}. ` +
           `Available subject assignments: ${availableAssignments}`,
       );
@@ -1226,6 +1219,9 @@ export class TeacherService {
     return {
       subjectId: subjectTeacher.subject.id,
       subjectName: subjectTeacher.subject.name,
+      classArmId: classArmData.id,
+      classArmName: classArmData.name,
+      levelName: classArmData.level?.name || '',
       teacher: {
         id: subjectTeacher.teacher.id,
         name: `${subjectTeacher.teacher.user.firstName} ${subjectTeacher.teacher.user.lastName}`,

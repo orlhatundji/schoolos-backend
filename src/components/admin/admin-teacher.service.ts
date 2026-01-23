@@ -531,8 +531,57 @@ export class AdminTeacherService {
           });
         }
 
-        // Update subjects if provided
-        if (updateTeacherDto.subjectIds !== undefined) {
+        // Handle new per-classarm subject assignments if provided
+        if (updateTeacherDto.subjectAssignments !== undefined) {
+          // Delete all existing subject assignments for this teacher
+          await tx.classArmSubjectTeacher.deleteMany({
+            where: { teacherId },
+          });
+
+          // Create new assignments based on specific classArm-subject combinations
+          for (const assignment of updateTeacherDto.subjectAssignments) {
+            // Validate subject exists and belongs to the school
+            const subject = await tx.subject.findFirst({
+              where: {
+                id: assignment.subjectId,
+                schoolId: user.schoolId,
+              },
+            });
+
+            if (!subject) {
+              throw new BadRequestException(
+                `Subject with ID ${assignment.subjectId} not found or does not belong to this school`,
+              );
+            }
+
+            // Validate all class arms exist and belong to the school
+            const classArms = await tx.classArm.findMany({
+              where: {
+                id: { in: assignment.classArmIds },
+                schoolId: user.schoolId,
+              },
+            });
+
+            if (classArms.length !== assignment.classArmIds.length) {
+              throw new BadRequestException(
+                'One or more class arms not found or do not belong to this school',
+              );
+            }
+
+            // Create subject assignments for each specified class arm
+            for (const classArmId of assignment.classArmIds) {
+              await tx.classArmSubjectTeacher.create({
+                data: {
+                  classArmId,
+                  subjectId: assignment.subjectId,
+                  teacherId,
+                },
+              });
+            }
+          }
+        }
+        // Legacy: Update subjects if provided (assigns to all class arms)
+        else if (updateTeacherDto.subjectIds !== undefined) {
           // Delete all existing subject assignments for this teacher
           await tx.classArmSubjectTeacher.deleteMany({
             where: { teacherId },
@@ -742,6 +791,79 @@ export class AdminTeacherService {
       subjects,
       createdAt: teacher.createdAt.toISOString(),
       updatedAt: teacher.updatedAt.toISOString(),
+    };
+  }
+
+  async getTeacherSubjectAssignments(userId: string, teacherId: string) {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not found or not associated with a school');
+    }
+
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId: user.schoolId, isCurrent: true },
+    });
+
+    // Get teacher's subject assignments with class arm and subject details
+    const assignments = await this.prisma.classArmSubjectTeacher.findMany({
+      where: {
+        teacherId,
+        deletedAt: null,
+        ...(currentSession && {
+          classArm: {
+            academicSessionId: currentSession.id,
+            deletedAt: null,
+          },
+        }),
+      },
+      include: {
+        subject: true,
+        classArm: {
+          include: {
+            level: true,
+          },
+        },
+      },
+    });
+
+    // Group assignments by subject
+    const subjectMap = new Map<string, {
+      subjectId: string;
+      subjectName: string;
+      classArms: Array<{
+        id: string;
+        name: string;
+        level: string;
+      }>;
+    }>();
+
+    for (const assignment of assignments) {
+      const existing = subjectMap.get(assignment.subjectId);
+      const classArmInfo = {
+        id: assignment.classArm.id,
+        name: assignment.classArm.name,
+        level: assignment.classArm.level?.name || '',
+      };
+
+      if (existing) {
+        existing.classArms.push(classArmInfo);
+      } else {
+        subjectMap.set(assignment.subjectId, {
+          subjectId: assignment.subjectId,
+          subjectName: assignment.subject.name,
+          classArms: [classArmInfo],
+        });
+      }
+    }
+
+    return {
+      subjectAssignments: Array.from(subjectMap.values()),
     };
   }
 

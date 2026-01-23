@@ -158,16 +158,10 @@ export class TeacherController {
 
   @Get('subject-assessment-scores')
   @ApiQuery({
-    name: 'level',
+    name: 'classArmId',
     required: true,
     type: String,
-    description: 'Level name (e.g., JSS1, JSS2, SS1)',
-  })
-  @ApiQuery({
-    name: 'classArm',
-    required: true,
-    type: String,
-    description: 'Class arm name (e.g., A, B, Alpha)',
+    description: 'Class arm ID',
   })
   @ApiQuery({
     name: 'subjectName',
@@ -177,14 +171,12 @@ export class TeacherController {
   })
   async getSubjectAssessmentScores(
     @GetCurrentUserId() userId: string,
-    @Query('level') level: string,
-    @Query('classArm') classArm: string,
+    @Query('classArmId') classArmId: string,
     @Query('subjectName') subjectName: string,
   ) {
     const scores = await this.teacherService.getSubjectAssessmentScores(
       userId,
-      level,
-      classArm,
+      classArmId,
       subjectName,
     );
     return new SubjectAssessmentScoresResult(scores);

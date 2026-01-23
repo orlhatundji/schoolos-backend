@@ -5,9 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { UserType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma';
 import { PasswordHasher } from '../../utils/hasher';
+import { CounterService } from '../../common/counter';
+import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { CreateTeacherDto, QueryTeachersDto, UpdateTeacherDto } from './dto';
 import {
   TeacherDetailsResult,
@@ -21,6 +24,7 @@ export class AdminTeacherService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordHasher: PasswordHasher,
+    private readonly counterService: CounterService,
   ) {}
 
   async createTeacher(userId: string, createTeacherDto: CreateTeacherDto): Promise<TeacherResult> {
@@ -48,8 +52,20 @@ export class AdminTeacherService {
       }
     }
 
+    // Get school code for teacher number generation
+    const school = await this.prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: { code: true },
+    });
+
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
     // Generate teacher number if not provided
-    const teacherNo = createTeacherDto.teacherId || (await this.generateTeacherNumber());
+    const teacherNo =
+      createTeacherDto.teacherId ||
+      (await this.generateTeacherNumber(user.schoolId, school.code));
 
     // Check for email/phone conflicts within the school scope
     if (createTeacherDto.email) {
@@ -691,55 +707,9 @@ export class AdminTeacherService {
     };
   }
 
-  private async generateTeacherNumber(): Promise<string> {
-    // Since teacherNo is globally unique, we need to find the last teacher number across all schools
-    const lastTeacher = await this.prisma.teacher.findFirst({
-      where: {
-        deletedAt: null,
-        teacherNo: {
-          not: {
-            contains: 'NaN',
-          },
-        },
-      },
-      orderBy: { teacherNo: 'desc' },
-    });
-
-    if (!lastTeacher) {
-      return 'TCH001';
-    }
-
-    const lastNumber = parseInt(lastTeacher.teacherNo.replace('TCH', ''));
-
-    // Handle invalid numbers (like NaN)
-    if (isNaN(lastNumber)) {
-      // Find the highest valid number
-      const allTeachers = await this.prisma.teacher.findMany({
-        where: {
-          deletedAt: null,
-          teacherNo: {
-            startsWith: 'TCH',
-          },
-        },
-        select: {
-          teacherNo: true,
-        },
-        orderBy: { teacherNo: 'desc' },
-      });
-
-      let maxNumber = 0;
-      for (const teacher of allTeachers) {
-        const number = parseInt(teacher.teacherNo.replace('TCH', ''));
-        if (!isNaN(number) && number > maxNumber) {
-          maxNumber = number;
-        }
-      }
-
-      return `TCH${(maxNumber + 1).toString().padStart(3, '0')}`;
-    }
-
-    const nextNumber = lastNumber + 1;
-    return `TCH${nextNumber.toString().padStart(3, '0')}`;
+  private async generateTeacherNumber(schoolId: string, schoolCode: string): Promise<string> {
+    const nextSeq = await this.counterService.getNextSequenceNo(UserType.TEACHER, schoolId);
+    return getNextUserEntityNoFormatted(UserType.TEACHER, schoolCode, new Date(), nextSeq);
   }
 
   private mapTeacherToResult(teacher: any): TeacherResult {

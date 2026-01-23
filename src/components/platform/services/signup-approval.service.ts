@@ -100,11 +100,15 @@ export class SignupApprovalService {
       throw new BadRequestException('Request has already been processed');
     }
 
+    // Type cast the JSON data
+    const contactPersonData = request.contactPerson as any;
+
+    // Generate secure admin password before transaction
+    const adminPassword = this.passwordGenerator.generate();
+
     // Use transaction to ensure data consistency
-    return await this.prisma.$transaction(async (tx) => {
-      // Type cast the JSON data
+    const result = await this.prisma.$transaction(async (tx) => {
       const addressData = request.address as any;
-      const contactPersonData = request.contactPerson as any;
 
       // 1. Create address record
       const address = await tx.address.create({
@@ -136,9 +140,7 @@ export class SignupApprovalService {
         },
       });
 
-      // 4. Generate secure admin password
-      const adminPassword = this.passwordGenerator.generate();
-      console.log('[SignupApprovalService] Admin password:', adminPassword);
+      // 4. Hash admin password
       const hashedPassword = await this.passwordHasher.hash(adminPassword);
 
       // 5. Create admin user
@@ -186,18 +188,69 @@ export class SignupApprovalService {
         },
       });
 
-      // 8. TODO: Send welcome email with credentials
-
       return {
         ...updatedRequest,
         schoolId: school.id,
         schoolCode: school.code,
+        schoolName: school.name,
         adminUserId: adminUser.id,
         adminNo,
         approvedAt: updatedRequest.reviewedAt,
-        message:
-          'School account created successfully. Admin credentials sent to the contact person.',
       };
+    });
+
+    // 8. Send welcome email with credentials (after transaction commits)
+    await this.sendWelcomeEmail({
+      email: contactPersonData.email,
+      firstName: contactPersonData.firstName,
+      lastName: contactPersonData.lastName,
+      schoolName: result.schoolName,
+      adminNo: result.adminNo,
+      password: adminPassword,
+    });
+
+    return {
+      ...result,
+      message: 'School account created successfully. Admin credentials sent to the contact person.',
+    };
+  }
+
+  private async sendWelcomeEmail(data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    schoolName: string;
+    adminNo: string;
+    password: string;
+  }) {
+    const { email, firstName, lastName, schoolName, adminNo, password } = data;
+
+    await this.mailService.sendEmail({
+      recipientAddress: email,
+      recipientName: `${firstName} ${lastName}`,
+      subject: `Welcome to Schos - Your ${schoolName} Admin Account`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Welcome to Schos!</h2>
+          <p>Hi ${firstName},</p>
+          <p>Your school <strong>${schoolName}</strong> has been successfully registered on Schos. Below are your administrator login credentials:</p>
+
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Admin ID:</strong> ${adminNo}</p>
+            <p style="margin: 5px 0;"><strong>Temporary Password:</strong> ${password}</p>
+          </div>
+
+          <p style="color: #e74c3c;"><strong>Important:</strong> For security reasons, you will be required to change your password upon first login.</p>
+
+          <p>If you have any questions or need assistance, please contact us:</p>
+          <ul style="list-style: none; padding: 0;">
+            <li>Email: <a href="mailto:support@schos.ng">support@schos.ng</a></li>
+            <li>Phone: <a href="tel:+2347012211243">+234 701 221 1243</a></li>
+          </ul>
+
+          <p>Best regards,<br/>The Schos Team</p>
+        </div>
+      `,
     });
   }
 

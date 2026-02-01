@@ -1,6 +1,5 @@
 import {
   Injectable,
-  BadRequestException,
   UnauthorizedException,
   NotFoundException,
   HttpStatus,
@@ -107,16 +106,11 @@ export class ResetPasswordService extends BaseService {
       throw new NotFoundException(ResetPasswordMessages.FAILURE.USER_NOT_FOUND);
     }
 
-    const isFirstTimePasswordUpdate = user.mustUpdatePassword;
+    const isValidResetToken = await this.validateResetPasswordToken(user, token);
+    const isValidPasswordToken = await this.validateUpdatePassword(user, token);
 
-    if (isFirstTimePasswordUpdate) {
-      // the token here will be the user's default password
-      const isValidPassword = await this.hasher.compare(token, user.password);
-      if (!isValidPassword)
-        throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
-    } else {
-      // validateResetPasswordTokenOrThrow also blacklists the token
-      await this.validateResetPasswordTokenOrThrow(user, token);
+    if (!isValidResetToken && !isValidPasswordToken) {
+      throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
     }
 
     // Pass plain password - users.service.update will hash it
@@ -169,22 +163,31 @@ export class ResetPasswordService extends BaseService {
     return `${baseUrl}/reset-password?token=${token}&userNo=${encodeURIComponent(userNo)}&userType=${userType}`;
   }
 
-  private async validateResetPasswordTokenOrThrow(user: User, token: string) {
+  private async validateResetPasswordToken(user: User, token: string): Promise<boolean> {
     const userToken = await this.tokensService.find(user.id, TokenTypes.RESET_PASSWORD);
     if (!userToken) {
-      throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
+      return false;
     }
 
     if (userToken.blacklisted || userToken.expires < new Date()) {
-      throw new BadRequestException(ResetPasswordMessages.FAILURE.RESET_LINK_EXPIRED);
+      return false;
     }
 
     const decryptedToken = this.encryptor.decrypt(userToken.token);
     if (decryptedToken !== token) {
-      throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
+      return false;
     }
 
     await this.tokensService.blacklistToken(user.id, TokenTypes.RESET_PASSWORD);
+    return true;
+  }
+
+  private async validateUpdatePassword(user: User, token: string): Promise<boolean> {
+    if (!user.mustUpdatePassword) {
+      return false;
+    }
+
+    return await this.hasher.compare(token, user.password);
   }
 
   async resetUserPassword(email: string): Promise<ResetPasswordByAdminResult> {

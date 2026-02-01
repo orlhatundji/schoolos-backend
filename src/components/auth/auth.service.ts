@@ -37,11 +37,11 @@ export class AuthService extends BaseService {
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
     }
 
+    const tokens: AuthTokens = await this._validate(password, student.user);
+
     if (student.user.mustUpdatePassword) {
       throw new UnauthorizedException('You must update your password before proceeding.');
     }
-
-    const tokens: AuthTokens = await this._validate(password, student.user);
 
     // Update last login timestamp
     await this.userService.updateLastLoginAt(student.user.id);
@@ -82,11 +82,11 @@ export class AuthService extends BaseService {
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
     }
 
+    const tokens: AuthTokens = await this._validate(password, user);
+
     if (user.mustUpdatePassword) {
       throw new UnauthorizedException('You must update your password before proceeding.');
     }
-
-    const tokens: AuthTokens = await this._validate(password, user);
 
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);

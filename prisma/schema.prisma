@@ -348,8 +348,6 @@ model User {
   address             Address?             @relation(fields: [addressId], references: [id])
   school              School?              @relation(fields: [schoolId], references: [id])
 
-  @@unique([email, schoolId])
-  @@unique([phone, schoolId])
   @@map("users")
 }
 

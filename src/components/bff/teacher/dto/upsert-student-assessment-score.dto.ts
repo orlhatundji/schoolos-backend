@@ -56,7 +56,7 @@ export class UpsertStudentAssessmentScoreDto {
   subjectName?: string;
 
   @ApiProperty({
-    description: 'Term name (required for new scores)',
+    description: 'Term name (required for new scores when termId not provided)',
     example: 'First Term',
     required: false,
   })
@@ -64,6 +64,16 @@ export class UpsertStudentAssessmentScoreDto {
   @IsString()
   @IsNotEmpty()
   termName?: string;
+
+  @ApiProperty({
+    description: 'Term ID (optional - when provided, used for exact lookup to avoid wrong session/duplicates)',
+    example: 'term-uuid',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  termId?: string;
 
   @ApiProperty({
     description: 'Assessment name (required for new scores)',

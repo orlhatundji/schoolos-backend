@@ -1387,55 +1387,65 @@ export class TeacherService {
       throw new Error(`Subject "${createDto.subjectName}" not found`);
     }
 
-    // Find the current academic session and term
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: {
-        isCurrent: true,
-        schoolId: teacher.user.schoolId,
-      },
-      include: {
-        terms: {
-          where: {
-            name: {
-              equals: createDto.termName,
-              mode: 'insensitive',
+    let term: { id: string; academicSessionId: string };
+    if (createDto.termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: {
+          id: createDto.termId,
+          academicSession: { schoolId: teacher.user.schoolId },
+        },
+      });
+      if (!termRecord) {
+        throw new Error(`Term with ID "${createDto.termId}" not found`);
+      }
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+    } else {
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: {
+          isCurrent: true,
+          schoolId: teacher.user.schoolId,
+        },
+        include: {
+          terms: {
+            where: {
+              name: { equals: createDto.termName, mode: 'insensitive' },
+              deletedAt: null,
             },
-            deletedAt: null,
           },
         },
-      },
-    });
-
-    if (!currentSession) {
-      throw new Error('No current academic session found');
+      });
+      if (!currentSession) {
+        throw new Error('No current academic session found');
+      }
+      const termRecord = currentSession.terms[0];
+      if (!termRecord) {
+        throw new Error(`Term "${createDto.termName}" not found in current academic session`);
+      }
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
     }
 
-    const term = currentSession.terms[0];
-    if (!term) {
-      throw new Error(`Term "${createDto.termName}" not found in current academic session`);
-    }
-
-    // Find or create the subject term
-    let subjectTerm = await this.prisma.subjectTerm.findFirst({
+    const subjectTerms = await this.prisma.subjectTerm.findMany({
       where: {
         subjectId: subject.id,
         termId: term.id,
-        academicSessionId: currentSession.id,
+        academicSessionId: term.academicSessionId,
+        deletedAt: null,
       },
       include: {
         subject: true,
         term: true,
         academicSession: true,
       },
+      orderBy: { createdAt: 'asc' },
     });
+    let subjectTerm = subjectTerms[0] ?? null;
 
     if (!subjectTerm) {
-      // Auto-create SubjectTerm if it doesn't exist
       subjectTerm = await this.prisma.subjectTerm.create({
         data: {
           subjectId: subject.id,
           termId: term.id,
-          academicSessionId: currentSession.id,
+          academicSessionId: term.academicSessionId,
         },
         include: {
           subject: true,
@@ -1458,11 +1468,11 @@ export class TeacherService {
       throw new Error('You are not authorized to teach this subject in this class');
     }
 
-    // Get or create SubjectTermStudent record
     let subjectTermStudent = await this.prisma.subjectTermStudent.findFirst({
       where: {
         studentId: student.id,
         subjectTermId: subjectTerm.id,
+        deletedAt: null,
       },
     });
 
@@ -1813,7 +1823,7 @@ export class TeacherService {
     userId: string,
     upsertDto: UpsertStudentAssessmentScoreDto,
   ): Promise<BulkStudentAssessmentScoreResult> {
-    const { assessmentScores, subjectName, termName, assessmentName } = upsertDto;
+    const { assessmentScores, subjectName, termName, termId, assessmentName } = upsertDto;
     const result: BulkStudentAssessmentScoreResult = {
       success: [],
       failed: [],
@@ -1843,18 +1853,22 @@ export class TeacherService {
             throw new Error('studentId is required for new assessment scores');
           }
 
-          // Validate required fields for new scores
-          if (!subjectName || !termName || !assessmentName) {
+          if (!subjectName || !assessmentName) {
             throw new Error(
-              'subjectName, termName, and assessmentName are required for new assessment scores (must be provided at top level)',
+              'subjectName and assessmentName are required for new assessment scores (must be provided at top level)',
+            );
+          }
+          if (!termId && !termName) {
+            throw new Error(
+              'Either termId or termName is required for new assessment scores',
             );
           }
 
-          // Check if assessment score already exists for this student/subject/term/assessment
           const existingAssessment = await this.findExistingAssessmentScore(
             item.studentId,
             subjectName,
             termName,
+            termId,
             assessmentName,
             teacher.user.schoolId,
           );
@@ -1878,6 +1892,7 @@ export class TeacherService {
               studentId: item.studentId,
               subjectName: subjectName,
               termName: termName,
+              termId: termId,
               assessmentName: assessmentName,
               score: item.score,
               isExam: item.isExam,
@@ -1887,16 +1902,34 @@ export class TeacherService {
               const assessmentScore = await this.createStudentAssessmentScore(userId, createData);
               result.success.push(assessmentScore);
             } catch (error) {
-              // Handle database constraint violation
               if (
                 error.code === 'P2002' &&
                 error.meta?.target?.includes('unique_assessment_per_student_term')
               ) {
-                throw new Error(
-                  'Assessment score already exists for this student. Use update instead of create.',
+                const retryExisting = await this.findExistingAssessmentScore(
+                  item.studentId,
+                  subjectName,
+                  termName,
+                  termId,
+                  assessmentName,
+                  teacher.user.schoolId,
                 );
+                if (retryExisting) {
+                  const assessmentScore = await this.updateStudentAssessmentScore(
+                    userId,
+                    retryExisting.id,
+                    { score: item.score, assessmentName, isExam: item.isExam },
+                  );
+                  result.success.push(assessmentScore);
+                } else {
+                  result.failed.push({
+                    assessmentScore: item,
+                    error: error.message || 'Operation failed',
+                  });
+                }
+              } else {
+                throw error;
               }
-              throw error;
             }
           }
         }
@@ -1915,41 +1948,44 @@ export class TeacherService {
     studentId: string,
     subjectName: string,
     termName: string,
+    termId: string | undefined,
     assessmentName: string,
     schoolId: string,
   ) {
-    // Find the subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
-      where: {
-        subject: {
-          name: {
-            equals: subjectName,
-            mode: 'insensitive',
-          },
-          schoolId: schoolId,
-        },
-        term: {
-          name: {
-            equals: termName,
-            mode: 'insensitive',
-          },
-        },
-        academicSession: {
-          isCurrent: true,
-          schoolId: schoolId,
-        },
+    const subjectTermWhere: any = {
+      subject: {
+        name: { equals: subjectName, mode: 'insensitive' },
+        schoolId: schoolId,
       },
+    };
+    if (termId) {
+      subjectTermWhere.termId = termId;
+      subjectTermWhere.academicSession = { schoolId: schoolId };
+    } else {
+      subjectTermWhere.term = {
+        name: { equals: termName, mode: 'insensitive' },
+      };
+      subjectTermWhere.academicSession = {
+        isCurrent: true,
+        schoolId: schoolId,
+      };
+    }
+
+    const subjectTerms = await this.prisma.subjectTerm.findMany({
+      where: subjectTermWhere,
+      orderBy: { createdAt: 'asc' },
     });
+    const subjectTerm = subjectTerms[0] ?? null;
 
     if (!subjectTerm) {
       return null;
     }
 
-    // Find the subject term student
     const subjectTermStudent = await this.prisma.subjectTermStudent.findFirst({
       where: {
         studentId: studentId,
         subjectTermId: subjectTerm.id,
+        deletedAt: null,
       },
     });
 
@@ -1957,14 +1993,10 @@ export class TeacherService {
       return null;
     }
 
-    // Find existing assessment score
     const existingAssessment = await this.prisma.subjectTermStudentAssessment.findFirst({
       where: {
         subjectTermStudentId: subjectTermStudent.id,
-        name: {
-          equals: assessmentName,
-          mode: 'insensitive',
-        },
+        name: { equals: assessmentName, mode: 'insensitive' },
         deletedAt: null,
       },
     });

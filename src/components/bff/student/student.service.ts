@@ -360,11 +360,12 @@ export class StudentService extends BaseService {
       }
     }
 
-    // Get subject term students with assessments
     const whereClause: any = {
       studentId: student.id,
+      deletedAt: null,
       subjectTerm: {
         termId: term.id,
+        deletedAt: null,
       },
     };
 
@@ -372,7 +373,7 @@ export class StudentService extends BaseService {
       whereClause.subjectTerm.subjectId = subjectId;
     }
 
-    const subjectTermStudents = await this.prisma.subjectTermStudent.findMany({
+    const subjectTermStudentsRaw = await this.prisma.subjectTermStudent.findMany({
       where: whereClause,
       include: {
         subjectTerm: {
@@ -381,10 +382,20 @@ export class StudentService extends BaseService {
           },
         },
         assessments: {
+          where: { deletedAt: null },
           orderBy: { createdAt: 'asc' },
         },
       },
     });
+    const bySubjectId = new Map<string, (typeof subjectTermStudentsRaw)[0]>();
+    for (const sts of subjectTermStudentsRaw) {
+      const sid = sts.subjectTerm.subject.id;
+      const existing = bySubjectId.get(sid);
+      if (!existing || sts.totalScore > existing.totalScore) {
+        bySubjectId.set(sid, sts);
+      }
+    }
+    const subjectTermStudentsDeduped = Array.from(bySubjectId.values());
 
     // Get assessment structures for the school to get correct maxScore values
     const assessmentStructures = await this.prisma.assessmentStructure.findMany({
@@ -401,8 +412,9 @@ export class StudentService extends BaseService {
       assessmentStructureMap.set(structure.name, structure.maxScore);
     });
 
-    // Calculate subject results
-    const subjects = subjectTermStudents.map((sts) => {
+    const subjectTermStudentsForResults = subjectTermStudentsDeduped;
+
+    const subjects = subjectTermStudentsForResults.map((sts) => {
       // Create a map of student assessments by name for quick lookup
       const studentAssessmentsMap = new Map();
       sts.assessments.forEach((assessment) => {

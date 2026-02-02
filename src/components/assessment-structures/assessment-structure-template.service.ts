@@ -151,11 +151,21 @@ export class AssessmentStructureTemplateService {
 
       // Preserve existing UUIDs for assessments that match by ID or name
       const existingAssessments = template.assessments as unknown as AssessmentEntry[];
+      const renamedAssessments: { assessmentTypeId: string; oldName: string; newName: string }[] = [];
+
       const newAssessments = updateDto.assessments.map((a) => {
         // First try to match by existing ID
         if (a.id) {
           const existing = existingAssessments.find((e) => e.id === a.id);
           if (existing) {
+            // Track renames so we can propagate to existing score records
+            if (existing.name !== a.name) {
+              renamedAssessments.push({
+                assessmentTypeId: existing.id,
+                oldName: existing.name,
+                newName: a.name,
+              });
+            }
             return { ...a, id: existing.id };
           }
         }
@@ -172,6 +182,19 @@ export class AssessmentStructureTemplateService {
       });
 
       updateDto.assessments = newAssessments as any;
+
+      // Propagate name changes to existing score records so they remain visible
+      for (const rename of renamedAssessments) {
+        await this.prisma.subjectTermStudentAssessment.updateMany({
+          where: {
+            assessmentTypeId: rename.assessmentTypeId,
+            deletedAt: null,
+          },
+          data: {
+            name: rename.newName,
+          },
+        });
+      }
     }
 
     const updatedTemplate = await this.prisma.assessmentStructureTemplate.update({
@@ -283,6 +306,7 @@ export class AssessmentStructureTemplateService {
   /**
    * Find the active template for a given school and session.
    * Used by other services (BFF, Excel upload) to look up assessment types.
+   * Auto-creates a template if none exists (safe for current/new sessions).
    */
   async findActiveTemplateForSchoolSession(schoolId: string, academicSessionId: string) {
     let template = await this.prisma.assessmentStructureTemplate.findFirst({
@@ -303,6 +327,37 @@ export class AssessmentStructureTemplateService {
     if (assessments.some((a: any) => !a.id)) {
       const assessmentsWithIds = this.ensureAssessmentIds(assessments);
       template = await this.prisma.assessmentStructureTemplate.update({
+        where: { id: template.id },
+        data: { assessments: assessmentsWithIds as any },
+      });
+    }
+
+    return template;
+  }
+
+  /**
+   * Find the template for a historical session without auto-creating.
+   * Used when viewing past results — we must never fabricate a template
+   * from the current session for historical data.
+   * Returns null if no template exists for that session.
+   */
+  async findTemplateForSessionReadOnly(schoolId: string, academicSessionId: string) {
+    const template = await this.prisma.assessmentStructureTemplate.findFirst({
+      where: {
+        schoolId,
+        academicSessionId,
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+
+    if (!template) return null;
+
+    // Backfill IDs if needed (safe mutation — just adds missing UUIDs)
+    const assessments = template.assessments as any[];
+    if (assessments.some((a: any) => !a.id)) {
+      const assessmentsWithIds = this.ensureAssessmentIds(assessments);
+      return await this.prisma.assessmentStructureTemplate.update({
         where: { id: template.id },
         data: { assessments: assessmentsWithIds as any },
       });
@@ -346,31 +401,69 @@ export class AssessmentStructureTemplateService {
     }
   }
 
+  /**
+   * Check if the template has any recorded scores across all its assessment types.
+   */
+  async hasRecordedScores(template: any): Promise<boolean> {
+    const assessments = template.assessments as unknown as AssessmentEntry[];
+    const assessmentTypeIds = assessments.map((a) => a.id).filter(Boolean);
+
+    if (assessmentTypeIds.length === 0) return false;
+
+    const count = await this.prisma.subjectTermStudentAssessment.count({
+      where: {
+        assessmentTypeId: { in: assessmentTypeIds },
+        deletedAt: null,
+      },
+    });
+
+    return count > 0;
+  }
+
+  /**
+   * Validates that structural changes (add/remove assessments, change maxScore)
+   * are not made when scores already exist. Only renames and description/order
+   * changes are allowed when scores exist.
+   */
   private async validateAssessmentsNotInUse(template: any, newAssessments: AssessmentDetailDto[]) {
     const existingAssessments = template.assessments as unknown as AssessmentEntry[];
+    const scoresExist = await this.hasRecordedScores(template);
+
+    if (!scoresExist) return; // No scores — all changes allowed
+
+    // Scores exist: block structural changes
+
+    // 1. Block adding new assessment types
+    if (newAssessments.length !== existingAssessments.length) {
+      throw new BadRequestException(
+        `Cannot add or remove assessment types — scores have already been recorded. ` +
+        `You can rename assessments or change descriptions, but the structure must remain the same.`,
+      );
+    }
+
+    // 2. Block removal of existing assessment types (replaced by different ones)
+    const existingIds = new Set(existingAssessments.map((a) => a.id).filter(Boolean));
     const newIds = new Set(newAssessments.map((a) => a.id).filter(Boolean));
 
-    // Find assessment IDs that are being removed
-    const removedAssessments = existingAssessments.filter(
-      (existing) => existing.id && !newIds.has(existing.id),
-    );
-
-    if (removedAssessments.length === 0) return;
-
-    // Check if any removed assessment types have scores recorded
-    for (const removed of removedAssessments) {
-      const inUseCount = await this.prisma.subjectTermStudentAssessment.count({
-        where: {
-          assessmentTypeId: removed.id,
-          deletedAt: null,
-        },
-      });
-
-      if (inUseCount > 0) {
+    for (const existing of existingAssessments) {
+      if (existing.id && !newIds.has(existing.id)) {
         throw new BadRequestException(
-          `Cannot remove assessment "${removed.name}" - it has ${inUseCount} recorded scores. ` +
-          `You can rename or modify it, but cannot remove it while scores exist.`,
+          `Cannot remove assessment "${existing.name}" — it has recorded scores. ` +
+          `You can rename it, but cannot remove it while scores exist.`,
         );
+      }
+    }
+
+    // 3. Block maxScore changes on existing assessments
+    for (const newAssessment of newAssessments) {
+      if (newAssessment.id) {
+        const existing = existingAssessments.find((e) => e.id === newAssessment.id);
+        if (existing && existing.maxScore !== newAssessment.maxScore) {
+          throw new BadRequestException(
+            `Cannot change max score for "${existing.name}" from ${existing.maxScore} to ${newAssessment.maxScore} — ` +
+            `scores have already been recorded with the current max score.`,
+          );
+        }
       }
     }
   }

@@ -1975,11 +1975,13 @@ export class TeacherService {
             result.failed.push({ assessmentScore: item, error: 'Assessment score not found in your school' });
             continue;
           }
-          // Verify teacher is authorized for this class+subject
-          const classArmId = existing.subjectTermStudent.student.classArmStudents?.[0]?.classArmId;
-          if (classArmId) {
+          // Verify teacher is authorized for this class+subject —
+          // check ALL active enrollments, not just the first one
+          const studentClassArmIds = existing.subjectTermStudent.student.classArmStudents
+            ?.map(cas => cas.classArmId) || [];
+          if (studentClassArmIds.length > 0) {
             const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
-              where: { classArmId, subjectId: subject.id, teacherId: teacher.id },
+              where: { classArmId: { in: studentClassArmIds }, subjectId: subject.id, teacherId: teacher.id },
             });
             if (!authorized) {
               result.failed.push({ assessmentScore: item, error: 'You are not authorized to modify this assessment score' });
@@ -2065,9 +2067,13 @@ export class TeacherService {
             continue;
           }
 
-          // Check authorization
-          const studentClassArmId = student.classArmStudents?.[0]?.classArmId;
-          if (!studentClassArmId || !authorizedClassArmIds.has(studentClassArmId)) {
+          // Check authorization — student may have classArmStudent records across
+          // multiple sessions, so check if ANY of their active enrollments match
+          // a class arm the teacher is authorized for.
+          const studentAuthorizedClassArm = student.classArmStudents?.find(
+            cas => authorizedClassArmIds.has(cas.classArmId),
+          );
+          if (!studentAuthorizedClassArm) {
             result.failed.push({ assessmentScore: item, error: 'You are not authorized to manage scores for this student' });
             continue;
           }

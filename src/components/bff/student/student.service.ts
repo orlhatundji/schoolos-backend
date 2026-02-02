@@ -418,11 +418,25 @@ export class StudentService extends BaseService {
     }
     const subjectTermStudentsDeduped = Array.from(bySubjectId.values());
 
-    // Get assessment structures from the active template for this school/session
-    const template = await this.templateService.findActiveTemplateForSchoolSession(
-      student.user.schoolId,
-      session.id,
-    );
+    // Get assessment structures from the session's own template.
+    // For historical sessions, use read-only lookup to avoid fabricating a template
+    // from the current session's structure. Only auto-create for the current session.
+    const template = session.isCurrent
+      ? await this.templateService.findActiveTemplateForSchoolSession(
+          student.user.schoolId,
+          session.id,
+        )
+      : await this.templateService.findTemplateForSessionReadOnly(
+          student.user.schoolId,
+          session.id,
+        );
+
+    if (!template) {
+      throw new Error(
+        `No assessment structure template found for session ${session.academicYear}`,
+      );
+    }
+
     const assessmentStructures = (template.assessments as any[]).sort(
       (a: any, b: any) => a.order - b.order,
     );

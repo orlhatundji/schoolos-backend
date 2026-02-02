@@ -1,7 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
 
+export interface AssessmentColumn {
+  name: string;
+  maxScore: number;
+  isExam: boolean;
+  order: number;
+}
+
 export interface StudentResultData {
+  school: {
+    name: string;
+    motto?: string;
+    logoUrl?: string;
+    address?: string;
+  };
   student: {
     fullName: string;
     studentNo: string;
@@ -18,6 +31,7 @@ export interface StudentResultData {
     startDate: Date;
     endDate: Date;
   };
+  assessmentStructures: AssessmentColumn[];
   subjects: Array<{
     name: string;
     totalScore: number;
@@ -25,6 +39,7 @@ export interface StudentResultData {
     assessments: Array<{
       name: string;
       score: number;
+      maxScore?: number;
     }>;
   }>;
   overallStats: {
@@ -60,7 +75,7 @@ export class PdfService {
         });
 
         // Modern vibrant header
-        this.addModernHeader(doc);
+        this.addModernHeader(doc, resultsData);
 
         // Card-style student and academic info
         this.addModernStudentAcademicInfo(doc, resultsData);
@@ -94,19 +109,32 @@ export class PdfService {
   }
 
   // Elegant modern header with gradient-like design
-  private addModernHeader(doc: any) {
+  private addModernHeader(doc: any, resultsData: StudentResultData) {
+    const school = resultsData.school;
+    const schoolName = school.name.toUpperCase();
+    const subtitle = [school.motto, school.address].filter(Boolean).join(' • ');
+    // Generate initials from school name (first letter of each word, max 2)
+    const initials = school.name
+      .split(/\s+/)
+      .map(w => w.charAt(0))
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+
     // Main header background with gradient effect
     doc.rect(0, 0, 612, 80).fill('#2c3e50');
     doc.rect(0, 0, 612, 40).fill('#34495e');
 
     // School name with elegant typography
     doc.fillColor('#ecf0f1').fontSize(20).font('Helvetica-Bold');
-    doc.text('BRIGHT FUTURE HIGH SCHOOL', 0, 12, { align: 'center', width: 612 });
-    doc
-      .fontSize(11)
-      .font('Helvetica')
-      .fillColor('#bdc3c7')
-      .text('Excellence in Education • Lagos, Nigeria', 0, 35, { align: 'center', width: 612 });
+    doc.text(schoolName, 0, 12, { align: 'center', width: 612 });
+    if (subtitle) {
+      doc
+        .fontSize(11)
+        .font('Helvetica')
+        .fillColor('#bdc3c7')
+        .text(subtitle, 0, 35, { align: 'center', width: 612 });
+    }
 
     // Elegant logo placeholder
     doc.circle(50, 40, 18).fill('#ecf0f1').stroke('#3498db', 2);
@@ -114,7 +142,7 @@ export class PdfService {
       .fillColor('#3498db')
       .fontSize(10)
       .font('Helvetica-Bold')
-      .text('BF', 42, 34, { width: 16, align: 'center' });
+      .text(initials, 42, 34, { width: 16, align: 'center' });
 
     // Report title with modern styling
     doc.rect(206, 52, 200, 26).fill('#ecf0f1').stroke('#bdc3c7', 1);
@@ -198,18 +226,46 @@ export class PdfService {
     doc.y = startY + 50;
   }
 
-  // Elegant results table with professional design
+  // Elegant results table with professional design — dynamic assessment columns
   private addModernResultsTable(doc: any, resultsData: StudentResultData) {
     const tableTop = doc.y;
     const tableWidth = 552; // Full width minus margins
-    const colWidths = [35, 160, 50, 50, 50, 50, 50, 97];
-    const colPositions = [30, 65, 225, 275, 325, 375, 425, 475];
+    const assessments = resultsData.assessmentStructures;
+    const assessmentCount = assessments.length;
+
+    // Build dynamic column layout:
+    // Fixed columns: S/N (30), Subject (variable), Total (45), Grade (45), Remarks (70)
+    const snWidth = 30;
+    const totalWidth = 45;
+    const gradeWidth = 45;
+    const remarksWidth = 70;
+    const fixedWidth = snWidth + totalWidth + gradeWidth + remarksWidth;
+
+    // Distribute remaining space between Subject and assessment columns
+    const remainingWidth = tableWidth - fixedWidth;
+    // Each assessment column gets equal share, subject gets the rest
+    const assessmentColWidth = Math.min(50, Math.floor(remainingWidth / (assessmentCount + 3)));
+    const subjectWidth = remainingWidth - (assessmentColWidth * assessmentCount);
+
+    // Build column widths and positions
+    const colWidths: number[] = [snWidth, subjectWidth];
+    assessments.forEach(() => colWidths.push(assessmentColWidth));
+    colWidths.push(totalWidth, gradeWidth, remarksWidth);
+
+    const colPositions: number[] = [30];
+    for (let i = 1; i < colWidths.length; i++) {
+      colPositions.push(colPositions[i - 1] + colWidths[i - 1]);
+    }
+
+    // Build header labels
+    const headers: string[] = ['S/N', 'Subject'];
+    assessments.forEach((a) => headers.push(a.name));
+    headers.push('Total', 'Grade', 'Remarks');
 
     // Professional header with gradient
     doc.rect(30, tableTop, tableWidth, 35).fill('#34495e');
     doc.rect(30, tableTop, tableWidth, 3).fill('#3498db');
-    doc.fontSize(12).font('Helvetica-Bold').fillColor('#ecf0f1');
-    const headers = ['S/N', 'Subject', 'Test 1', 'Test 2', 'Exam', 'Total', 'Grade', 'Remarks'];
+    doc.fontSize(assessmentCount > 4 ? 9 : assessmentCount > 3 ? 10 : 12).font('Helvetica-Bold').fillColor('#ecf0f1');
     headers.forEach((header, index) => {
       doc.text(header, colPositions[index], tableTop + 12, {
         width: colWidths[index],
@@ -217,120 +273,96 @@ export class PdfService {
       });
     });
 
+    // Build assessment lookup by name for each structure
+    const getScoreColor = (score: number, maxScore: number) => {
+      const percentage = maxScore > 0 ? (score / maxScore) * 100 : 0;
+      if (percentage >= 80) return '#27ae60';
+      if (percentage >= 60) return '#f39c12';
+      if (percentage >= 40) return '#e67e22';
+      return '#e74c3c';
+    };
+
+    const totalMaxScore = assessments.reduce((sum, a) => sum + a.maxScore, 0);
+
+    const getPerformanceRemark = (grade: string, totalScore: number) => {
+      const percentage = totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0;
+      if (grade === 'A' || percentage >= 80) return 'Excellent';
+      if (grade === 'B' || percentage >= 70) return 'Good';
+      if (grade === 'C' || percentage >= 60) return 'Fair';
+      if (grade === 'D' || percentage >= 50) return 'Poor';
+      return 'Weak';
+    };
+
     // Data rows with elegant styling
     let currentY = tableTop + 35;
     resultsData.subjects.slice(0, 12).forEach((subject, index) => {
-      // Alternating row colors with subtle styling
-      if (index % 2 === 0) {
-        doc.rect(30, currentY, tableWidth, 30).fill('#f8f9fa');
-      } else {
-        doc.rect(30, currentY, tableWidth, 30).fill('#ffffff');
-      }
-
-      // Add subtle row border
+      // Alternating row colors
+      doc.rect(30, currentY, tableWidth, 30).fill(index % 2 === 0 ? '#f8f9fa' : '#ffffff');
       doc.rect(30, currentY, tableWidth, 30).stroke('#e9ecef', 0.5);
 
       doc.fontSize(10).font('Helvetica').fillColor('#495057');
 
-      // Serial number
+      // S/N
       doc.text((index + 1).toString(), colPositions[0], currentY + 10, {
         width: colWidths[0],
         align: 'center',
       });
 
-      // Subject name with better styling
-      doc.font('Helvetica-Bold').text(subject.name, colPositions[1] + 5, currentY + 10, {
-        width: colWidths[1] - 10,
+      // Subject name
+      doc.font('Helvetica-Bold').text(subject.name, colPositions[1] + 3, currentY + 10, {
+        width: colWidths[1] - 6,
       });
       doc.font('Helvetica');
 
-      // Assessment scores with enhanced color coding
-      const test1 = subject.assessments.find((a) => a.name === 'Test 1');
-      const test2 = subject.assessments.find((a) => a.name === 'Test 2');
-      const exam = subject.assessments.find((a) => a.name === 'Exam');
+      // Dynamic assessment score columns
+      const assessmentMap = new Map(subject.assessments.map((a) => [a.name, a]));
+      assessments.forEach((structure, colIdx) => {
+        const assessment = assessmentMap.get(structure.name);
+        const score = assessment ? assessment.score : 0;
+        const maxScore = assessment?.maxScore || structure.maxScore;
+        const posIdx = colIdx + 2; // offset past S/N and Subject
 
-      const getScoreColor = (score: number, maxScore: number) => {
-        const percentage = (score / maxScore) * 100;
-        if (percentage >= 80) return '#27ae60';
-        if (percentage >= 60) return '#f39c12';
-        if (percentage >= 40) return '#e67e22';
-        return '#e74c3c';
-      };
-
-      const test1Score = test1 ? test1.score : 0;
-      const test2Score = test2 ? test2.score : 0;
-      const examScore = exam ? exam.score : 0;
-
-      // Test scores with better presentation
-      doc.fillColor(getScoreColor(test1Score, 20)).font('Helvetica-Bold');
-      doc.text(test1 ? test1.score.toString() : '-', colPositions[2], currentY + 10, {
-        width: colWidths[2],
-        align: 'center',
+        doc.fillColor(getScoreColor(score, maxScore)).font('Helvetica-Bold');
+        doc.text(assessment ? assessment.score.toString() : '-', colPositions[posIdx], currentY + 10, {
+          width: colWidths[posIdx],
+          align: 'center',
+        });
       });
 
-      doc.fillColor(getScoreColor(test2Score, 20));
-      doc.text(test2 ? test2.score.toString() : '-', colPositions[3], currentY + 10, {
-        width: colWidths[3],
-        align: 'center',
-      });
-
-      doc.fillColor(getScoreColor(examScore, 60));
-      doc.text(exam ? exam.score.toString() : '-', colPositions[4], currentY + 10, {
-        width: colWidths[4],
-        align: 'center',
-      });
-
-      // Total score with emphasis
+      // Total
+      const totalColIdx = assessmentCount + 2;
       doc.fillColor('#2c3e50').fontSize(11).font('Helvetica-Bold');
-      doc.text(subject.totalScore.toString(), colPositions[5], currentY + 10, {
-        width: colWidths[5],
+      doc.text(subject.totalScore.toString(), colPositions[totalColIdx], currentY + 10, {
+        width: colWidths[totalColIdx],
         align: 'center',
       });
 
-      // Grade with sophisticated color scheme
+      // Grade
+      const gradeColIdx = totalColIdx + 1;
       const gradeColor =
-        subject.grade === 'A'
-          ? '#27ae60'
-          : subject.grade === 'B'
-            ? '#3498db'
-            : subject.grade === 'C'
-              ? '#f39c12'
-              : subject.grade === 'D'
-                ? '#e67e22'
+        subject.grade === 'A' ? '#27ae60'
+          : subject.grade === 'B' ? '#3498db'
+            : subject.grade === 'C' ? '#f39c12'
+              : subject.grade === 'D' ? '#e67e22'
                 : '#e74c3c';
-
       doc.fillColor(gradeColor).fontSize(11).font('Helvetica-Bold');
-      doc.text(`${subject.grade || '-'}`, colPositions[6], currentY + 10, {
-        width: colWidths[6],
+      doc.text(`${subject.grade || '-'}`, colPositions[gradeColIdx], currentY + 10, {
+        width: colWidths[gradeColIdx],
         align: 'center',
       });
 
-      // Remarks based on performance
-      const getPerformanceRemark = (grade: string, totalScore: number) => {
-        const percentage = (totalScore / 100) * 100; // Assuming max total is 100
-
-        if (grade === 'A' || percentage >= 80) return 'Excellent';
-        if (grade === 'B' || percentage >= 70) return 'Good';
-        if (grade === 'C' || percentage >= 60) return 'Fair';
-        if (grade === 'D' || percentage >= 50) return 'Poor';
-        return 'Weak';
-      };
-
+      // Remarks
+      const remarksColIdx = gradeColIdx + 1;
       const remark = getPerformanceRemark(subject.grade || '', subject.totalScore);
       const remarkColor =
-        remark === 'Excellent'
-          ? '#27ae60'
-          : remark === 'Good'
-            ? '#3498db'
-            : remark === 'Fair'
-              ? '#f39c12'
-              : remark === 'Poor'
-                ? '#e67e22'
+        remark === 'Excellent' ? '#27ae60'
+          : remark === 'Good' ? '#3498db'
+            : remark === 'Fair' ? '#f39c12'
+              : remark === 'Poor' ? '#e67e22'
                 : '#e74c3c';
-
       doc.fillColor(remarkColor).fontSize(10).font('Helvetica-Bold');
-      doc.text(remark, colPositions[7], currentY + 10, {
-        width: colWidths[7],
+      doc.text(remark, colPositions[remarksColIdx], currentY + 10, {
+        width: colWidths[remarksColIdx],
         align: 'center',
       });
 
@@ -339,7 +371,7 @@ export class PdfService {
 
     // Professional table border
     doc.strokeColor('#34495e').lineWidth(2);
-    doc.rect(30, tableTop, 552, currentY - tableTop).stroke();
+    doc.rect(30, tableTop, tableWidth, currentY - tableTop).stroke();
     doc.y = currentY + 20;
   }
 
@@ -369,7 +401,7 @@ export class PdfService {
 
     // Class Teacher section
     doc.fontSize(10).font('Helvetica-Bold').fillColor('#2c3e50');
-    doc.text("Class Teacher's Remark:", 50, footerY + 12);
+    doc.text("Class Teacher's Remark:", 50, footerY + 12, { lineBreak: false });
     doc
       .moveTo(200, footerY + 24)
       .lineTo(562, footerY + 24)
@@ -378,7 +410,7 @@ export class PdfService {
       .stroke();
 
     // Principal section (on separate line)
-    doc.text("Principal's Remark:", 50, footerY + 40);
+    doc.text("Principal's Remark:", 50, footerY + 40, { lineBreak: false });
     doc
       .moveTo(180, footerY + 52)
       .lineTo(562, footerY + 52)
@@ -386,11 +418,15 @@ export class PdfService {
       .lineWidth(1)
       .stroke();
 
-    // Footer bar with branding (adjusted position)
-    doc.rect(0, footerY + 80, 612, 25).fill('#2c3e50');
+    // Footer bar pinned to the absolute bottom of the page
+    // Letter size = 792pt height, bar height = 25pt
+    const pageHeight = 792;
+    const barHeight = 25;
+    const barY = pageHeight - barHeight;
+    doc.rect(0, barY, 612, barHeight).fill('#2c3e50');
     doc.fontSize(9).fillColor('#ecf0f1');
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 50, footerY + 88);
-    doc.text('Powered by Schos', 450, footerY + 88);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 50, barY + 8, { lineBreak: false });
+    doc.text('Powered by Schos', 450, barY + 8, { lineBreak: false });
   }
   // Elegant summary section
   private addSummaryBox(doc: any, resultsData: StudentResultData) {

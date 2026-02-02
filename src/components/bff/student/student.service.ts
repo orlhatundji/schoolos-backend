@@ -3,6 +3,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaystackService } from '../../../shared/services/paystack.service';
+import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import {
   StudentAttendanceData,
   StudentDashboardData,
@@ -19,6 +20,7 @@ export class StudentService extends BaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paystackService: PaystackService,
+    private readonly templateService: AssessmentStructureTemplateService,
   ) {
     super(StudentService.name);
   }
@@ -289,6 +291,12 @@ export class StudentService extends BaseService {
       throw new Error('Student not found');
     }
 
+    // Fetch school details for the report card header
+    const school = await this.prisma.school.findUnique({
+      where: { id: student.user.schoolId },
+      include: { primaryAddress: true },
+    });
+
     // Get academic session and term with proper validation
     let session = null;
     let term = null;
@@ -387,29 +395,41 @@ export class StudentService extends BaseService {
         },
       },
     });
+    // Aggregate duplicate subjectTermStudent records per subject
+    // (race conditions can create multiple records for the same student-subject-term)
     const bySubjectId = new Map<string, (typeof subjectTermStudentsRaw)[0]>();
     for (const sts of subjectTermStudentsRaw) {
       const sid = sts.subjectTerm.subject.id;
       const existing = bySubjectId.get(sid);
-      if (!existing || sts.totalScore > existing.totalScore) {
+      if (!existing) {
         bySubjectId.set(sid, sts);
+      } else {
+        // Merge assessments from duplicate records into the first one
+        const existingNames = new Set(existing.assessments.map(a => a.name));
+        for (const assessment of sts.assessments) {
+          if (!existingNames.has(assessment.name)) {
+            existing.assessments.push(assessment);
+            existingNames.add(assessment.name);
+          }
+        }
+        // Recalculate totalScore from merged assessments
+        existing.totalScore = existing.assessments.reduce((sum, a) => sum + a.score, 0);
       }
     }
     const subjectTermStudentsDeduped = Array.from(bySubjectId.values());
 
-    // Get assessment structures for the school to get correct maxScore values
-    const assessmentStructures = await this.prisma.assessmentStructure.findMany({
-      where: {
-        schoolId: student.user.schoolId,
-        isActive: true,
-      },
-      orderBy: { order: 'asc' },
-    });
+    // Get assessment structures from the active template for this school/session
+    const template = await this.templateService.findActiveTemplateForSchoolSession(
+      student.user.schoolId,
+      session.id,
+    );
+    const assessmentStructures = (template.assessments as any[]).sort(
+      (a: any, b: any) => a.order - b.order,
+    );
 
-    // Create a map for quick lookup of maxScore by assessment name
-    const assessmentStructureMap = new Map();
-    assessmentStructures.forEach((structure) => {
-      assessmentStructureMap.set(structure.name, structure.maxScore);
+    // Get school's grading model for grade calculation
+    const gradingModel = await this.prisma.gradingModel.findUnique({
+      where: { schoolId: student.user.schoolId },
     });
 
     const subjectTermStudentsForResults = subjectTermStudentsDeduped;
@@ -452,7 +472,7 @@ export class StudentService extends BaseService {
         code: sts.subjectTerm.subject.name.substring(0, 3).toUpperCase(),
         totalScore: sts.totalScore,
         averageScore: sts.totalScore,
-        grade: this.calculateGrade(sts.totalScore),
+        grade: this.calculateGrade(sts.totalScore, gradingModel?.model),
         assessments: orderedAssessments,
       };
     });
@@ -490,7 +510,19 @@ export class StudentService extends BaseService {
     const sortedStudents = classStudents.sort((a, b) => b.totalScore - a.totalScore);
     const position = sortedStudents.findIndex((sts) => sts.studentId === student.id) + 1;
 
+    // Build school address string
+    const addr = school?.primaryAddress;
+    const schoolAddress = addr
+      ? [addr.city, addr.state, addr.country].filter(Boolean).join(', ')
+      : undefined;
+
     return {
+      school: {
+        name: school?.name || 'School',
+        motto: school?.motto || undefined,
+        logoUrl: school?.logoUrl || undefined,
+        address: schoolAddress,
+      },
       student: {
         id: student.id,
         studentNo: student.studentNo,
@@ -516,14 +548,21 @@ export class StudentService extends BaseService {
         endDate: term.endDate,
       },
       subjects,
+      assessmentStructures: assessmentStructures.map((s: any) => ({
+        name: s.name,
+        maxScore: s.maxScore,
+        isExam: s.isExam,
+        order: s.order,
+      })),
       overallStats: {
         totalSubjects,
         totalScore,
         averageScore: Math.round(averageScore * 100) / 100,
         position,
         totalStudents: classStudents.length,
-        grade: this.calculateGrade(averageScore),
+        grade: this.calculateGrade(averageScore, gradingModel?.model),
       },
+      gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
     };
   }
 
@@ -531,20 +570,29 @@ export class StudentService extends BaseService {
     const student = await this.prisma.student.findFirst({
       where: { userId },
       include: {
-        user: true,
+        user: {
+          include: {
+            address: true,
+          },
+        },
         classArmStudents: {
           where: { isActive: true },
           include: {
             classArm: {
               include: {
                 level: true,
+                academicSession: true,
               },
             },
           },
         },
         guardian: {
           include: {
-            user: true,
+            user: {
+              include: {
+                address: true,
+              },
+            },
           },
         },
       },
@@ -553,6 +601,18 @@ export class StudentService extends BaseService {
     if (!student) {
       throw new Error('Student not found');
     }
+
+    // Build address strings
+    const buildAddress = (addr: any) => {
+      if (!addr) return undefined;
+      return [addr.street1, addr.street2, addr.city, addr.state, addr.country]
+        .filter(Boolean)
+        .join(', ');
+    };
+
+    // Get current academic session
+    const activeClassArm = student.classArmStudents?.[0];
+    const academicSession = activeClassArm?.classArm?.academicSession;
 
     return {
       student: {
@@ -571,15 +631,23 @@ export class StudentService extends BaseService {
         gender: student.user.gender,
         dateOfBirth: student.user.dateOfBirth,
         avatarUrl: student.user.avatarUrl,
+        address: buildAddress((student.user as any).address),
       },
       classArm: {
-        id: student.classArmStudents?.[0]?.classArm?.id || '',
-        name: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
+        id: activeClassArm?.classArm?.id || '',
+        name: activeClassArm?.classArm?.name || 'N/A',
         level: {
-          id: student.classArmStudents?.[0]?.classArm?.level?.id || '',
-          name: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
+          id: activeClassArm?.classArm?.level?.id || '',
+          name: activeClassArm?.classArm?.level?.name || 'N/A',
         },
       },
+      academicSession: academicSession
+        ? {
+            id: academicSession.id,
+            academicYear: academicSession.academicYear,
+            isCurrent: academicSession.isCurrent,
+          }
+        : undefined,
       guardian: student.guardian
         ? {
             id: student.guardian.id,
@@ -587,7 +655,8 @@ export class StudentService extends BaseService {
             lastName: student.guardian.user.lastName,
             email: student.guardian.user.email,
             phone: student.guardian.user.phone,
-            relationship: 'Parent', // Default relationship since it's not in the schema
+            relationship: 'Parent/Guardian',
+            address: buildAddress((student.guardian.user as any).address),
           }
         : undefined,
     };
@@ -800,6 +869,15 @@ export class StudentService extends BaseService {
       throw new Error('Academic session or term not found');
     }
 
+    // Get school's grading model
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    const gradingModel = user?.schoolId
+      ? await this.prisma.gradingModel.findUnique({ where: { schoolId: user.schoolId } })
+      : null;
+
     const subjectTermStudents = await this.prisma.subjectTermStudent.findMany({
       where: {
         studentId: student.id,
@@ -856,19 +934,31 @@ export class StudentService extends BaseService {
         enrollmentDate: sts.createdAt,
         currentScore: sts.totalScore,
         averageScore: sts.totalScore,
-        grade: this.calculateGrade(sts.totalScore),
+        grade: this.calculateGrade(sts.totalScore, gradingModel?.model),
         totalAssessments,
         completedAssessments,
       };
     });
   }
 
-  private calculateGrade(score: number): string {
-    if (score >= 90) return 'A+';
-    if (score >= 80) return 'A';
-    if (score >= 70) return 'B';
-    if (score >= 60) return 'C';
-    if (score >= 50) return 'D';
+  private calculateGrade(score: number, gradingModelData?: any): string {
+    if (gradingModelData && typeof gradingModelData === 'object') {
+      for (const [grade, range] of Object.entries(gradingModelData)) {
+        if (Array.isArray(range) && range.length === 2) {
+          const [min, max] = range as [number, number];
+          if (score >= min && score <= max) {
+            return grade;
+          }
+        }
+      }
+    }
+
+    // Fallback to default grading
+    if (score >= 70) return 'A';
+    if (score >= 60) return 'B';
+    if (score >= 50) return 'C';
+    if (score >= 45) return 'D';
+    if (score >= 40) return 'E';
     return 'F';
   }
 

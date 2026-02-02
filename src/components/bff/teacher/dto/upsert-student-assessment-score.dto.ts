@@ -42,6 +42,16 @@ export class UpsertStudentAssessmentScoreItemDto {
   @IsOptional()
   @IsBoolean()
   isExam?: boolean;
+
+  @ApiProperty({
+    description: 'Assessment name for this score (overrides top-level assessmentName if provided)',
+    example: 'CA 1',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  assessmentName?: string;
 }
 
 export class UpsertStudentAssessmentScoreDto {

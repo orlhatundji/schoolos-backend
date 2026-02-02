@@ -1,7 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNumber, IsBoolean, IsOptional, Min, Max } from 'class-validator';
+import { randomUUID } from 'crypto';
 
 export class AssessmentDetailDto {
+  @ApiProperty({
+    description: 'Unique identifier for this assessment type (auto-generated if not provided)',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @ApiProperty({
     description: 'Name of the assessment (e.g., "Test 1", "Midterm Exam")',
     example: 'Test 1',

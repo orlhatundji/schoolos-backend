@@ -37,6 +37,8 @@ export interface TeacherProfile {
   qualification: string;
   joinDate: string;
   avatar?: string;
+  subjects: string[];
+  classesAssigned: string[];
 }
 
 // Class information
@@ -147,6 +149,7 @@ export interface SubjectAssessmentScores {
     lowestScore: number;
     passRate: number;
   };
+  gradingModel?: Record<string, [number, number]> | null;
 }
 
 // Subject information

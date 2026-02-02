@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import * as ExcelJS from 'exceljs';
-import { Readable } from 'stream';
 
 export interface StudentAssessmentTemplate {
   studentId: string;
@@ -29,7 +29,10 @@ export interface BulkUploadResult {
 
 @Injectable()
 export class ExcelBulkUploadService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly templateService: AssessmentStructureTemplateService,
+  ) {}
 
   /**
    * Generate Excel template for bulk assessment score upload
@@ -43,21 +46,7 @@ export class ExcelBulkUploadService {
     classArmName: string,
     teacherId: string,
   ): Promise<Buffer> {
-    // Get assessment structures for the school
-    const assessmentStructures = await this.prisma.assessmentStructure.findMany({
-      where: {
-        schoolId,
-        isActive: true,
-        deletedAt: null,
-      },
-      orderBy: { order: 'asc' },
-    });
-
-    if (assessmentStructures.length === 0) {
-      throw new BadRequestException('No assessment structures found for this school');
-    }
-
-    // Get academic session first
+    // Get academic session first (needed to find the template)
     const academicSession = await this.prisma.academicSession.findFirst({
       where: {
         academicYear: sessionName,
@@ -74,6 +63,19 @@ export class ExcelBulkUploadService {
       });
       const sessionNames = availableSessions.map(s => s.academicYear).join(', ');
       throw new NotFoundException(`Academic session '${sessionName}' not found. Available sessions: ${sessionNames}`);
+    }
+
+    // Get assessment structures from the active template for this school/session
+    const template = await this.templateService.findActiveTemplateForSchoolSession(
+      schoolId,
+      academicSession.id,
+    );
+    const assessmentStructures = (template.assessments as any[]).sort(
+      (a: any, b: any) => a.order - b.order,
+    );
+
+    if (assessmentStructures.length === 0) {
+      throw new BadRequestException('No assessment structures found for this school');
     }
 
     // Check if subject exists (case-insensitive)
@@ -338,10 +340,11 @@ export class ExcelBulkUploadService {
       schoolId: schoolId,
       subjectTermId: subjectTerm.id,
       classArmId: classArm.id,
-      assessmentStructures: assessmentStructures.map(structure => ({
+      assessmentStructures: assessmentStructures.map((structure: any) => ({
+        id: structure.id,
         name: structure.name,
         maxScore: structure.maxScore,
-        isExam: structure.isExam
+        isExam: structure.isExam,
       }))
     };
 
@@ -671,6 +674,7 @@ export class ExcelBulkUploadService {
               assessmentName,
               numericScore,
               schoolId,
+              metadata.assessmentStructures,
             );
 
             result.success.push({
@@ -880,6 +884,7 @@ export class ExcelBulkUploadService {
     assessmentName: string,
     score: number,
     schoolId: string,
+    metadataAssessments?: Array<{ id: string; name: string; maxScore: number; isExam: boolean }>,
   ) {
     // Get academic session first
     const academicSession = await this.prisma.academicSession.findFirst({
@@ -937,7 +942,6 @@ export class ExcelBulkUploadService {
     });
 
     if (!subjectTerm) {
-      // Auto-create SubjectTerm if it doesn't exist
       subjectTerm = await this.prisma.subjectTerm.create({
         data: {
           subjectId: subject.id,
@@ -966,18 +970,26 @@ export class ExcelBulkUploadService {
       });
     }
 
-    // Get assessment structure to determine if it's an exam (case-insensitive)
-    const assessmentStructure = await this.prisma.assessmentStructure.findFirst({
-      where: {
+    // Look up assessment type from metadata (embedded in Excel) or from the active template
+    let assessmentEntry: { id: string; name: string; maxScore: number; isExam: boolean } | undefined;
+
+    if (metadataAssessments) {
+      assessmentEntry = metadataAssessments.find(
+        (a) => a.name.toLowerCase() === assessmentName.toLowerCase(),
+      );
+    }
+
+    if (!assessmentEntry) {
+      // Fallback: look up from the active template
+      const template = await this.templateService.findActiveTemplateForSchoolSession(
         schoolId,
-        name: {
-          equals: assessmentName,
-          mode: 'insensitive',
-        },
-        isActive: true,
-        deletedAt: null,
-      },
-    });
+        academicSession.id,
+      );
+      const entry = this.templateService.getAssessmentEntryByName(template, assessmentName);
+      if (entry) {
+        assessmentEntry = { id: entry.id, name: entry.name, maxScore: entry.maxScore, isExam: entry.isExam };
+      }
+    }
 
     // Find existing assessment score (only non-deleted ones)
     const existingAssessment = await this.prisma.subjectTermStudentAssessment.findFirst({
@@ -989,24 +1001,24 @@ export class ExcelBulkUploadService {
     });
 
     if (existingAssessment) {
-      // Update existing assessment
       await this.prisma.subjectTermStudentAssessment.update({
-        where: {
-          id: existingAssessment.id,
-        },
+        where: { id: existingAssessment.id },
         data: {
           score,
-          isExam: assessmentStructure?.isExam || false,
+          isExam: assessmentEntry?.isExam || false,
+          assessmentTypeId: assessmentEntry?.id || existingAssessment.assessmentTypeId,
+          maxScore: assessmentEntry?.maxScore || existingAssessment.maxScore,
         },
       });
     } else {
-      // Create new assessment
       await this.prisma.subjectTermStudentAssessment.create({
         data: {
           name: assessmentName,
           score,
-          isExam: assessmentStructure?.isExam || false,
+          isExam: assessmentEntry?.isExam || false,
           subjectTermStudentId: subjectTermStudent.id,
+          assessmentTypeId: assessmentEntry?.id,
+          maxScore: assessmentEntry?.maxScore,
         },
       });
     }

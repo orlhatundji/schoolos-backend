@@ -815,24 +815,28 @@ async function main() {
     return;
   }
 
-  const assessmentStructures = [];
-  for (const structureData of defaultAssessmentStructures) {
-    const assessmentStructure = await prisma.assessmentStructure.create({
-      data: {
-        name: structureData.name,
-        description: structureData.description,
-        maxScore: structureData.maxScore,
-        isExam: structureData.isExam,
-        order: structureData.order,
-        schoolId: school.id,
-        academicSessionId: currentAcademicSession.id,
-        isActive: true,
-      },
-    });
-    assessmentStructures.push(assessmentStructure);
-  }
+  const { randomUUID } = await import('crypto');
+  const assessmentsWithIds = defaultAssessmentStructures.map((s) => ({
+    id: randomUUID(),
+    name: s.name,
+    description: s.description,
+    maxScore: s.maxScore,
+    isExam: s.isExam,
+    order: s.order,
+  }));
 
-  console.log(`✅ Created ${assessmentStructures.length} default assessment structures`);
+  await prisma.assessmentStructureTemplate.create({
+    data: {
+      schoolId: school.id,
+      academicSessionId: currentAcademicSession.id,
+      name: 'Standard Assessment Structure',
+      description: 'Default assessment structure for all subjects',
+      assessments: assessmentsWithIds as any,
+      isActive: true,
+    },
+  });
+
+  console.log(`✅ Created assessment structure template with ${assessmentsWithIds.length} assessment types`);
 
   console.log('Creating payment structures...');
   // Payment Structures

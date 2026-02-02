@@ -8,6 +8,7 @@ import { PasswordHasher } from '../../../utils/hasher/hasher';
 import { MailService } from '../../../utils/mail/mail.service';
 import { CounterService } from '../../../common/counter';
 import { getNextUserEntityNoFormatted } from '../../../utils/misc';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SignupApprovalService {
@@ -17,6 +18,7 @@ export class SignupApprovalService {
     private readonly passwordHasher: PasswordHasher,
     private readonly mailService: MailService,
     private readonly counterService: CounterService,
+    private readonly configService: ConfigService,
   ) {}
 
   async getSignupRequests(params: { page?: number; limit?: number; status?: string }) {
@@ -224,6 +226,8 @@ export class SignupApprovalService {
     password: string;
   }) {
     const { email, firstName, lastName, schoolName, adminNo, password } = data;
+    const frontendBaseUrl = this.configService.get<string>('frontendBaseUrl');
+    const adminPortalUrl = frontendBaseUrl ? `${frontendBaseUrl}/admin/login` : 'https://admin.schos.ng/login';
 
     await this.mailService.sendEmail({
       recipientAddress: email,
@@ -238,6 +242,10 @@ export class SignupApprovalService {
           <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 5px 0;"><strong>Admin ID:</strong> ${adminNo}</p>
             <p style="margin: 5px 0;"><strong>Temporary Password:</strong> ${password}</p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${adminPortalUrl}" style="display: inline-block; background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Access Admin Portal</a>
           </div>
 
           <p style="color: #e74c3c;"><strong>Important:</strong> For security reasons, you will be required to change your password upon first login.</p>

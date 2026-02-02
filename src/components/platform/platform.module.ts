@@ -11,6 +11,7 @@ import { CounterModule } from '../../common/counter/counter.module';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
 import { ComplaintsService } from './services/complaints.service';
+import { PlatformBootstrapService } from './services/platform-bootstrap.service';
 import { SchoolsManagementService } from './services/schools-management.service';
 import { SignupApprovalService } from './services/signup-approval.service';
 
@@ -19,6 +20,7 @@ import { SignupApprovalService } from './services/signup-approval.service';
   controllers: [PlatformController],
   providers: [
     PlatformService,
+    PlatformBootstrapService,
     SchoolsManagementService,
     SignupApprovalService,
     ComplaintsService,

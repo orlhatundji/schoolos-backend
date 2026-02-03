@@ -27,6 +27,12 @@ const getConfiguration = () => ({
     mailjetSecretKey: process.env.MAILJET_SECRET_KEY,
     defaultEmail: process.env.DEFAULT_SOURCE_EMAIL,
   },
+  platformAdmin: {
+    email: process.env.PLATFORM_ADMIN_EMAIL || 'orlhatund@gmail.com',
+    password: process.env.PLATFORM_ADMIN_PASSWORD || 'Password@123',
+    firstName: process.env.PLATFORM_ADMIN_FIRST_NAME || 'Platform',
+    lastName: process.env.PLATFORM_ADMIN_LAST_NAME || 'Admin',
+  },
   frontendBaseUrl: process.env.FRONTEND_BASE_URL,
   otpGeneratorKey: process.env.OTP_GENERATOR_KEY,
   paystack: {

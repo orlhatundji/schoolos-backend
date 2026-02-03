@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SchoolsService } from '../schools/schools.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SchoolConfigDto, UpdateSchoolConfigDto } from './dto';
@@ -215,5 +215,110 @@ export class SettingsService {
       updatedFields,
       updatedAt: new Date(),
     };
+  }
+
+  async getGradingModel(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new NotFoundException('School not found for user');
+    }
+
+    const gradingModel = await this.prisma.gradingModel.findUnique({
+      where: { schoolId: user.schoolId },
+    });
+
+    if (!gradingModel) {
+      // Return default grading model
+      return {
+        id: null,
+        schoolId: user.schoolId,
+        model: {
+          A: [70, 100],
+          B: [60, 69],
+          C: [50, 59],
+          D: [45, 49],
+          E: [40, 44],
+          F: [0, 39],
+        },
+      };
+    }
+
+    return gradingModel;
+  }
+
+  async upsertGradingModel(userId: string, model: Record<string, [number, number]>) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new NotFoundException('School not found for user');
+    }
+
+    // Validate the grading model
+    this.validateGradingModel(model);
+
+    const result = await this.prisma.gradingModel.upsert({
+      where: { schoolId: user.schoolId },
+      update: { model: model as any },
+      create: {
+        schoolId: user.schoolId,
+        model: model as any,
+      },
+    });
+
+    return result;
+  }
+
+  private validateGradingModel(model: Record<string, [number, number]>) {
+    const entries = Object.entries(model);
+
+    if (entries.length === 0) {
+      throw new BadRequestException('Grading model must have at least one grade');
+    }
+
+    // Validate each entry has [min, max] with min <= max
+    for (const [grade, range] of entries) {
+      if (!Array.isArray(range) || range.length !== 2) {
+        throw new BadRequestException(`Grade "${grade}" must have a [min, max] range`);
+      }
+      const [min, max] = range;
+      if (typeof min !== 'number' || typeof max !== 'number') {
+        throw new BadRequestException(`Grade "${grade}" range must be numeric`);
+      }
+      if (min > max) {
+        throw new BadRequestException(`Grade "${grade}" min (${min}) cannot be greater than max (${max})`);
+      }
+      if (min < 0 || max > 100) {
+        throw new BadRequestException(`Grade "${grade}" range must be between 0 and 100`);
+      }
+    }
+
+    // Validate no overlapping ranges
+    const sortedEntries = entries.sort((a, b) => a[1][0] - b[1][0]);
+    for (let i = 1; i < sortedEntries.length; i++) {
+      const prevMax = sortedEntries[i - 1][1][1];
+      const currMin = sortedEntries[i][1][0];
+      if (currMin <= prevMax) {
+        throw new BadRequestException(
+          `Overlapping ranges: "${sortedEntries[i - 1][0]}" (max ${prevMax}) and "${sortedEntries[i][0]}" (min ${currMin})`,
+        );
+      }
+    }
+
+    // Validate coverage: ranges should cover 0-100
+    const lowestMin = sortedEntries[0][1][0];
+    const highestMax = sortedEntries[sortedEntries.length - 1][1][1];
+    if (lowestMin !== 0) {
+      throw new BadRequestException(`Grading model must cover from 0. Lowest min is ${lowestMin}`);
+    }
+    if (highestMax !== 100) {
+      throw new BadRequestException(`Grading model must cover up to 100. Highest max is ${highestMax}`);
+    }
   }
 }

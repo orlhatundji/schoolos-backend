@@ -5,9 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { UserType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma';
 import { PasswordHasher } from '../../utils/hasher';
+import { CounterService } from '../../common/counter';
+import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { CreateTeacherDto, QueryTeachersDto, UpdateTeacherDto } from './dto';
 import {
   TeacherDetailsResult,
@@ -21,6 +24,7 @@ export class AdminTeacherService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordHasher: PasswordHasher,
+    private readonly counterService: CounterService,
   ) {}
 
   async createTeacher(userId: string, createTeacherDto: CreateTeacherDto): Promise<TeacherResult> {
@@ -48,8 +52,20 @@ export class AdminTeacherService {
       }
     }
 
+    // Get school code for teacher number generation
+    const school = await this.prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: { code: true },
+    });
+
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
     // Generate teacher number if not provided
-    const teacherNo = createTeacherDto.teacherId || (await this.generateTeacherNumber());
+    const teacherNo =
+      createTeacherDto.teacherId ||
+      (await this.generateTeacherNumber(user.schoolId, school.code));
 
     // Check for email/phone conflicts within the school scope
     if (createTeacherDto.email) {
@@ -515,8 +531,57 @@ export class AdminTeacherService {
           });
         }
 
-        // Update subjects if provided
-        if (updateTeacherDto.subjectIds !== undefined) {
+        // Handle new per-classarm subject assignments if provided
+        if (updateTeacherDto.subjectAssignments !== undefined) {
+          // Delete all existing subject assignments for this teacher
+          await tx.classArmSubjectTeacher.deleteMany({
+            where: { teacherId },
+          });
+
+          // Create new assignments based on specific classArm-subject combinations
+          for (const assignment of updateTeacherDto.subjectAssignments) {
+            // Validate subject exists and belongs to the school
+            const subject = await tx.subject.findFirst({
+              where: {
+                id: assignment.subjectId,
+                schoolId: user.schoolId,
+              },
+            });
+
+            if (!subject) {
+              throw new BadRequestException(
+                `Subject with ID ${assignment.subjectId} not found or does not belong to this school`,
+              );
+            }
+
+            // Validate all class arms exist and belong to the school
+            const classArms = await tx.classArm.findMany({
+              where: {
+                id: { in: assignment.classArmIds },
+                schoolId: user.schoolId,
+              },
+            });
+
+            if (classArms.length !== assignment.classArmIds.length) {
+              throw new BadRequestException(
+                'One or more class arms not found or do not belong to this school',
+              );
+            }
+
+            // Create subject assignments for each specified class arm
+            for (const classArmId of assignment.classArmIds) {
+              await tx.classArmSubjectTeacher.create({
+                data: {
+                  classArmId,
+                  subjectId: assignment.subjectId,
+                  teacherId,
+                },
+              });
+            }
+          }
+        }
+        // Legacy: Update subjects if provided (assigns to all class arms)
+        else if (updateTeacherDto.subjectIds !== undefined) {
           // Delete all existing subject assignments for this teacher
           await tx.classArmSubjectTeacher.deleteMany({
             where: { teacherId },
@@ -691,55 +756,9 @@ export class AdminTeacherService {
     };
   }
 
-  private async generateTeacherNumber(): Promise<string> {
-    // Since teacherNo is globally unique, we need to find the last teacher number across all schools
-    const lastTeacher = await this.prisma.teacher.findFirst({
-      where: {
-        deletedAt: null,
-        teacherNo: {
-          not: {
-            contains: 'NaN',
-          },
-        },
-      },
-      orderBy: { teacherNo: 'desc' },
-    });
-
-    if (!lastTeacher) {
-      return 'TCH001';
-    }
-
-    const lastNumber = parseInt(lastTeacher.teacherNo.replace('TCH', ''));
-
-    // Handle invalid numbers (like NaN)
-    if (isNaN(lastNumber)) {
-      // Find the highest valid number
-      const allTeachers = await this.prisma.teacher.findMany({
-        where: {
-          deletedAt: null,
-          teacherNo: {
-            startsWith: 'TCH',
-          },
-        },
-        select: {
-          teacherNo: true,
-        },
-        orderBy: { teacherNo: 'desc' },
-      });
-
-      let maxNumber = 0;
-      for (const teacher of allTeachers) {
-        const number = parseInt(teacher.teacherNo.replace('TCH', ''));
-        if (!isNaN(number) && number > maxNumber) {
-          maxNumber = number;
-        }
-      }
-
-      return `TCH${(maxNumber + 1).toString().padStart(3, '0')}`;
-    }
-
-    const nextNumber = lastNumber + 1;
-    return `TCH${nextNumber.toString().padStart(3, '0')}`;
+  private async generateTeacherNumber(schoolId: string, schoolCode: string): Promise<string> {
+    const nextSeq = await this.counterService.getNextSequenceNo(UserType.TEACHER, schoolId);
+    return getNextUserEntityNoFormatted(UserType.TEACHER, schoolCode, new Date(), nextSeq);
   }
 
   private mapTeacherToResult(teacher: any): TeacherResult {
@@ -772,6 +791,79 @@ export class AdminTeacherService {
       subjects,
       createdAt: teacher.createdAt.toISOString(),
       updatedAt: teacher.updatedAt.toISOString(),
+    };
+  }
+
+  async getTeacherSubjectAssignments(userId: string, teacherId: string) {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not found or not associated with a school');
+    }
+
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId: user.schoolId, isCurrent: true },
+    });
+
+    // Get teacher's subject assignments with class arm and subject details
+    const assignments = await this.prisma.classArmSubjectTeacher.findMany({
+      where: {
+        teacherId,
+        deletedAt: null,
+        ...(currentSession && {
+          classArm: {
+            academicSessionId: currentSession.id,
+            deletedAt: null,
+          },
+        }),
+      },
+      include: {
+        subject: true,
+        classArm: {
+          include: {
+            level: true,
+          },
+        },
+      },
+    });
+
+    // Group assignments by subject
+    const subjectMap = new Map<string, {
+      subjectId: string;
+      subjectName: string;
+      classArms: Array<{
+        id: string;
+        name: string;
+        level: string;
+      }>;
+    }>();
+
+    for (const assignment of assignments) {
+      const existing = subjectMap.get(assignment.subjectId);
+      const classArmInfo = {
+        id: assignment.classArm.id,
+        name: assignment.classArm.name,
+        level: assignment.classArm.level?.name || '',
+      };
+
+      if (existing) {
+        existing.classArms.push(classArmInfo);
+      } else {
+        subjectMap.set(assignment.subjectId, {
+          subjectId: assignment.subjectId,
+          subjectName: assignment.subject.name,
+          classArms: [classArmInfo],
+        });
+      }
+    }
+
+    return {
+      subjectAssignments: Array.from(subjectMap.values()),
     };
   }
 

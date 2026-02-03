@@ -55,4 +55,27 @@ export class SettingsController {
       data: result,
     };
   }
+
+  @Get('grading-model')
+  @ApiOperation({ summary: 'Get school grading model' })
+  @ApiResponse({
+    status: 200,
+    description: 'Grading model retrieved successfully',
+  })
+  async getGradingModel(@GetCurrentUserId() userId: string) {
+    return this.settingsService.getGradingModel(userId);
+  }
+
+  @Put('grading-model')
+  @ApiOperation({ summary: 'Create or update school grading model' })
+  @ApiResponse({
+    status: 200,
+    description: 'Grading model updated successfully',
+  })
+  async upsertGradingModel(
+    @GetCurrentUserId() userId: string,
+    @Body() body: { model: Record<string, [number, number]> },
+  ) {
+    return this.settingsService.upsertGradingModel(userId, body.model);
+  }
 }

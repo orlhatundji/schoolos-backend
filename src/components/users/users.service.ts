@@ -24,7 +24,7 @@ export class UsersService extends BaseService {
   }
 
   async save(createUserDto: CreateUserDto) {
-    await this.throwIfUserExists(createUserDto);
+    // await this.throwIfUserExists(createUserDto);
 
     const { password, email, dateOfBirth, ...others } = createUserDto;
     const hashedPassword = await this.hasher.hash(password);

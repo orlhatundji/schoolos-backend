@@ -57,10 +57,12 @@ export class AssessmentStructureTemplateController {
       academicSessionId,
     );
 
+    const hasRecordedScores = await this.assessmentStructureTemplateService.hasRecordedScores(template);
+
     return {
       status: 200,
       message: 'Assessment structure template retrieved successfully',
-      data: template,
+      data: { ...template, hasRecordedScores },
     };
   }
 

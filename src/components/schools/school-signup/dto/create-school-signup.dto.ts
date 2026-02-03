@@ -77,11 +77,6 @@ export class CreateSchoolSignupDto {
   @IsString()
   schoolName: string;
 
-  @ApiProperty({ description: 'Unique code for the school' })
-  @IsString()
-  @IsOptional()
-  schoolCode?: string;
-
   @ApiProperty({ description: 'Contact person details' })
   @ValidateNested()
   @Type(() => ContactPersonDto)

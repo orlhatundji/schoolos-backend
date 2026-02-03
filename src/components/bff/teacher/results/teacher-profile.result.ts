@@ -12,6 +12,8 @@ export class TeacherProfileResult {
   qualification: string;
   joinDate: string;
   avatar?: string;
+  subjects: string[];
+  classesAssigned: string[];
 
   constructor(data: TeacherProfile) {
     this.teacherNo = data.teacherNo;
@@ -25,5 +27,7 @@ export class TeacherProfileResult {
     this.qualification = data.qualification;
     this.joinDate = data.joinDate;
     this.avatar = data.avatar;
+    this.subjects = data.subjects;
+    this.classesAssigned = data.classesAssigned;
   }
 }

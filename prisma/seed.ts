@@ -59,7 +59,7 @@ async function main() {
   const existingSystemAdmin = await prisma.systemAdmin.findFirst({
     where: {
       user: {
-        email: 'orlhatund@gmail.com',
+        email: 'orlhatundji@gmail.com',
       },
     },
   });
@@ -67,7 +67,7 @@ async function main() {
   if (existingSystemAdmin) {
     console.log('System admin already exists:', {
       id: existingSystemAdmin.id,
-      email: 'orlhatund@gmail.com',
+      email: 'orlhatundji@gmail.com',
       password: samplePassword,
       role: existingSystemAdmin.role,
     });
@@ -98,7 +98,7 @@ async function main() {
     const systemAdminUser = await prisma.user.create({
       data: {
         type: UserTypes.SYSTEM_ADMIN,
-        email: 'orlhatund@gmail.com',
+        email: 'orlhatundji@gmail.com',
         phone: '+1234567890',
         password: hashedPassword,
         firstName: 'Platform',
@@ -233,9 +233,14 @@ async function main() {
       },
     });
 
+    // Generate adminNo for super admin
+    const currentYear = new Date().getFullYear().toString().slice(-2);
+    const adminNo = `${school.code}/SA/${currentYear}/0001`;
+
     const superAdmin = await prisma.admin.create({
       data: {
         userId: adminUser.id,
+        adminNo,
         isSuper: true,
       },
     });
@@ -810,24 +815,28 @@ async function main() {
     return;
   }
 
-  const assessmentStructures = [];
-  for (const structureData of defaultAssessmentStructures) {
-    const assessmentStructure = await prisma.assessmentStructure.create({
-      data: {
-        name: structureData.name,
-        description: structureData.description,
-        maxScore: structureData.maxScore,
-        isExam: structureData.isExam,
-        order: structureData.order,
-        schoolId: school.id,
-        academicSessionId: currentAcademicSession.id,
-        isActive: true,
-      },
-    });
-    assessmentStructures.push(assessmentStructure);
-  }
+  const { randomUUID } = await import('crypto');
+  const assessmentsWithIds = defaultAssessmentStructures.map((s) => ({
+    id: randomUUID(),
+    name: s.name,
+    description: s.description,
+    maxScore: s.maxScore,
+    isExam: s.isExam,
+    order: s.order,
+  }));
 
-  console.log(`✅ Created ${assessmentStructures.length} default assessment structures`);
+  await prisma.assessmentStructureTemplate.create({
+    data: {
+      schoolId: school.id,
+      academicSessionId: currentAcademicSession.id,
+      name: 'Standard Assessment Structure',
+      description: 'Default assessment structure for all subjects',
+      assessments: assessmentsWithIds as any,
+      isActive: true,
+    },
+  });
+
+  console.log(`✅ Created assessment structure template with ${assessmentsWithIds.length} assessment types`);
 
   console.log('Creating payment structures...');
   // Payment Structures

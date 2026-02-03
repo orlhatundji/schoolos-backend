@@ -80,8 +80,6 @@ model School {
   colorScheme                  String?
   academicSessions             AcademicSession[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
-  assessmentStructures         AssessmentStructure[]
-  assessments                  Assessment[]
   bulkImportJobs               BulkImportJob[]
   categories                   Category[]
   classArms                    ClassArm[]
@@ -143,7 +141,6 @@ model AcademicSession {
   calendar                     AcademicSessionCalendar?
   school                       School                        @relation(fields: [schoolId], references: [id])
   assessmentStructureTemplates AssessmentStructureTemplate[]
-  assessmentStructures         AssessmentStructure[]
   classArmStudents             ClassArmStudent[]
   classArms                    ClassArm[]
   paymentStructures            PaymentStructure[]
@@ -348,8 +345,6 @@ model User {
   address             Address?             @relation(fields: [addressId], references: [id])
   school              School?              @relation(fields: [schoolId], references: [id])
 
-  @@unique([email, schoolId])
-  @@unique([phone, schoolId])
   @@map("users")
 }
 
@@ -385,6 +380,7 @@ model UserToken {
 model Admin {
   id        String    @id @default(uuid())
   userId    String    @unique
+  adminNo   String    @unique
   isSuper   Boolean   @default(false)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -687,46 +683,6 @@ model AssessmentStructureTemplate {
   @@map("assessment_structure_templates")
 }
 
-model AssessmentStructure {
-  id                String          @id @default(uuid())
-  schoolId          String
-  name              String
-  description       String?
-  maxScore          Int
-  isExam            Boolean         @default(false)
-  order             Int
-  isActive          Boolean         @default(true)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  deletedAt         DateTime?
-  academicSessionId String
-  academicSession   AcademicSession @relation(fields: [academicSessionId], references: [id])
-  school            School          @relation(fields: [schoolId], references: [id])
-
-  @@unique([schoolId, academicSessionId, name])
-  @@index([academicSessionId])
-  @@map("assessment_structures")
-}
-
-/// *
-/// * Assessment
-/// * ----------
-/// * Represents a test, exam, or any form of student assessment (e.g., "Midterm Test", "Final Exam").
-/// * Each assessment has a name, optional description, and a maximum score.
-/// * Assessments are used to evaluate student performance in various subjects and terms.
-model Assessment {
-  id          String    @id @default(uuid())
-  schoolId    String
-  name        String
-  description String?
-  maxScore    Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-  school      School    @relation(fields: [schoolId], references: [id])
-
-  @@map("assessments")
-}
 
 /// *
 /// * SubjectTermStudent
@@ -745,6 +701,7 @@ model SubjectTermStudent {
   student       Student                        @relation(fields: [studentId], references: [id])
   subjectTerm   SubjectTerm                    @relation(fields: [subjectTermId], references: [id])
 
+  @@unique([studentId, subjectTermId], name: "unique_student_subject_term")
   @@map("subject_term_students")
 }
 
@@ -753,19 +710,21 @@ model SubjectTermStudent {
 /// * ----------------------------
 /// * Represents an individual assessment (e.g., test, exam, assignment) for a student in a subject term.
 /// * Stores the score, type (exam or not), and links to the overall subject term student record.
-/// * This enables granular analysis of student performance over time.
+/// * assessmentTypeId links to the UUID of the assessment entry in AssessmentStructureTemplate.assessments JSON.
+/// * maxScore is snapshotted at the time of scoring so historical data stays accurate.
 model SubjectTermStudentAssessment {
   id                   String             @id @default(uuid())
   name                 String
   score                Int
   isExam               Boolean            @default(false)
+  assessmentTypeId     String?
+  maxScore             Int?
   subjectTermStudentId String
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
   subjectTermStudent   SubjectTermStudent @relation(fields: [subjectTermStudentId], references: [id])
 
-  @@unique([subjectTermStudentId, name, deletedAt], name: "unique_assessment_per_student_term")
   @@map("subject_term_student_assessments")
 }
 
@@ -915,6 +874,21 @@ model Counter {
 
   @@unique([schoolId, entity])
   @@map("counters")
+}
+
+/// *
+/// * GlobalCounter
+/// * -------------
+/// * Used to generate and track unique numbers for platform-level entities (e.g., school codes).
+/// * Unlike Counter which is scoped to a school, this is for global/platform-wide sequences.
+model GlobalCounter {
+  id        String    @id @default(uuid())
+  entity    String    @unique
+  current   Int       @default(0)
+  updatedAt DateTime  @updatedAt
+  createdAt DateTime  @default(now())
+
+  @@map("global_counters")
 }
 
 /// *

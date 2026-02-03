@@ -1,16 +1,18 @@
 import {
   Injectable,
-  BadRequestException,
   UnauthorizedException,
   NotFoundException,
   HttpStatus,
 } from '@nestjs/common';
 import { ResetPasswordRequestDto, UpdatePasswordDto } from './dto';
+import { StudentsService } from '../../../students/students.service';
+import { TeachersService } from '../../../teachers/teachers.service';
 import { BaseService } from '../../../../common/base-service';
 import { OtpGenerator } from '../../../../utils/otp-generator';
 import { TokensService } from '../refresh-token/tokens.service';
 import { UsersService } from '../../../users/users.service';
-import { User } from '@prisma/client';
+import { PrismaService } from '../../../../prisma/prisma.service';
+import { User, UserType } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { SendEmailInputType } from '../../../../utils/mail/types/mail-service.interface';
 import { ResetPasswordMessages } from './results/messages';
@@ -31,19 +33,31 @@ export class ResetPasswordService extends BaseService {
     private readonly otpGenerator: OtpGenerator,
     private readonly tokensService: TokensService,
     private readonly userService: UsersService,
+    private readonly studentsService: StudentsService,
+    private readonly teachersService: TeachersService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
     private readonly encryptor: Encryptor,
     private readonly hasher: PasswordHasher,
     private readonly passwordGenerator: PasswordGenerator,
+    private readonly prisma: PrismaService,
   ) {
     super(ResetPasswordService.name);
   }
 
-  async requestResetPassword(resetPasswordRequestDto: ResetPasswordRequestDto) {
-    const { email } = resetPasswordRequestDto;
-    const user = await this.userService.findByEmail(email);
+  async requestResetPassword(dto: ResetPasswordRequestDto) {
+    const { email, userNo, userType } = dto;
+    let user: User | null = null;
+
+    // Determine lookup method: email or userNo+userType
+    if (email) {
+      user = await this.userService.findByEmail(email);
+    } else if (userNo && userType) {
+      user = await this._findUserByUserNo(userNo, userType);
+    }
+
     if (!user) {
+      // Return success even if not found to prevent enumeration attacks
       return ResetPasswordRequestResult.from({
         status: HttpStatus.OK,
         message: ResetPasswordMessages.SUCCESS.SENT_RESET_PASSWORD_LINK,
@@ -58,9 +72,13 @@ export class ResetPasswordService extends BaseService {
       type: TokenTypes.RESET_PASSWORD,
     });
 
-    const resetPasswordUrl = this._generateResetPasswordUrl(email, otp);
+    // Generate appropriate reset URL
+    const resetPasswordUrl = email
+      ? this._generateResetPasswordUrl(email, otp)
+      : this._generateResetPasswordUrlForUserNo(userNo!, userType!, otp);
+
     const emailInput: SendEmailInputType = {
-      recipientAddress: email,
+      recipientAddress: user.email,
       recipientName: user.lastName,
       subject: 'Reset Password',
       html: `<p>Hi ${user.firstName},</p><p>Please click the link below to reset your password:</p><p><a href="${resetPasswordUrl}">Reset Password</a></p>`,
@@ -73,36 +91,38 @@ export class ResetPasswordService extends BaseService {
     });
   }
 
-  private _generateResetPasswordUrl(email: string, token: string): string {
-    const baseUrl = this.configService.get<string>('frontendBaseUrl');
-    return `${baseUrl}/reset-password?token=${token}&email=${email}`;
-  }
+  async updatePassword(dto: UpdatePasswordDto) {
+    const { password, email, userNo, userType, token } = dto;
+    let user: User | null = null;
 
-  async updatePassword(updatePasswordDto: UpdatePasswordDto) {
-    const { password, email, token } = updatePasswordDto;
-    const user = await this.findUserOrThrow(email);
-
-    if (user.mustUpdatePassword) {
-      // the token here will be the user's default password
-      const isValidPassword = await this.hasher.compare(token, user.password);
-      if (!isValidPassword)
-        throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
-    } else {
-      await this.validateResetPasswordTokenOrThrow(user, token);
+    // Determine lookup method: email or userNo+userType
+    if (email) {
+      user = await this.userService.findByEmail(email);
+    } else if (userNo && userType) {
+      user = await this._findUserByUserNo(userNo, userType);
     }
 
-    const hashedPassword = await this.hasher.hash(password);
-    await this.userService.update(user.id, { password: hashedPassword, mustUpdatePassword: false });
+    if (!user) {
+      throw new NotFoundException(ResetPasswordMessages.FAILURE.USER_NOT_FOUND);
+    }
+
+    const isValidResetToken = await this.validateResetPasswordToken(user, token);
+    const isValidPasswordToken = await this.validateUpdatePassword(user, token);
+
+    if (!isValidResetToken && !isValidPasswordToken) {
+      throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
+    }
+
+    // Pass plain password - users.service.update will hash it
+    await this.userService.update(user.id, { password, mustUpdatePassword: false });
 
     const emailInput: SendEmailInputType = {
-      recipientAddress: email,
+      recipientAddress: user.email,
       recipientName: user.lastName,
       subject: 'Password Reset Confirmation',
       html: `<p>Hi ${user.firstName},</p><p>Your password has been successfully reset.</p>`,
     };
     await this.mailService.sendEmail(emailInput);
-
-    await this.tokensService.blacklistToken(user.id, TokenTypes.RESET_PASSWORD);
 
     return UpdatePasswordResult.from({
       status: HttpStatus.OK,
@@ -110,30 +130,64 @@ export class ResetPasswordService extends BaseService {
     });
   }
 
-  private async validateResetPasswordTokenOrThrow(user: User, token: string) {
+  private async _findUserByUserNo(userNo: string, userType: UserType): Promise<User | null> {
+    switch (userType) {
+      case UserType.STUDENT: {
+        const student = await this.studentsService.getStudentByStudentNo(userNo);
+        return student?.user || null;
+      }
+      case UserType.TEACHER: {
+        const teacher = await this.teachersService.getTeacherByTeacherNo(userNo);
+        return teacher?.user || null;
+      }
+      case UserType.ADMIN:
+      case UserType.SUPER_ADMIN: {
+        const admin = await this.prisma.admin.findUnique({
+          where: { adminNo: userNo },
+          include: { user: true },
+        });
+        return admin?.user || null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  private _generateResetPasswordUrl(email: string, token: string): string {
+    const baseUrl = this.configService.get<string>('frontendBaseUrl');
+    return `${baseUrl}/reset-password?token=${token}&email=${email}`;
+  }
+
+  private _generateResetPasswordUrlForUserNo(userNo: string, userType: UserType, token: string): string {
+    const baseUrl = this.configService.get<string>('frontendBaseUrl');
+    return `${baseUrl}/reset-password?token=${token}&userNo=${encodeURIComponent(userNo)}&userType=${userType}`;
+  }
+
+  private async validateResetPasswordToken(user: User, token: string): Promise<boolean> {
     const userToken = await this.tokensService.find(user.id, TokenTypes.RESET_PASSWORD);
     if (!userToken) {
-      throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
+      return false;
     }
 
     if (userToken.blacklisted || userToken.expires < new Date()) {
-      throw new BadRequestException(ResetPasswordMessages.FAILURE.RESET_LINK_EXPIRED);
+      return false;
     }
 
     const decryptedToken = this.encryptor.decrypt(userToken.token);
     if (decryptedToken !== token) {
-      throw new UnauthorizedException(ResetPasswordMessages.FAILURE.INVALID_TOKEN);
+      return false;
     }
 
     await this.tokensService.blacklistToken(user.id, TokenTypes.RESET_PASSWORD);
+    return true;
   }
 
-  private async findUserOrThrow(email: string) {
-    const user = await this.userService.findByEmail(email);
-    if (!user) {
-      throw new NotFoundException(ResetPasswordMessages.FAILURE.USER_NOT_FOUND);
+  private async validateUpdatePassword(user: User, token: string): Promise<boolean> {
+    if (!user.mustUpdatePassword) {
+      return false;
     }
-    return user;
+
+    return await this.hasher.compare(token, user.password);
   }
 
   async resetUserPassword(email: string): Promise<ResetPasswordByAdminResult> {
@@ -143,9 +197,9 @@ export class ResetPasswordService extends BaseService {
     }
 
     const defaultPassword = this.passwordGenerator.generate();
-    const hashedPassword = await this.hasher.hash(defaultPassword);
+    // Pass plain password - users.service.update will hash it
     await this.userService.update(userExists.id, {
-      password: hashedPassword,
+      password: defaultPassword,
       mustUpdatePassword: true,
     });
 

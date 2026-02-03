@@ -18,18 +18,42 @@ export class AuthController {
   @ApiResponse({
     status: HttpStatus.OK,
     type: AuthResult,
-    description: AuthMessages.SUCCESS.AUTHENTICATED,
+    description: 'User successfully authenticated. Supports both email-based login (for system admins) and userNo-based login (for students, teachers, and school admins).',
+    schema: {
+      example: {
+        status: 200,
+        message: 'Successfully authenticated',
+        data: {
+          user: {
+            id: 'uuid',
+            firstName: 'John',
+            lastName: 'Doe',
+            email: 'john.doe@school.com',
+          },
+          admin: {
+            id: 'admin-uuid',
+            adminNo: 'BRF4/SA/25/0001',
+            isSuper: true,
+          },
+          tokens: {
+            accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+            refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          },
+        },
+      },
+    },
   })
   @ApiUnauthorizedResponse({
     description: AuthMessages.FAILURE.ACCESS_DENIED,
   })
   async login(@Body() loginDto: LoginDto): Promise<AuthResult> {
-    const { tokens, user, student, teacher, preferences } = await this.authService.login(loginDto);
+    const { tokens, user, student, teacher, admin, preferences } = await this.authService.login(loginDto);
 
     return AuthResult.from({
       user,
       student,
       teacher,
+      admin,
       preferences,
       tokens,
       status: HttpStatus.OK,
@@ -38,7 +62,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post('student/login') // Keeping the original route
+  @Post('student/login')
   @HttpCode(HttpStatus.OK)
   @ApiResponse({
     status: HttpStatus.OK,

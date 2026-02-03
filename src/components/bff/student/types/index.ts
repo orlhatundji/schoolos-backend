@@ -52,6 +52,12 @@ export interface StudentDashboardData {
 }
 
 export interface StudentResultsData {
+  school: {
+    name: string;
+    motto?: string;
+    logoUrl?: string;
+    address?: string;
+  };
   student: {
     id: string;
     studentNo: string;
@@ -92,6 +98,12 @@ export interface StudentResultsData {
       date: Date;
     }[];
   }[];
+  assessmentStructures: {
+    name: string;
+    maxScore: number;
+    isExam: boolean;
+    order: number;
+  }[];
   overallStats: {
     totalSubjects: number;
     totalScore: number;
@@ -100,6 +112,7 @@ export interface StudentResultsData {
     totalStudents: number;
     grade?: string;
   };
+  gradingModel?: Record<string, [number, number]> | null;
 }
 
 export interface StudentProfileData {
@@ -119,6 +132,7 @@ export interface StudentProfileData {
     gender: string;
     dateOfBirth?: Date;
     avatarUrl?: string;
+    address?: string;
   };
   classArm: {
     id: string;
@@ -128,6 +142,11 @@ export interface StudentProfileData {
       name: string;
     };
   };
+  academicSession?: {
+    id: string;
+    academicYear: string;
+    isCurrent: boolean;
+  };
   guardian?: {
     id: string;
     firstName: string;
@@ -135,6 +154,8 @@ export interface StudentProfileData {
     email?: string;
     phone?: string;
     relationship: string;
+    address?: string;
+    occupation?: string;
   };
 }
 

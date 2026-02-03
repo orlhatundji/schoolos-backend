@@ -1,3 +1,2 @@
-export * from './create-assessment-structure.dto';
-export * from './update-assessment-structure.dto';
-export * from './bulk-update-assessment-structures.dto';
+export * from './assessment-structure-template.dto';
+export * from './assessment-detail.dto';

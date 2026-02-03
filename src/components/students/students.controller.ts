@@ -61,9 +61,9 @@ export class StudentsController {
     type: StudentResult,
     description: StudentMessages.SUCCESS.STUDENT_CREATED_SUCCESSFULLY,
   })
-  @ApiBadRequestResponse({
-    description: UserMessages.FAILURE.USER_EXISTS,
-  })
+  // @ApiBadRequestResponse({
+  //   description: UserMessages.FAILURE.USER_EXISTS,
+  // })
   @CheckPolicies(new ManageStudentPolicyHandler())
   async create(@Body() createStudentDto: CreateStudentDto, @Request() req: any) {
     // Extract schoolId from the authenticated user's context

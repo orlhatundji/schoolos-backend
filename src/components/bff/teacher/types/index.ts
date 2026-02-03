@@ -37,6 +37,8 @@ export interface TeacherProfile {
   qualification: string;
   joinDate: string;
   avatar?: string;
+  subjects: string[];
+  classesAssigned: string[];
 }
 
 // Class information
@@ -106,6 +108,9 @@ export interface ClassStudentInfo {
 export interface SubjectAssessmentScores {
   subjectId: string;
   subjectName: string;
+  classArmId: string;
+  classArmName: string;
+  levelName: string;
   teacher: {
     id: string;
     name: string;
@@ -144,6 +149,7 @@ export interface SubjectAssessmentScores {
     lowestScore: number;
     passRate: number;
   };
+  gradingModel?: Record<string, [number, number]> | null;
 }
 
 // Subject information

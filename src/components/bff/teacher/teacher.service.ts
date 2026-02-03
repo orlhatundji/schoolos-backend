@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../../../prisma';
 import { PasswordHasher } from '../../../utils/hasher';
 import { PaystackService } from '../../../shared/services/paystack.service';
+import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import {
   ClassDetails,
   ClassStudentInfo,
@@ -33,6 +34,7 @@ export class TeacherService {
     private readonly prisma: PrismaService,
     private readonly passwordHasher: PasswordHasher,
     private readonly paystackService: PaystackService,
+    private readonly templateService: AssessmentStructureTemplateService,
   ) {}
 
   async getTeacherDashboardData(userId: string): Promise<TeacherDashboardData> {
@@ -300,6 +302,7 @@ export class TeacherService {
             school: true,
           },
         },
+        department: true,
         classArmSubjectTeachers: {
           where: {
             deletedAt: null,
@@ -371,18 +374,39 @@ export class TeacherService {
   async getTeacherProfile(userId: string): Promise<TeacherProfile> {
     const teacher = await this.getTeacherWithRelations(userId);
 
+    // Extract unique subject names from class arm subject assignments
+    const subjects = [
+      ...new Set(
+        teacher.classArmSubjectTeachers.map((cast) => cast.subject.name),
+      ),
+    ];
+
+    // Extract unique class names from class arm assignments and primary class arms
+    const classArmNames = new Set<string>();
+    for (const cat of teacher.classArmTeachers) {
+      classArmNames.add(
+        `${cat.classArm.level.name} ${cat.classArm.name}`,
+      );
+    }
+    for (const ca of teacher.classArmsAsTeacher) {
+      classArmNames.add(`${ca.level.name} ${ca.name}`);
+    }
+    const classesAssigned = [...classArmNames];
+
     return {
       teacherNo: teacher.teacherNo,
       firstName: teacher.user.firstName,
       lastName: teacher.user.lastName,
       email: teacher.user.email,
       phone: teacher.user.phone,
-      department: (teacher as any).department?.name || 'Unassigned',
+      department: teacher.department?.name || 'Unassigned',
       status: teacher.status,
       employmentType: teacher.employmentType,
       qualification: teacher.qualification,
       joinDate: teacher.joinDate.toISOString(),
       avatar: teacher.user.avatarUrl,
+      subjects,
+      classesAssigned,
     };
   }
 
@@ -443,22 +467,8 @@ export class TeacherService {
       });
     }
 
-    // Get updated teacher data
-    const updatedTeacher = await this.getTeacherWithRelations(userId);
-
-    return {
-      teacherNo: updatedTeacher.teacherNo,
-      firstName: updatedTeacher.user.firstName,
-      lastName: updatedTeacher.user.lastName,
-      email: updatedTeacher.user.email,
-      phone: updatedTeacher.user.phone,
-      department: (updatedTeacher as any).department?.name || 'Unassigned',
-      status: updatedTeacher.status,
-      employmentType: updatedTeacher.employmentType,
-      qualification: updatedTeacher.qualification,
-      joinDate: updatedTeacher.joinDate.toISOString(),
-      avatar: updatedTeacher.user.avatarUrl,
-    };
+    // Re-fetch and return updated profile
+    return this.getTeacherProfile(userId);
   }
 
   // Change teacher password
@@ -799,16 +809,13 @@ export class TeacherService {
   }
 
   // Get class details for class teachers
-  async getClassDetails(userId: string, level: string, classArm: string): Promise<ClassDetails> {
+  async getClassDetails(userId: string, classArmId: string): Promise<ClassDetails> {
     const teacher = await this.getTeacherWithRelations(userId);
 
     // Find the specific class arm
     const classArmData = await this.prisma.classArm.findFirst({
       where: {
-        name: classArm,
-        level: {
-          name: level,
-        },
+        id: classArmId,
         schoolId: teacher.user.schoolId,
         deletedAt: null,
       },
@@ -929,20 +936,13 @@ export class TeacherService {
   }
 
   // Get students in a specific class for class teachers
-  async getClassStudents(
-    userId: string,
-    level: string,
-    classArm: string,
-  ): Promise<ClassStudentInfo[]> {
+  async getClassStudents(userId: string, classArmId: string): Promise<ClassStudentInfo[]> {
     const teacher = await this.getTeacherWithRelations(userId);
 
     // Find the specific class arm
     const classArmData = await this.prisma.classArm.findFirst({
       where: {
-        name: classArm,
-        level: {
-          name: level,
-        },
+        id: classArmId,
         schoolId: teacher.user.schoolId,
         deletedAt: null,
       },
@@ -993,7 +993,7 @@ export class TeacherService {
       throw new ForbiddenException(
         `You are not authorized to access this class's student information. ` +
           `You must be either the class teacher or assigned to teach any subject in this class. ` +
-          `Looking for: teacherId=${teacher.id} in ${level}${classArm}. ` +
+          `Looking for: teacherId=${teacher.id} in classArmId=${classArmId}. ` +
           `Class teacher: ${classArmData.classTeacherId || 'None assigned'}. ` +
           `Available subject assignments: ${availableAssignments}`,
       );
@@ -1026,23 +1026,16 @@ export class TeacherService {
   // Get subject assessment scores for a specific class
   async getSubjectAssessmentScores(
     userId: string,
-    level: string,
-    classArm: string,
+    classArmId: string,
     subjectName: string,
   ): Promise<SubjectAssessmentScores> {
     const teacher = await this.getTeacherWithRelations(userId);
 
-    // Find the specific class arm in the current academic session
+    // Find the specific class arm by ID
     const classArmData = await this.prisma.classArm.findFirst({
       where: {
-        name: classArm,
-        level: {
-          name: level,
-        },
+        id: classArmId,
         schoolId: teacher.user.schoolId,
-        academicSession: {
-          isCurrent: true,
-        },
         deletedAt: null,
       },
       include: {
@@ -1105,7 +1098,7 @@ export class TeacherService {
 
     if (!classArmData) {
       throw new NotFoundException(
-        `Class ${level} ${classArm} not found in the current academic session. Please contact the administrator to set up class arms for the current session.`,
+        `Class arm with ID ${classArmId} not found. Please contact the administrator.`,
       );
     }
 
@@ -1126,7 +1119,7 @@ export class TeacherService {
       throw new ForbiddenException(
         `You are not authorized to access this subject's assessment scores. ` +
           `You must be either the class teacher or assigned to teach this subject. ` +
-          `Looking for: teacherId=${teacher.id}, subjectName=${subjectName} in ${level}${classArm}. ` +
+          `Looking for: teacherId=${teacher.id}, subjectName=${subjectName}. ` +
           `Class teacher: ${classArmData.classTeacherId || 'None assigned'}. ` +
           `Available subject assignments: ${availableAssignments}`,
       );
@@ -1137,13 +1130,32 @@ export class TeacherService {
       where: { schoolId: teacher.user.schoolId },
     });
 
+    // Get current academic session and term information (needed for maxScore fallback below)
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: {
+        isCurrent: true,
+        schoolId: teacher.user.schoolId,
+      },
+      include: {
+        terms: {
+          where: {
+            deletedAt: null,
+            isCurrent: true,
+          },
+        },
+      },
+    });
+
+    // Get current term using the isCurrent field
+    const currentTerm = currentSession?.terms?.[0];
+
     // Process student assessment data
     const studentsWithScores = await Promise.all(
       (classArmData as any).classArmStudents.map(async (classArmStudent: any) => {
         const student = classArmStudent.student;
-        const subjectTermStudent = student.subjectTermStudents[0];
+        const subjectTermStudents = student.subjectTermStudents || [];
 
-        if (!subjectTermStudent) {
+        if (subjectTermStudents.length === 0) {
           return {
             id: student.id,
             studentNo: student.studentNo,
@@ -1156,12 +1168,31 @@ export class TeacherService {
           };
         }
 
+        // Aggregate assessments across all subjectTermStudent records
+        // (handles duplicate subjectTermStudent records from race conditions)
+        const allRawAssessments: any[] = [];
+        for (const sts of subjectTermStudents) {
+          if (sts.assessments) {
+            allRawAssessments.push(...sts.assessments);
+          }
+        }
+
+        // Deduplicate by assessment name (keep the most recent)
+        const assessmentsByName = new Map<string, any>();
+        for (const assessment of allRawAssessments) {
+          if (assessment.deletedAt) continue;
+          const existing = assessmentsByName.get(assessment.name);
+          if (!existing || new Date(assessment.updatedAt) > new Date(existing.updatedAt)) {
+            assessmentsByName.set(assessment.name, assessment);
+          }
+        }
+
         const assessments = await Promise.all(
-          subjectTermStudent.assessments.map(async (assessment: any) => {
-            // Calculate maxScore based on assessment type if not provided
+          Array.from(assessmentsByName.values()).map(async (assessment: any) => {
+            // Use maxScore from the score record (snapshot), fall back to template lookup
             const maxScore =
               assessment.maxScore ||
-              (await this.getMaxScoreForAssessmentType(assessment.name, teacher.user.schoolId));
+              (await this.getMaxScoreForAssessmentType(assessment.name, teacher.user.schoolId, currentSession?.id));
             const percentage = maxScore > 0 ? Math.round((assessment.score / maxScore) * 100) : 0;
 
             return {
@@ -1214,28 +1245,12 @@ export class TeacherService {
           : 0,
     };
 
-    // Get current academic session and term information
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: {
-        isCurrent: true,
-        schoolId: teacher.user.schoolId,
-      },
-      include: {
-        terms: {
-          where: {
-            deletedAt: null,
-            isCurrent: true,
-          },
-        },
-      },
-    });
-
-    // Get current term using the isCurrent field
-    const currentTerm = currentSession?.terms?.[0];
-
     return {
       subjectId: subjectTeacher.subject.id,
       subjectName: subjectTeacher.subject.name,
+      classArmId: classArmData.id,
+      classArmName: classArmData.name,
+      levelName: classArmData.level?.name || '',
       teacher: {
         id: subjectTeacher.teacher.id,
         name: `${subjectTeacher.teacher.user.firstName} ${subjectTeacher.teacher.user.lastName}`,
@@ -1251,6 +1266,7 @@ export class TeacherService {
       },
       classStats,
       students: studentsWithScores,
+      gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
     };
   }
 
@@ -1282,51 +1298,26 @@ export class TeacherService {
   private async getMaxScoreForAssessmentType(
     assessmentName: string,
     schoolId: string,
+    academicSessionId?: string,
   ): Promise<number> {
-    // First, try to find the assessment in the school's assessment structure
-    const assessmentStructure = await this.prisma.assessmentStructure.findFirst({
-      where: {
-        schoolId,
-        name: {
-          equals: assessmentName,
-          mode: 'insensitive',
-        },
-        isActive: true,
-        deletedAt: null,
-      },
-    });
-
-    if (assessmentStructure) {
-      return assessmentStructure.maxScore;
+    // Try to look up from the active template
+    if (academicSessionId) {
+      try {
+        const template = await this.templateService.findActiveTemplateForSchoolSession(
+          schoolId,
+          academicSessionId,
+        );
+        const entry = this.templateService.getAssessmentEntryByName(template, assessmentName);
+        if (entry) {
+          return entry.maxScore;
+        }
+      } catch {
+        // Fall through to default
+      }
     }
 
-    // Fallback to default mapping for backward compatibility
-    const assessmentType = assessmentName.toUpperCase();
-    switch (assessmentType) {
-      case 'TEST 1':
-        return 20;
-      case 'TEST 2':
-        return 20;
-      case 'EXAM':
-        return 60;
-      case 'CLASSWORK':
-      case 'HOMEWORK':
-        return 15;
-      case 'QUIZ':
-        return 20;
-      case 'ASSIGNMENT':
-        return 25;
-      case 'PRACTICAL':
-        return 30;
-      case 'MID TERM TEST':
-        return 40;
-      case 'CONTINUOUS ASSESSMENT':
-        return 20;
-      case 'FINAL EXAMINATION':
-        return 70;
-      default:
-        return 100; // Default max score
-    }
+    // Fallback default
+    return 100;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1386,36 +1377,87 @@ export class TeacherService {
       throw new Error('Student not found or not in your school');
     }
 
-    // Find the subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
+    // Find the subject
+    const subject = await this.prisma.subject.findFirst({
       where: {
-        subject: {
-          name: {
-            equals: createDto.subjectName,
-            mode: 'insensitive',
-          },
-          schoolId: teacher.user.schoolId,
+        name: {
+          equals: createDto.subjectName,
+          mode: 'insensitive',
         },
-        term: {
-          name: {
-            equals: createDto.termName,
-            mode: 'insensitive',
-          },
+        schoolId: teacher.user.schoolId,
+      },
+    });
+
+    if (!subject) {
+      throw new Error(`Subject "${createDto.subjectName}" not found`);
+    }
+
+    let term: { id: string; academicSessionId: string };
+    if (createDto.termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: {
+          id: createDto.termId,
+          academicSession: { schoolId: teacher.user.schoolId },
         },
-        academicSession: {
+      });
+      if (!termRecord) {
+        throw new Error(`Term with ID "${createDto.termId}" not found`);
+      }
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+    } else {
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: {
           isCurrent: true,
           schoolId: teacher.user.schoolId,
         },
+        include: {
+          terms: {
+            where: {
+              name: { equals: createDto.termName, mode: 'insensitive' },
+              deletedAt: null,
+            },
+          },
+        },
+      });
+      if (!currentSession) {
+        throw new Error('No current academic session found');
+      }
+      const termRecord = currentSession.terms[0];
+      if (!termRecord) {
+        throw new Error(`Term "${createDto.termName}" not found in current academic session`);
+      }
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+    }
+
+    const subjectTerms = await this.prisma.subjectTerm.findMany({
+      where: {
+        subjectId: subject.id,
+        termId: term.id,
+        academicSessionId: term.academicSessionId,
+        deletedAt: null,
       },
       include: {
         subject: true,
         term: true,
         academicSession: true,
       },
+      orderBy: { createdAt: 'asc' },
     });
+    let subjectTerm = subjectTerms[0] ?? null;
 
     if (!subjectTerm) {
-      throw new Error('Subject term not found');
+      subjectTerm = await this.prisma.subjectTerm.create({
+        data: {
+          subjectId: subject.id,
+          termId: term.id,
+          academicSessionId: term.academicSessionId,
+        },
+        include: {
+          subject: true,
+          term: true,
+          academicSession: true,
+        },
+      });
     }
 
     // Verify teacher is assigned to teach this subject in this class
@@ -1431,39 +1473,39 @@ export class TeacherService {
       throw new Error('You are not authorized to teach this subject in this class');
     }
 
-    // Get or create SubjectTermStudent record
-    let subjectTermStudent = await this.prisma.subjectTermStudent.findFirst({
+    // Atomically find or create the SubjectTermStudent using the unique constraint
+    const subjectTermStudent = await this.prisma.subjectTermStudent.upsert({
       where: {
-        studentId: student.id,
-        subjectTermId: subjectTerm.id,
-      },
-    });
-
-    if (!subjectTermStudent) {
-      subjectTermStudent = await this.prisma.subjectTermStudent.create({
-        data: {
+        unique_student_subject_term: {
           studentId: student.id,
           subjectTermId: subjectTerm.id,
-          totalScore: 0,
         },
-      });
-    }
-
-    // Get assessment structure to determine isExam if not provided
-    const assessmentStructure = await this.prisma.assessmentStructure.findFirst({
-      where: {
-        schoolId: teacher.user.schoolId,
-        name: {
-          equals: createDto.assessmentName,
-          mode: 'insensitive',
-        },
-        isActive: true,
-        deletedAt: null,
+      },
+      update: {}, // No-op if it already exists
+      create: {
+        studentId: student.id,
+        subjectTermId: subjectTerm.id,
+        totalScore: 0,
       },
     });
 
+    // Look up assessment type from the active template
+    let assessmentEntry: { id: string; maxScore: number; isExam: boolean } | undefined;
+    try {
+      const template = await this.templateService.findActiveTemplateForSchoolSession(
+        teacher.user.schoolId,
+        term.academicSessionId,
+      );
+      const entry = this.templateService.getAssessmentEntryByName(template, createDto.assessmentName);
+      if (entry) {
+        assessmentEntry = { id: entry.id, maxScore: entry.maxScore, isExam: entry.isExam };
+      }
+    } catch {
+      // Template not found — proceed without
+    }
+
     const isExam =
-      createDto.isExam !== undefined ? createDto.isExam : assessmentStructure?.isExam || false;
+      createDto.isExam !== undefined ? createDto.isExam : assessmentEntry?.isExam || false;
 
     // Create the assessment score
     const assessmentScore = await this.prisma.subjectTermStudentAssessment.create({
@@ -1472,6 +1514,8 @@ export class TeacherService {
         score: createDto.score,
         isExam,
         subjectTermStudentId: subjectTermStudent.id,
+        assessmentTypeId: assessmentEntry?.id,
+        maxScore: assessmentEntry?.maxScore,
       },
     });
 
@@ -1786,163 +1830,404 @@ export class TeacherService {
     userId: string,
     upsertDto: UpsertStudentAssessmentScoreDto,
   ): Promise<BulkStudentAssessmentScoreResult> {
-    const { assessmentScores, subjectName, termName, assessmentName } = upsertDto;
+    const { assessmentScores, subjectName, termName, termId, assessmentName } = upsertDto;
     const result: BulkStudentAssessmentScoreResult = {
       success: [],
       failed: [],
     };
 
-    // Get teacher and verify authorization
+    // ── 1. Resolve teacher (once) ──
     const teacher = await this.prisma.teacher.findFirst({
       where: { userId },
       include: { user: true },
     });
-
     if (!teacher) {
       throw new Error('Teacher not found');
     }
+    const schoolId = teacher.user.schoolId;
 
-    // Process each assessment score
+    // ── 2. Resolve subject (once) ──
+    if (!subjectName) {
+      throw new Error('subjectName is required');
+    }
+    const subject = await this.prisma.subject.findFirst({
+      where: {
+        name: { equals: subjectName, mode: 'insensitive' },
+        schoolId,
+      },
+    });
+    if (!subject) {
+      throw new Error(`Subject "${subjectName}" not found`);
+    }
+
+    // ── 3. Resolve term (once) ──
+    if (!termId && !termName) {
+      throw new Error('Either termId or termName is required');
+    }
+    let term: { id: string; academicSessionId: string };
+    if (termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: { id: termId, academicSession: { schoolId } },
+      });
+      if (!termRecord) {
+        throw new Error(`Term with ID "${termId}" not found`);
+      }
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+    } else {
+      const currentSession = await this.prisma.academicSession.findFirst({
+        where: { isCurrent: true, schoolId },
+        include: {
+          terms: {
+            where: { name: { equals: termName, mode: 'insensitive' }, deletedAt: null },
+          },
+        },
+      });
+      if (!currentSession) {
+        throw new Error('No current academic session found');
+      }
+      const termRecord = currentSession.terms[0];
+      if (!termRecord) {
+        throw new Error(`Term "${termName}" not found in current academic session`);
+      }
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+    }
+
+    // ── 4. Resolve subjectTerm (once), create if missing ──
+    const subjectTerms = await this.prisma.subjectTerm.findMany({
+      where: {
+        subjectId: subject.id,
+        termId: term.id,
+        academicSessionId: term.academicSessionId,
+        deletedAt: null,
+      },
+      include: { subject: true, term: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    let subjectTerm = subjectTerms[0] ?? null;
+    if (!subjectTerm) {
+      subjectTerm = await this.prisma.subjectTerm.create({
+        data: {
+          subjectId: subject.id,
+          termId: term.id,
+          academicSessionId: term.academicSessionId,
+        },
+        include: { subject: true, term: true },
+      });
+    }
+
+    // ── 5. Resolve assessment template (once) ──
+    let template: any = null;
+    try {
+      template = await this.templateService.findActiveTemplateForSchoolSession(
+        schoolId,
+        term.academicSessionId,
+      );
+    } catch {
+      // Template not found — proceed without
+    }
+
+    // ── 6. Separate items into updates-by-id vs upserts-by-student ──
+    const updateByIdItems: typeof assessmentScores = [];
+    const upsertItems: typeof assessmentScores = [];
+
     for (const item of assessmentScores) {
-      try {
-        if (item.id) {
-          // Update existing assessment score
-          const { id, ...updateData } = item;
-          const assessmentScore = await this.updateStudentAssessmentScore(userId, id, updateData);
-          result.success.push(assessmentScore);
-        } else {
-          // Smart upsert: Check if assessment score already exists
-          if (!item.studentId) {
-            throw new Error('studentId is required for new assessment scores');
-          }
-
-          // Validate required fields for new scores
-          if (!subjectName || !termName || !assessmentName) {
-            throw new Error(
-              'subjectName, termName, and assessmentName are required for new assessment scores (must be provided at top level)',
-            );
-          }
-
-          // Check if assessment score already exists for this student/subject/term/assessment
-          const existingAssessment = await this.findExistingAssessmentScore(
-            item.studentId,
-            subjectName,
-            termName,
-            assessmentName,
-            teacher.user.schoolId,
-          );
-
-          if (existingAssessment) {
-            // Update existing assessment score
-            const updateData = {
-              score: item.score,
-              assessmentName: assessmentName,
-              isExam: item.isExam,
-            };
-            const assessmentScore = await this.updateStudentAssessmentScore(
-              userId,
-              existingAssessment.id,
-              updateData,
-            );
-            result.success.push(assessmentScore);
-          } else {
-            // Create new assessment score
-            const createData = {
-              studentId: item.studentId,
-              subjectName: subjectName,
-              termName: termName,
-              assessmentName: assessmentName,
-              score: item.score,
-              isExam: item.isExam,
-            };
-
-            try {
-              const assessmentScore = await this.createStudentAssessmentScore(userId, createData);
-              result.success.push(assessmentScore);
-            } catch (error) {
-              // Handle database constraint violation
-              if (
-                error.code === 'P2002' &&
-                error.meta?.target?.includes('unique_assessment_per_student_term')
-              ) {
-                throw new Error(
-                  'Assessment score already exists for this student. Use update instead of create.',
-                );
-              }
-              throw error;
-            }
-          }
+      if (item.id) {
+        updateByIdItems.push(item);
+      } else {
+        if (!item.studentId) {
+          result.failed.push({ assessmentScore: item, error: 'studentId is required for new assessment scores' });
+          continue;
         }
-      } catch (error) {
-        result.failed.push({
-          assessmentScore: item,
-          error: error.message || 'Operation failed',
-        });
+        const itemAssessmentName = item.assessmentName || assessmentName;
+        if (!itemAssessmentName) {
+          result.failed.push({ assessmentScore: item, error: 'assessmentName is required (provide at top level or per item)' });
+          continue;
+        }
+        upsertItems.push(item);
       }
     }
 
+    // ── 7. Process updates-by-id: batch-fetch existing assessments ──
+    if (updateByIdItems.length > 0) {
+      const existingAssessments = await this.prisma.subjectTermStudentAssessment.findMany({
+        where: {
+          id: { in: updateByIdItems.map(i => i.id!) },
+          deletedAt: null,
+        },
+        include: {
+          subjectTermStudent: {
+            include: {
+              student: { include: { user: true, classArmStudents: { where: { isActive: true } } } },
+            },
+          },
+        },
+      });
+      const assessmentMap = new Map(existingAssessments.map(a => [a.id, a]));
+
+      for (const item of updateByIdItems) {
+        try {
+          const existing = assessmentMap.get(item.id!);
+          if (!existing) {
+            result.failed.push({ assessmentScore: item, error: 'Assessment score not found' });
+            continue;
+          }
+          if (existing.subjectTermStudent.student.user.schoolId !== schoolId) {
+            result.failed.push({ assessmentScore: item, error: 'Assessment score not found in your school' });
+            continue;
+          }
+          // Verify teacher is authorized for this class+subject —
+          // check ALL active enrollments, not just the first one
+          const studentClassArmIds = existing.subjectTermStudent.student.classArmStudents
+            ?.map(cas => cas.classArmId) || [];
+          if (studentClassArmIds.length > 0) {
+            const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
+              where: { classArmId: { in: studentClassArmIds }, subjectId: subject.id, teacherId: teacher.id },
+            });
+            if (!authorized) {
+              result.failed.push({ assessmentScore: item, error: 'You are not authorized to modify this assessment score' });
+              continue;
+            }
+          }
+
+          const updated = await this.prisma.subjectTermStudentAssessment.update({
+            where: { id: item.id! },
+            data: {
+              ...(item.score !== undefined && { score: item.score }),
+              ...(item.assessmentName && { name: item.assessmentName }),
+              ...(item.isExam !== undefined && { isExam: item.isExam }),
+            },
+          });
+
+          result.success.push({
+            id: updated.id,
+            name: updated.name,
+            score: updated.score,
+            isExam: updated.isExam,
+            studentId: existing.subjectTermStudent.student.id,
+            studentName: `${existing.subjectTermStudent.student.user.firstName} ${existing.subjectTermStudent.student.user.lastName}`,
+            subjectName: subject.name,
+            termName: subjectTerm.term.name,
+            updatedAt: updated.updatedAt,
+          } as any);
+        } catch (error) {
+          result.failed.push({ assessmentScore: item, error: error.message || 'Update failed' });
+        }
+      }
+    }
+
+    // ── 8. Process upserts: batch-fetch students & existing scores ──
+    if (upsertItems.length > 0) {
+      const studentIds = [...new Set(upsertItems.map(i => i.studentId!))];
+
+      // Batch-fetch all students
+      const students = await this.prisma.student.findMany({
+        where: { id: { in: studentIds }, user: { schoolId } },
+        include: {
+          user: true,
+          classArmStudents: { where: { isActive: true } },
+        },
+      });
+      const studentMap = new Map(students.map(s => [s.id, s]));
+
+      // Verify teacher authorization for the class (once per unique classArm)
+      const classArmIds = [...new Set(students.flatMap(s => s.classArmStudents.map(cas => cas.classArmId)))];
+      const authorizedClassArms = await this.prisma.classArmSubjectTeacher.findMany({
+        where: { classArmId: { in: classArmIds }, subjectId: subject.id, teacherId: teacher.id },
+      });
+      const authorizedClassArmIds = new Set(authorizedClassArms.map(a => a.classArmId));
+
+      // Batch-fetch all subjectTermStudents for these students
+      const subjectTermStudents = await this.prisma.subjectTermStudent.findMany({
+        where: { studentId: { in: studentIds }, subjectTermId: subjectTerm.id, deletedAt: null },
+      });
+      const stsMap = new Map(subjectTermStudents.map(sts => [sts.studentId, sts]));
+
+      // Batch-fetch existing assessment scores for these subjectTermStudents
+      const stsIds = subjectTermStudents.map(sts => sts.id);
+      const existingScores = stsIds.length > 0
+        ? await this.prisma.subjectTermStudentAssessment.findMany({
+            where: { subjectTermStudentId: { in: stsIds }, deletedAt: null },
+          })
+        : [];
+      // Map: subjectTermStudentId -> assessmentName (lowercase) -> assessment
+      const existingScoreMap = new Map<string, Map<string, any>>();
+      for (const score of existingScores) {
+        if (!existingScoreMap.has(score.subjectTermStudentId)) {
+          existingScoreMap.set(score.subjectTermStudentId, new Map());
+        }
+        existingScoreMap.get(score.subjectTermStudentId)!.set(score.name.toLowerCase(), score);
+      }
+
+      for (const item of upsertItems) {
+        try {
+          const itemAssessmentName = (item.assessmentName || assessmentName)!;
+          const student = studentMap.get(item.studentId!);
+          if (!student) {
+            result.failed.push({ assessmentScore: item, error: 'Student not found or not in your school' });
+            continue;
+          }
+
+          // Check authorization — student may have classArmStudent records across
+          // multiple sessions, so check if ANY of their active enrollments match
+          // a class arm the teacher is authorized for.
+          const studentAuthorizedClassArm = student.classArmStudents?.find(
+            cas => authorizedClassArmIds.has(cas.classArmId),
+          );
+          if (!studentAuthorizedClassArm) {
+            result.failed.push({ assessmentScore: item, error: 'You are not authorized to manage scores for this student' });
+            continue;
+          }
+
+          // Find or create subjectTermStudent
+          let sts = stsMap.get(item.studentId!);
+          if (!sts) {
+            sts = await this.prisma.subjectTermStudent.upsert({
+              where: {
+                unique_student_subject_term: {
+                  studentId: student.id,
+                  subjectTermId: subjectTerm.id,
+                },
+              },
+              update: {},
+              create: { studentId: student.id, subjectTermId: subjectTerm.id, totalScore: 0 },
+            });
+            stsMap.set(item.studentId!, sts);
+            existingScoreMap.set(sts.id, new Map());
+          }
+
+          // Resolve assessment template entry for this assessment name
+          let assessmentEntry: { id: string; maxScore: number; isExam: boolean } | undefined;
+          if (template) {
+            const entry = this.templateService.getAssessmentEntryByName(template, itemAssessmentName);
+            if (entry) {
+              assessmentEntry = { id: entry.id, maxScore: entry.maxScore, isExam: entry.isExam };
+            }
+          }
+          const isExam = item.isExam !== undefined ? item.isExam : assessmentEntry?.isExam || false;
+
+          // Check if assessment already exists
+          const existingForSts = existingScoreMap.get(sts.id);
+          const existingAssessment = existingForSts?.get(itemAssessmentName.toLowerCase());
+
+          let savedAssessment: any;
+          if (existingAssessment) {
+            // Update existing
+            savedAssessment = await this.prisma.subjectTermStudentAssessment.update({
+              where: { id: existingAssessment.id },
+              data: { score: item.score, name: itemAssessmentName, isExam },
+            });
+          } else {
+            // Create new
+            try {
+              savedAssessment = await this.prisma.subjectTermStudentAssessment.create({
+                data: {
+                  name: itemAssessmentName,
+                  score: item.score,
+                  isExam,
+                  subjectTermStudentId: sts.id,
+                  assessmentTypeId: assessmentEntry?.id,
+                  maxScore: assessmentEntry?.maxScore,
+                },
+              });
+            } catch (error) {
+              // Handle unique constraint race condition — fall back to update
+              if (error.code === 'P2002') {
+                const raceExisting = await this.prisma.subjectTermStudentAssessment.findFirst({
+                  where: {
+                    subjectTermStudentId: sts.id,
+                    name: { equals: itemAssessmentName, mode: 'insensitive' },
+                    deletedAt: null,
+                  },
+                });
+                if (raceExisting) {
+                  savedAssessment = await this.prisma.subjectTermStudentAssessment.update({
+                    where: { id: raceExisting.id },
+                    data: { score: item.score, name: itemAssessmentName, isExam },
+                  });
+                } else {
+                  throw error;
+                }
+              } else {
+                throw error;
+              }
+            }
+            // Update local cache so subsequent items for the same student can find it
+            if (existingForSts) {
+              existingForSts.set(itemAssessmentName.toLowerCase(), savedAssessment);
+            }
+          }
+
+          result.success.push({
+            id: savedAssessment.id,
+            name: savedAssessment.name,
+            score: savedAssessment.score,
+            isExam: savedAssessment.isExam,
+            studentId: student.id,
+            studentName: `${student.user.firstName} ${student.user.lastName}`,
+            subjectName: subject.name,
+            termName: subjectTerm.term.name,
+            createdAt: savedAssessment.createdAt,
+            updatedAt: savedAssessment.updatedAt,
+          });
+        } catch (error) {
+          result.failed.push({ assessmentScore: item, error: error.message || 'Operation failed' });
+        }
+      }
+    }
+
+    // ── 9. Batch-recalculate totalScore for all affected students ──
+    const affectedStsIds = [
+      ...new Set(result.success.map(s => s.id).filter(Boolean)),
+    ];
+    // Collect all unique subjectTermStudent IDs from the items we touched
+    const allStsIds = new Set<string>();
+
+    // From update-by-id items: look up subjectTermStudentId from the assessments we updated
+    if (updateByIdItems.length > 0) {
+      const updatedAssessments = await this.prisma.subjectTermStudentAssessment.findMany({
+        where: { id: { in: result.success.map(s => s.id) }, deletedAt: null },
+        select: { subjectTermStudentId: true },
+      });
+      updatedAssessments.forEach(a => allStsIds.add(a.subjectTermStudentId));
+    }
+
+    // From upsert items: we already have the stsMap
+    if (upsertItems.length > 0) {
+      const successStudentIds = new Set(result.success.map(s => s.studentId));
+      // stsMap may not exist in this scope if upsertItems was empty, but we checked
+      const subjectTermStudentsForRecalc = await this.prisma.subjectTermStudent.findMany({
+        where: {
+          studentId: { in: [...successStudentIds] },
+          subjectTermId: subjectTerm.id,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      subjectTermStudentsForRecalc.forEach(sts => allStsIds.add(sts.id));
+    }
+
+    if (allStsIds.size > 0) {
+      const allAssessments = await this.prisma.subjectTermStudentAssessment.findMany({
+        where: { subjectTermStudentId: { in: [...allStsIds] }, deletedAt: null },
+        select: { subjectTermStudentId: true, score: true },
+      });
+
+      const totalsByStS = new Map<string, number>();
+      for (const a of allAssessments) {
+        totalsByStS.set(a.subjectTermStudentId, (totalsByStS.get(a.subjectTermStudentId) || 0) + a.score);
+      }
+
+      await Promise.all(
+        [...totalsByStS.entries()].map(([stsId, total]) =>
+          this.prisma.subjectTermStudent.update({
+            where: { id: stsId },
+            data: { totalScore: total },
+          }),
+        ),
+      );
+    }
+
     return result;
-  }
-
-  private async findExistingAssessmentScore(
-    studentId: string,
-    subjectName: string,
-    termName: string,
-    assessmentName: string,
-    schoolId: string,
-  ) {
-    // Find the subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
-      where: {
-        subject: {
-          name: {
-            equals: subjectName,
-            mode: 'insensitive',
-          },
-          schoolId: schoolId,
-        },
-        term: {
-          name: {
-            equals: termName,
-            mode: 'insensitive',
-          },
-        },
-        academicSession: {
-          isCurrent: true,
-          schoolId: schoolId,
-        },
-      },
-    });
-
-    if (!subjectTerm) {
-      return null;
-    }
-
-    // Find the subject term student
-    const subjectTermStudent = await this.prisma.subjectTermStudent.findFirst({
-      where: {
-        studentId: studentId,
-        subjectTermId: subjectTerm.id,
-      },
-    });
-
-    if (!subjectTermStudent) {
-      return null;
-    }
-
-    // Find existing assessment score
-    const existingAssessment = await this.prisma.subjectTermStudentAssessment.findFirst({
-      where: {
-        subjectTermStudentId: subjectTermStudent.id,
-        name: {
-          equals: assessmentName,
-          mode: 'insensitive',
-        },
-        deletedAt: null,
-      },
-    });
-
-    return existingAssessment;
   }
 
   // Attendance Management Methods

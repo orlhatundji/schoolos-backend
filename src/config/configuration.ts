@@ -28,7 +28,7 @@ const getConfiguration = () => ({
     defaultEmail: process.env.DEFAULT_SOURCE_EMAIL,
   },
   platformAdmin: {
-    email: process.env.PLATFORM_ADMIN_EMAIL || 'orlhatund@gmail.com',
+    email: process.env.PLATFORM_ADMIN_EMAIL || 'orlhatundji@gmail.com',
     password: process.env.PLATFORM_ADMIN_PASSWORD || 'Password@123',
     firstName: process.env.PLATFORM_ADMIN_FIRST_NAME || 'Platform',
     lastName: process.env.PLATFORM_ADMIN_LAST_NAME || 'Admin',

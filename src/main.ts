@@ -27,14 +27,14 @@ async function bootstrap() {
       'https://www.schos.ng',
       'https://platform.schos.ng',
     ];
-  } else if (process.env.NODE_ENV === 'staging') {
+  } else if (process.env.NODE_ENV === 'develop') {
     corsOptions.origin = [
       'https://devapi.schos.ng',
-      'https://dev-admin.schos.ng',
-      'https://dev-teacher.schos.ng',
-      'https://dev-student.schos.ng',
-      'https://dev-website.schos.ng',
-      'https://dev-platform.schos.ng',
+      'https://schos-admin.netlify.app',
+      'https://schos-teacher.netlify.app',
+      'https://schos-student.netlify.app',
+      'https://schos-website.netlify.app',
+      'https://schos-platform.netlify.app',
     ];
   } else {
     // Allow localhost in development

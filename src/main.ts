@@ -27,7 +27,7 @@ async function bootstrap() {
       'https://www.schos.ng',
       'https://platform.schos.ng',
     ];
-  } else if (process.env.NODE_ENV === 'develop') {
+  } else if (process.env.NODE_ENV === 'staging') {
     corsOptions.origin = [
       'https://devapi.schos.ng',
       'https://schos-admin.netlify.app',

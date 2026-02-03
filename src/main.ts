@@ -17,6 +17,8 @@ async function bootstrap() {
     preflightContinue: false,
     optionsSuccessStatus: 204,
   };
+  console.log('\n\nEnvironment\n\n');
+  console.log(process.env.NODE_ENV);
 
   if (process.env.NODE_ENV === 'production') {
     corsOptions.origin = [
@@ -28,7 +30,10 @@ async function bootstrap() {
       'https://platform.schos.ng',
     ];
   } else if (process.env.NODE_ENV === 'staging') {
+    console.log('\n\nStaging environment\n\n');
+    console.log(process.env.NODE_ENV);
     corsOptions.origin = [
+      '*',
       'https://devapi.schos.ng',
       'https://schos-admin.netlify.app',
       'https://schos-teacher.netlify.app',

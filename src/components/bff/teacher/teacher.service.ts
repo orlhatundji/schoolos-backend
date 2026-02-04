@@ -1989,26 +1989,47 @@ export class TeacherService {
             }
           }
 
-          const updated = await this.prisma.subjectTermStudentAssessment.update({
-            where: { id: item.id! },
-            data: {
-              ...(item.score !== undefined && { score: item.score }),
-              ...(item.assessmentName && { name: item.assessmentName }),
-              ...(item.isExam !== undefined && { isExam: item.isExam }),
-            },
-          });
+          // score: null means delete this assessment
+          if (item.score === null) {
+            await this.prisma.subjectTermStudentAssessment.update({
+              where: { id: item.id! },
+              data: { deletedAt: new Date() },
+            });
 
-          result.success.push({
-            id: updated.id,
-            name: updated.name,
-            score: updated.score,
-            isExam: updated.isExam,
-            studentId: existing.subjectTermStudent.student.id,
-            studentName: `${existing.subjectTermStudent.student.user.firstName} ${existing.subjectTermStudent.student.user.lastName}`,
-            subjectName: subject.name,
-            termName: subjectTerm.term.name,
-            updatedAt: updated.updatedAt,
-          } as any);
+            result.success.push({
+              id: existing.id,
+              name: existing.name,
+              score: 0,
+              isExam: existing.isExam,
+              studentId: existing.subjectTermStudent.student.id,
+              studentName: `${existing.subjectTermStudent.student.user.firstName} ${existing.subjectTermStudent.student.user.lastName}`,
+              subjectName: subject.name,
+              termName: subjectTerm.term.name,
+              createdAt: existing.createdAt,
+              updatedAt: new Date(),
+            } as any);
+          } else {
+            const updated = await this.prisma.subjectTermStudentAssessment.update({
+              where: { id: item.id! },
+              data: {
+                ...(item.score !== undefined && { score: item.score }),
+                ...(item.assessmentName && { name: item.assessmentName }),
+                ...(item.isExam !== undefined && { isExam: item.isExam }),
+              },
+            });
+
+            result.success.push({
+              id: updated.id,
+              name: updated.name,
+              score: updated.score,
+              isExam: updated.isExam,
+              studentId: existing.subjectTermStudent.student.id,
+              studentName: `${existing.subjectTermStudent.student.user.firstName} ${existing.subjectTermStudent.student.user.lastName}`,
+              subjectName: subject.name,
+              termName: subjectTerm.term.name,
+              updatedAt: updated.updatedAt,
+            } as any);
+          }
         } catch (error) {
           result.failed.push({ assessmentScore: item, error: error.message || 'Update failed' });
         }
@@ -2109,6 +2130,33 @@ export class TeacherService {
           const existingForSts = existingScoreMap.get(sts.id);
           const existingAssessment = existingForSts?.get(itemAssessmentName.toLowerCase());
 
+          // score: null means delete this assessment
+          if (item.score === null) {
+            if (existingAssessment) {
+              await this.prisma.subjectTermStudentAssessment.update({
+                where: { id: existingAssessment.id },
+                data: { deletedAt: new Date() },
+              });
+              // Remove from local cache
+              existingForSts?.delete(itemAssessmentName.toLowerCase());
+
+              result.success.push({
+                id: existingAssessment.id,
+                name: existingAssessment.name,
+                score: 0,
+                isExam: existingAssessment.isExam,
+                studentId: student.id,
+                studentName: `${student.user.firstName} ${student.user.lastName}`,
+                subjectName: subject.name,
+                termName: subjectTerm.term.name,
+                createdAt: existingAssessment.createdAt,
+                updatedAt: new Date(),
+              });
+            }
+            // If no existing assessment, nothing to delete — skip silently
+            continue;
+          }
+
           let savedAssessment: any;
           if (existingAssessment) {
             // Update existing
@@ -2182,10 +2230,11 @@ export class TeacherService {
     // Collect all unique subjectTermStudent IDs from the items we touched
     const allStsIds = new Set<string>();
 
-    // From update-by-id items: look up subjectTermStudentId from the assessments we updated
+    // From update-by-id items: look up subjectTermStudentId from the assessments we touched
+    // (include soft-deleted ones so totals are recalculated after deletes)
     if (updateByIdItems.length > 0) {
       const updatedAssessments = await this.prisma.subjectTermStudentAssessment.findMany({
-        where: { id: { in: result.success.map(s => s.id) }, deletedAt: null },
+        where: { id: { in: result.success.map(s => s.id) } },
         select: { subjectTermStudentId: true },
       });
       updatedAssessments.forEach(a => allStsIds.add(a.subjectTermStudentId));
@@ -2212,7 +2261,11 @@ export class TeacherService {
         select: { subjectTermStudentId: true, score: true },
       });
 
+      // Initialize all affected STS IDs with 0 so deleted-all-scores cases get reset
       const totalsByStS = new Map<string, number>();
+      for (const stsId of allStsIds) {
+        totalsByStS.set(stsId, 0);
+      }
       for (const a of allAssessments) {
         totalsByStS.set(a.subjectTermStudentId, (totalsByStS.get(a.subjectTermStudentId) || 0) + a.score);
       }

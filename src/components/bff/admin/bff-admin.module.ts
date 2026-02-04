@@ -15,6 +15,8 @@ import { BffAdminLevelService } from './services/bff-admin-level.service';
 import { BffAdminStudentService } from './services/bff-admin-student.service';
 import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
+import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
+
 @Module({
   imports: [PrismaModule, ActivityLogModule, UsersModule, RolesManagerModule, JwtAuthModule],
   controllers: [BffAdminController],
@@ -27,6 +29,7 @@ import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
     BffAdminLevelService,
     BffAdminClassroomService,
     BffAdminAdminService,
+    AssessmentStructureTemplateService,
     Encryptor,
   ],
 })

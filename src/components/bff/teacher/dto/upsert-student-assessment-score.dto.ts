@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize, IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsBoolean } from 'class-validator';
+import { IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize, IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsBoolean, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -24,15 +24,18 @@ export class UpsertStudentAssessmentScoreItemDto {
   studentId?: string;
 
   @ApiProperty({
-    description: 'Score for the assessment',
+    description: 'Score for the assessment. Set to null to delete an existing score.',
     example: 85,
     minimum: 0,
     maximum: 100,
+    nullable: true,
   })
+  @IsOptional()
+  @ValidateIf((o) => o.score !== null)
   @IsNumber()
   @Min(0)
   @Max(100)
-  score: number;
+  score: number | null;
 
   @ApiProperty({
     description: 'Whether this is an exam (optional - will be auto-determined from assessment structure if not provided)',

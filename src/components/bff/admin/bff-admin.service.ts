@@ -109,6 +109,18 @@ export class BffAdminService {
     return this.subjectService.deleteSubject(userId, subjectId);
   }
 
+  async getSubjectDetails(userId: string, subjectId: string) {
+    return this.subjectService.getSubjectDetails(userId, subjectId);
+  }
+
+  async getClassAssessments(userId: string, subjectId: string, classArmId: string) {
+    return this.subjectService.getClassAssessments(userId, subjectId, classArmId);
+  }
+
+  async generateBroadsheet(userId: string, subjectId: string, classArmId: string) {
+    return this.subjectService.generateBroadsheet(userId, subjectId, classArmId);
+  }
+
   // Department methods
   async getDepartmentsViewData(userId: string): Promise<DepartmentsViewData> {
     return this.departmentService.getDepartmentsViewData(userId);

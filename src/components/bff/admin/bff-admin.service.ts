@@ -707,9 +707,11 @@ export class BffAdminService {
           where: {
             schoolId,
             deletedAt: null,
-            classArmSubjectTeachers: {
+            classArmSubjects: {
               some: {
-                deletedAt: null,
+                teachers: {
+                  some: { deletedAt: null },
+                },
                 classArm: {
                   academicSessionId: sessionId,
                   deletedAt: null,
@@ -1096,48 +1098,44 @@ export class BffAdminService {
       highestAssessmentScore,
       lowestAssessmentScore,
     ] = await Promise.all([
-      this.prisma.subjectTermStudentAssessment.count({
+      this.prisma.classArmStudentAssessment.count({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
       }),
       this.prisma.subject.count({
         where: {
           schoolId,
-          classArmSubjectTeachers: { some: {} },
+          classArmSubjects: { some: { teachers: { some: { deletedAt: null } } } },
         },
       }),
-      this.prisma.subjectTermStudentAssessment.aggregate({
+      this.prisma.classArmStudentAssessment.aggregate({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
         _avg: { score: true },
       }),
-      this.prisma.subjectTermStudentAssessment.findFirst({
+      this.prisma.classArmStudentAssessment.findFirst({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
         orderBy: { score: 'desc' },
       }),
-      this.prisma.subjectTermStudentAssessment.findFirst({
+      this.prisma.classArmStudentAssessment.findFirst({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
         orderBy: { score: 'asc' },
       }),
@@ -1245,7 +1243,7 @@ export class BffAdminService {
         where: { schoolId, academicSessionId: sessionId },
       }),
       this.prisma.subject.count({
-        where: { schoolId, classArmSubjectTeachers: { some: {} } },
+        where: { schoolId, classArmSubjects: { some: { teachers: { some: { deletedAt: null } } } } },
       }),
       this.prisma.department.count({
         where: { schoolId, deletedAt: null },
@@ -1253,13 +1251,12 @@ export class BffAdminService {
       this.prisma.level.count({
         where: { schoolId, deletedAt: null },
       }),
-      this.prisma.subjectTermStudentAssessment.count({
+      this.prisma.classArmStudentAssessment.count({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
       }),
       this.prisma.studentAttendance.count({

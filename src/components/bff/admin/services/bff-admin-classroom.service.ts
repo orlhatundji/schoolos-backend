@@ -226,21 +226,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data to get their name
           },
         },
-        subjectTermStudents: {
-          take: 50, // Limit to recent results
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -270,21 +260,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data
           },
         },
-        subjectTermStudents: {
-          take: 50,
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -316,19 +296,16 @@ export class BffAdminClassroomService {
     >();
 
     allStudents.forEach((student) => {
-      student.subjectTermStudents.forEach((subjectTermStudent) => {
-        const studentId = student.id;
-        const existing = performanceMap.get(studentId) || {
-          totalScore: 0,
-          count: 0,
+      if (student.assessments.length > 0) {
+        const totalScore = student.assessments.reduce((sum, a) => sum + a.score, 0);
+        const firstSubject = student.assessments[0]?.classArmSubject?.subject?.name || 'N/A';
+        performanceMap.set(student.id, {
+          totalScore,
+          count: student.assessments.length,
           student,
-          latestSubject: subjectTermStudent.subjectTerm.subject.name,
-        };
-
-        existing.totalScore += subjectTermStudent.totalScore;
-        existing.count += 1;
-        performanceMap.set(studentId, existing);
-      });
+          latestSubject: firstSubject,
+        });
+      }
     });
 
     const topPerformers = Array.from(performanceMap.entries())
@@ -793,21 +770,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data to get their name
           },
         },
-        subjectTermStudents: {
-          take: 50, // Limit to recent results
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -837,21 +804,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data
           },
         },
-        subjectTermStudents: {
-          take: 50,
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -864,20 +821,16 @@ export class BffAdminClassroomService {
 
     // Calculate top performers (only include students with assessment data)
     const topPerformers = allStudents
-      .filter((student) => student.subjectTermStudents.length > 0) // Only include students with assessment data
+      .filter((student) => student.assessments.length > 0)
       .map((student) => {
-        const totalScore = student.subjectTermStudents.reduce(
-          (sum, sts) => sum + sts.totalScore,
-          0,
-        );
-        const subjectCount = student.subjectTermStudents.length;
-        const averageScore = subjectCount > 0 ? totalScore / subjectCount : 0;
+        const totalScore = student.assessments.reduce((sum, a) => sum + a.score, 0);
+        const averageScore = student.assessments.length > 0 ? totalScore / student.assessments.length : 0;
 
         return {
           id: student.id,
           name: `${student.user.firstName} ${student.user.lastName}`,
           score: Math.round(averageScore),
-          subject: student.subjectTermStudents[0]?.subjectTerm?.subject?.name || 'N/A',
+          subject: student.assessments[0]?.classArmSubject?.subject?.name || 'N/A',
         };
       })
       .sort((a, b) => b.score - a.score)

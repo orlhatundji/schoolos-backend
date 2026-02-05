@@ -146,7 +146,6 @@ model AcademicSession {
   paymentStructures            PaymentStructure[]
   promotionsFrom               StudentPromotion[]            @relation("PromotionFromSession")
   promotionsTo                 StudentPromotion[]            @relation("PromotionToSession")
-  subjectTerms                 SubjectTerm[]
   terms                        Term[]
 
   @@map("academic_sessions")
@@ -207,9 +206,9 @@ model Term {
   endDate            DateTime
   startDate          DateTime
   paymentStructures  PaymentStructure[]
+  assessments        ClassArmStudentAssessment[]
   studentAttendances StudentAttendance[]
-  subjectTerms       SubjectTerm[]
-  academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id])
+  academicSession    AcademicSession            @relation(fields: [academicSessionId], references: [id])
 
   @@map("terms")
 }
@@ -287,7 +286,7 @@ model ClassArm {
   location                String?
   slug                    String                   @unique
   classArmStudents        ClassArmStudent[]
-  classArmSubjectTeachers ClassArmSubjectTeacher[]
+  classArmSubjects        ClassArmSubject[]
   classArmTeachers        ClassArmTeacher[]
   academicSession         AcademicSession          @relation(fields: [academicSessionId], references: [id])
   captain                 Student?                 @relation("ClassArmCaptain", fields: [captainId], references: [id])
@@ -474,17 +473,16 @@ model Student {
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?
   status                StudentStatus          @default(ACTIVE)
+  assessments           ClassArmStudentAssessment[]
   classArmStudents      ClassArmStudent[]
-  classArmAsCaptain     ClassArm?              @relation("ClassArmCaptain")
-  curriculumItemRatings CurriculumItemRating[]
+  classArmAsCaptain     ClassArm?                   @relation("ClassArmCaptain")
   prefect               Prefect?
   studentPayments       StudentPayment[]
-  promotedFrom          StudentPromotion[]     @relation("PromotedStudent")
+  promotedFrom          StudentPromotion[]          @relation("PromotedStudent")
   promotions            StudentPromotion[]
   statusHistory         StudentStatusHistory[]
-  guardian              Guardian?              @relation(fields: [guardianId], references: [id])
-  user                  User                   @relation(fields: [userId], references: [id])
-  subjectTermStudents   SubjectTermStudent[]
+  guardian              Guardian?                   @relation(fields: [guardianId], references: [id])
+  user                  User                        @relation(fields: [userId], references: [id])
 
   @@map("students")
 }
@@ -561,93 +559,34 @@ model Subject {
   updatedAt               DateTime                 @updatedAt
   deletedAt               DateTime?
   categoryId              String?
-  classArmSubjectTeachers ClassArmSubjectTeacher[]
-  subjectTerms            SubjectTerm[]
-  category                Category?                @relation(fields: [categoryId], references: [id])
-  department              Department?              @relation(fields: [departmentId], references: [id])
-  school                  School                   @relation(fields: [schoolId], references: [id])
+  classArmSubjects        ClassArmSubject[]
+  category                Category?         @relation(fields: [categoryId], references: [id])
+  department              Department?       @relation(fields: [departmentId], references: [id])
+  school                  School            @relation(fields: [schoolId], references: [id])
 
   @@map("subjects")
 }
 
 /// *
-/// * SubjectTerm
-/// * -----------
-/// * Represents the offering of a subject in a specific academic session and term.
-/// * Links a subject to a session and term, and is associated with a curriculum for that period.
-/// * This enables tracking of what is taught, when, and to whom, across different school years and terms.
-model SubjectTerm {
-  id                  String               @id @default(uuid())
-  subjectId           String
-  academicSessionId   String
-  termId              String
-  curriculumId        String?              @unique
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  deletedAt           DateTime?
-  subjectTermStudents SubjectTermStudent[]
-  academicSession     AcademicSession      @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
-  curriculum          Curriculum?          @relation(fields: [curriculumId], references: [id])
-  subject             Subject              @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  term                Term                 @relation(fields: [termId], references: [id], onDelete: Cascade)
+/// * ClassArmSubject
+/// * ---------------
+/// * Represents the assignment of a subject to a class arm.
+/// * This is a first-class entity that exists independently of teacher assignments.
+/// * A class arm can take a subject even without a teacher assigned.
+model ClassArmSubject {
+  id          String                      @id @default(uuid())
+  classArmId  String
+  subjectId   String
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  deletedAt   DateTime?
+  classArm    ClassArm                    @relation(fields: [classArmId], references: [id])
+  subject     Subject                     @relation(fields: [subjectId], references: [id])
+  teachers    ClassArmSubjectTeacher[]
+  assessments ClassArmStudentAssessment[]
 
-  @@map("subject_terms")
-}
-
-/// *
-/// * Curriculum
-/// * ----------
-/// * Represents the curriculum for a subject term, defining the topics, lessons, and learning objectives to be covered.
-/// * Each curriculum is linked to a subject term and contains multiple curriculum items (topics or units).
-/// * This entity is essential for academic planning, ensuring that teaching aligns with educational standards and goals.
-model Curriculum {
-  id            String           @id @default(uuid())
-  subjectTermId String?          @unique
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  deletedAt     DateTime?
-  items         CurriculumItem[]
-  subjectTerm   SubjectTerm?
-
-  @@map("curriculums")
-}
-
-/// *
-/// * CurriculumItem
-/// * --------------
-/// * Represents a specific topic, lesson, or unit within a curriculum (e.g., "Algebra Basics", "Photosynthesis").
-/// * Each item is linked to a curriculum and can be rated or assessed for student understanding.
-/// * This allows for granular tracking of what is taught and how well students are grasping each topic.
-model CurriculumItem {
-  id                    String                 @id @default(uuid())
-  title                 String
-  curriculumId          String
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  deletedAt             DateTime?
-  curriculumItemRatings CurriculumItemRating[]
-  curriculum            Curriculum             @relation(fields: [curriculumId], references: [id])
-
-  @@map("curriculum_items")
-}
-
-/// *
-/// * CurriculumItemRating
-/// * --------------------
-/// * Tracks a student's performance or rating on a specific curriculum item.
-/// * Useful for formative assessment, personalized learning, and identifying areas where students need support.
-model CurriculumItemRating {
-  id               String         @id @default(uuid())
-  studentId        String
-  curriculumItemId String
-  rating           Int
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  deletedAt        DateTime?
-  curriculumItem   CurriculumItem @relation(fields: [curriculumItemId], references: [id])
-  student          Student        @relation(fields: [studentId], references: [id])
-
-  @@map("curriculum_item_ratings")
+  @@unique([classArmId, subjectId])
+  @@map("class_arm_subjects")
 }
 
 /// *
@@ -685,47 +624,34 @@ model AssessmentStructureTemplate {
 
 
 /// *
-/// * SubjectTermStudent
-/// * ------------------
-/// * Associates a student with a subject term, tracking their enrollment, performance, and assessments for that subject in that term.
-/// * This model enables detailed academic tracking and personalized reporting for each student.
-model SubjectTermStudent {
-  id            String                         @id @default(uuid())
-  studentId     String
-  subjectTermId String
-  totalScore    Int
-  createdAt     DateTime                       @default(now())
-  updatedAt     DateTime                       @updatedAt
-  deletedAt     DateTime?
-  assessments   SubjectTermStudentAssessment[]
-  student       Student                        @relation(fields: [studentId], references: [id])
-  subjectTerm   SubjectTerm                    @relation(fields: [subjectTermId], references: [id])
-
-  @@unique([studentId, subjectTermId], name: "unique_student_subject_term")
-  @@map("subject_term_students")
-}
-
-/// *
-/// * SubjectTermStudentAssessment
-/// * ----------------------------
-/// * Represents an individual assessment (e.g., test, exam, assignment) for a student in a subject term.
-/// * Stores the score, type (exam or not), and links to the overall subject term student record.
+/// * ClassArmStudentAssessment
+/// * -------------------------
+/// * Represents an individual assessment score for a student in a class arm subject.
+/// * Links directly to ClassArmSubject, Student, and Term — no intermediary tables.
 /// * assessmentTypeId links to the UUID of the assessment entry in AssessmentStructureTemplate.assessments JSON.
 /// * maxScore is snapshotted at the time of scoring so historical data stays accurate.
-model SubjectTermStudentAssessment {
-  id                   String             @id @default(uuid())
-  name                 String
-  score                Int
-  isExam               Boolean            @default(false)
-  assessmentTypeId     String?
-  maxScore             Int?
-  subjectTermStudentId String
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  deletedAt            DateTime?
-  subjectTermStudent   SubjectTermStudent @relation(fields: [subjectTermStudentId], references: [id])
+model ClassArmStudentAssessment {
+  id                String          @id @default(uuid())
+  classArmSubjectId String
+  studentId         String
+  termId            String
+  name              String
+  score             Int
+  isExam            Boolean         @default(false)
+  assessmentTypeId  String?
+  maxScore          Int?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+  classArmSubject   ClassArmSubject @relation(fields: [classArmSubjectId], references: [id])
+  student           Student         @relation(fields: [studentId], references: [id])
+  term              Term            @relation(fields: [termId], references: [id])
 
-  @@map("subject_term_student_assessments")
+  @@unique([classArmSubjectId, studentId, termId, name])
+  @@index([studentId])
+  @@index([classArmSubjectId])
+  @@index([termId])
+  @@map("class_arm_student_assessments")
 }
 
 /// *
@@ -797,21 +723,20 @@ model ClassArmTeacher {
 /// *
 /// * ClassArmSubjectTeacher
 /// * ----------------------
-/// * Associates a teacher with a subject and a class arm, indicating which teacher is responsible for teaching a specific subject to a specific class arm.
-/// * This enables flexible assignment of teachers to different subjects and classes.
+/// * Associates a teacher with a ClassArmSubject, indicating which teacher teaches a specific subject in a specific class arm.
+/// * References ClassArmSubject instead of separate classArmId + subjectId.
 /// * e.g JSS2A maths teacher is Mr. John Doe
 model ClassArmSubjectTeacher {
-  id         String    @id @default(uuid())
-  teacherId  String
-  subjectId  String
-  classArmId String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  deletedAt  DateTime?
-  classArm   ClassArm  @relation(fields: [classArmId], references: [id])
-  subject    Subject   @relation(fields: [subjectId], references: [id])
-  teacher    Teacher   @relation(fields: [teacherId], references: [id])
+  id                String          @id @default(uuid())
+  classArmSubjectId String
+  teacherId         String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+  classArmSubject   ClassArmSubject @relation(fields: [classArmSubjectId], references: [id])
+  teacher           Teacher         @relation(fields: [teacherId], references: [id])
 
+  @@unique([classArmSubjectId, teacherId])
   @@map("class_arm_subject_teachers")
 }
 

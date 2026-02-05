@@ -60,27 +60,42 @@ export class StudentService extends BaseService {
       },
     });
 
-    // Get student statistics
-    const subjectTermStudents = await this.prisma.subjectTermStudent.findMany({
+    // Get student assessments for the current term
+    const assessments = await this.prisma.classArmStudentAssessment.findMany({
       where: {
         studentId: student.id,
-        subjectTerm: {
-          termId: currentTerm?.id,
-        },
+        termId: currentTerm?.id,
+        deletedAt: null,
       },
       include: {
-        assessments: true,
+        classArmSubject: {
+          include: {
+            subject: true,
+          },
+        },
       },
     });
 
+    // Group assessments by subject to compute per-subject totals
+    const subjectAssessmentsMap = new Map<string, { subject: any; assessments: typeof assessments }>();
+    for (const a of assessments) {
+      const subjectId = a.classArmSubject.subject.id;
+      if (!subjectAssessmentsMap.has(subjectId)) {
+        subjectAssessmentsMap.set(subjectId, { subject: a.classArmSubject.subject, assessments: [] });
+      }
+      subjectAssessmentsMap.get(subjectId).assessments.push(a);
+    }
+
     // Calculate statistics
-    const totalSubjects = subjectTermStudents.length;
-    const totalScore = subjectTermStudents.reduce((sum, sts) => sum + sts.totalScore, 0);
-    const averageScore = totalSubjects > 0 ? totalScore / totalSubjects : 0;
-    const totalAssessments = subjectTermStudents.reduce(
-      (sum, sts) => sum + sts.assessments.length,
-      0,
+    const totalSubjects = subjectAssessmentsMap.size;
+    const totalScore = assessments.reduce((sum, a) => sum + a.score, 0);
+    const subjectTotals = Array.from(subjectAssessmentsMap.values()).map(
+      (entry) => entry.assessments.reduce((sum, a) => sum + a.score, 0),
     );
+    const averageScore = totalSubjects > 0
+      ? subjectTotals.reduce((sum, t) => sum + t, 0) / totalSubjects
+      : 0;
+    const totalAssessments = assessments.length;
 
     // Get attendance rate for current term
     const attendanceRecords = await this.prisma.studentAttendance.findMany({
@@ -97,20 +112,15 @@ export class StudentService extends BaseService {
       attendanceRecords.length > 0 ? (presentDays / attendanceRecords.length) * 100 : 0;
 
     // Get recent activities (last 5 assessments)
-    const recentAssessments = await this.prisma.subjectTermStudentAssessment.findMany({
+    const recentAssessments = await this.prisma.classArmStudentAssessment.findMany({
       where: {
-        subjectTermStudent: {
-          studentId: student.id,
-        },
+        studentId: student.id,
+        deletedAt: null,
       },
       include: {
-        subjectTermStudent: {
+        classArmSubject: {
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
+            subject: true,
           },
         },
       },
@@ -124,7 +134,7 @@ export class StudentService extends BaseService {
       title: assessment.name,
       description: `Scored ${assessment.score}`,
       date: assessment.createdAt,
-      subjectName: assessment.subjectTermStudent.subjectTerm.subject.name,
+      subjectName: assessment.classArmSubject.subject.name,
     }));
 
     // Get recent payment activities (last 5)
@@ -187,11 +197,10 @@ export class StudentService extends BaseService {
       .slice(0, 10); // Take the 10 most recent activities
 
     // Get upcoming events (exams in the next 30 days)
-    const upcomingExams = await this.prisma.subjectTermStudentAssessment.findMany({
+    const upcomingExams = await this.prisma.classArmStudentAssessment.findMany({
       where: {
-        subjectTermStudent: {
-          studentId: student.id,
-        },
+        studentId: student.id,
+        deletedAt: null,
         isExam: true,
         createdAt: {
           gte: new Date(),
@@ -199,13 +208,9 @@ export class StudentService extends BaseService {
         },
       },
       include: {
-        subjectTermStudent: {
+        classArmSubject: {
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
+            subject: true,
           },
         },
       },
@@ -215,7 +220,7 @@ export class StudentService extends BaseService {
 
     const upcomingEvents = upcomingExams.map((exam) => ({
       id: exam.id,
-      title: `${exam.subjectTermStudent.subjectTerm.subject.name} Exam`,
+      title: `${exam.classArmSubject.subject.name} Exam`,
       description: exam.name,
       date: exam.createdAt,
       type: 'EXAM' as const,
@@ -368,55 +373,41 @@ export class StudentService extends BaseService {
       }
     }
 
-    const whereClause: any = {
+    const assessmentWhereClause: any = {
       studentId: student.id,
+      termId: term.id,
       deletedAt: null,
-      subjectTerm: {
-        termId: term.id,
-        deletedAt: null,
-      },
     };
 
     if (subjectId) {
-      whereClause.subjectTerm.subjectId = subjectId;
+      assessmentWhereClause.classArmSubject = { subjectId };
     }
 
-    const subjectTermStudentsRaw = await this.prisma.subjectTermStudent.findMany({
-      where: whereClause,
+    const allAssessments = await this.prisma.classArmStudentAssessment.findMany({
+      where: assessmentWhereClause,
       include: {
-        subjectTerm: {
+        classArmSubject: {
           include: {
             subject: true,
           },
         },
-        assessments: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'asc' },
-        },
       },
+      orderBy: { createdAt: 'asc' },
     });
-    // Aggregate duplicate subjectTermStudent records per subject
-    // (race conditions can create multiple records for the same student-subject-term)
-    const bySubjectId = new Map<string, (typeof subjectTermStudentsRaw)[0]>();
-    for (const sts of subjectTermStudentsRaw) {
-      const sid = sts.subjectTerm.subject.id;
+
+    // Group assessments by subject
+    const bySubjectId = new Map<string, { subject: any; assessments: typeof allAssessments; totalScore: number }>();
+    for (const a of allAssessments) {
+      const sid = a.classArmSubject.subject.id;
       const existing = bySubjectId.get(sid);
       if (!existing) {
-        bySubjectId.set(sid, sts);
+        bySubjectId.set(sid, { subject: a.classArmSubject.subject, assessments: [a], totalScore: a.score });
       } else {
-        // Merge assessments from duplicate records into the first one
-        const existingNames = new Set(existing.assessments.map(a => a.name));
-        for (const assessment of sts.assessments) {
-          if (!existingNames.has(assessment.name)) {
-            existing.assessments.push(assessment);
-            existingNames.add(assessment.name);
-          }
-        }
-        // Recalculate totalScore from merged assessments
-        existing.totalScore = existing.assessments.reduce((sum, a) => sum + a.score, 0);
+        existing.assessments.push(a);
+        existing.totalScore += a.score;
       }
     }
-    const subjectTermStudentsDeduped = Array.from(bySubjectId.values());
+    const subjectEntries = Array.from(bySubjectId.values());
 
     // Get assessment structures from the session's own template.
     // For historical sessions, use read-only lookup to avoid fabricating a template
@@ -446,12 +437,10 @@ export class StudentService extends BaseService {
       where: { schoolId: student.user.schoolId },
     });
 
-    const subjectTermStudentsForResults = subjectTermStudentsDeduped;
-
-    const subjects = subjectTermStudentsForResults.map((sts) => {
+    const subjects = subjectEntries.map((entry) => {
       // Create a map of student assessments by name for quick lookup
       const studentAssessmentsMap = new Map();
-      sts.assessments.forEach((assessment) => {
+      entry.assessments.forEach((assessment) => {
         studentAssessmentsMap.set(assessment.name, assessment);
       });
 
@@ -481,12 +470,12 @@ export class StudentService extends BaseService {
       });
 
       return {
-        id: sts.subjectTerm.subject.id,
-        name: sts.subjectTerm.subject.name,
-        code: sts.subjectTerm.subject.name.substring(0, 3).toUpperCase(),
-        totalScore: sts.totalScore,
-        averageScore: sts.totalScore,
-        grade: this.calculateGrade(sts.totalScore, gradingModel?.model),
+        id: entry.subject.id,
+        name: entry.subject.name,
+        code: entry.subject.name.substring(0, 3).toUpperCase(),
+        totalScore: entry.totalScore,
+        averageScore: entry.totalScore,
+        grade: this.calculateGrade(entry.totalScore, gradingModel?.model),
         assessments: orderedAssessments,
       };
     });
@@ -497,32 +486,30 @@ export class StudentService extends BaseService {
     const averageScore = totalSubjects > 0 ? totalScore / totalSubjects : 0;
 
     // Get class position (simplified - would need more complex logic in real implementation)
-    const allClassStudents = await this.prisma.subjectTermStudent.findMany({
+    const currentClassArmId = student.classArmStudents?.[0]?.classArmId;
+    const classArmAssessments = await this.prisma.classArmStudentAssessment.findMany({
       where: {
-        subjectTerm: {
-          termId: term.id,
+        termId: term.id,
+        deletedAt: null,
+        classArmSubject: {
+          classArmId: currentClassArmId,
         },
       },
-      include: {
-        student: {
-          include: {
-            classArmStudents: {
-              where: { isActive: true },
-              include: {
-                classArm: true,
-              },
-            },
-          },
-        },
+      select: {
+        studentId: true,
+        score: true,
       },
     });
 
-    const classStudents = allClassStudents.filter(
-      (sts) => sts.student.classArmStudents?.[0]?.classArmId === student.classArmStudents?.[0]?.classArmId,
-    );
+    // Aggregate total scores per student in the same class arm
+    const studentScores = new Map<string, number>();
+    for (const a of classArmAssessments) {
+      studentScores.set(a.studentId, (studentScores.get(a.studentId) || 0) + a.score);
+    }
 
-    const sortedStudents = classStudents.sort((a, b) => b.totalScore - a.totalScore);
-    const position = sortedStudents.findIndex((sts) => sts.studentId === student.id) + 1;
+    const sortedStudents = Array.from(studentScores.entries()).sort((a, b) => b[1] - a[1]);
+    const position = sortedStudents.findIndex(([sid]) => sid === student.id) + 1;
+    const classStudentsCount = sortedStudents.length;
 
     // Build school address string
     const addr = school?.primaryAddress;
@@ -573,7 +560,7 @@ export class StudentService extends BaseService {
         totalScore,
         averageScore: Math.round(averageScore * 100) / 100,
         position,
-        totalStudents: classStudents.length,
+        totalStudents: classStudentsCount,
         grade: this.calculateGrade(averageScore, gradingModel?.model),
       },
       gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
@@ -757,8 +744,8 @@ export class StudentService extends BaseService {
       throw new Error('Student not found');
     }
 
-    // Get academic sessions where student was enrolled (through classArm or subjectTermStudent)
-    // Include associated terms where student was enrolled
+    // Get academic sessions where student was enrolled (through classArm or assessments)
+    // Include associated terms where student has assessments
     const sessions = await this.prisma.academicSession.findMany({
       where: {
         schoolId: student.user.schoolId,
@@ -775,13 +762,14 @@ export class StudentService extends BaseService {
               },
             },
           },
-          // Sessions where student was enrolled in subjects
+          // Sessions where student has assessments
           {
-            subjectTerms: {
+            terms: {
               some: {
-                subjectTermStudents: {
+                assessments: {
                   some: {
                     studentId: student.id,
+                    deletedAt: null,
                   },
                 },
               },
@@ -798,13 +786,10 @@ export class StudentService extends BaseService {
         createdAt: true,
         terms: {
           where: {
-            subjectTerms: {
+            assessments: {
               some: {
-                subjectTermStudents: {
-                  some: {
-                    studentId: student.id,
-                  },
-                },
+                studentId: student.id,
+                deletedAt: null,
               },
             },
           },
@@ -892,44 +877,67 @@ export class StudentService extends BaseService {
       ? await this.prisma.gradingModel.findUnique({ where: { schoolId: user.schoolId } })
       : null;
 
-    const subjectTermStudents = await this.prisma.subjectTermStudent.findMany({
+    const studentAssessments = await this.prisma.classArmStudentAssessment.findMany({
       where: {
         studentId: student.id,
-        subjectTerm: {
-          termId: term.id,
-        },
+        termId: term.id,
+        deletedAt: null,
       },
       include: {
-        subjectTerm: {
+        classArmSubject: {
           include: {
-            subject: {
+            subject: true,
+            teachers: {
               include: {
-                classArmSubjectTeachers: {
+                teacher: {
                   include: {
-                    teacher: {
-                      include: {
-                        user: true,
-                      },
-                    },
+                    user: true,
                   },
                 },
               },
             },
           },
         },
-        assessments: true,
       },
     });
 
-    return subjectTermStudents.map((sts) => {
-      const teacher = sts.subjectTerm.subject.classArmSubjectTeachers[0]?.teacher;
-      const totalAssessments = sts.assessments.length;
-      const completedAssessments = sts.assessments.filter((a) => a.score > 0).length;
+    // Group assessments by subject
+    const subjectMap = new Map<string, {
+      subject: any;
+      teachers: any[];
+      assessments: typeof studentAssessments;
+      totalScore: number;
+      earliestDate: Date;
+    }>();
+    for (const a of studentAssessments) {
+      const sid = a.classArmSubject.subject.id;
+      const existing = subjectMap.get(sid);
+      if (!existing) {
+        subjectMap.set(sid, {
+          subject: a.classArmSubject.subject,
+          teachers: a.classArmSubject.teachers,
+          assessments: [a],
+          totalScore: a.score,
+          earliestDate: a.createdAt,
+        });
+      } else {
+        existing.assessments.push(a);
+        existing.totalScore += a.score;
+        if (a.createdAt < existing.earliestDate) {
+          existing.earliestDate = a.createdAt;
+        }
+      }
+    }
+
+    return Array.from(subjectMap.values()).map((entry) => {
+      const teacher = entry.teachers[0]?.teacher;
+      const totalAssessments = entry.assessments.length;
+      const completedAssessments = entry.assessments.filter((a) => a.score > 0).length;
 
       return {
-        id: sts.subjectTerm.subject.id,
-        name: sts.subjectTerm.subject.name,
-        code: sts.subjectTerm.subject.name.substring(0, 3).toUpperCase(),
+        id: entry.subject.id,
+        name: entry.subject.name,
+        code: entry.subject.name.substring(0, 3).toUpperCase(),
         teacher: teacher
           ? {
               id: teacher.id,
@@ -945,10 +953,10 @@ export class StudentService extends BaseService {
           id: term.id,
           name: term.name,
         },
-        enrollmentDate: sts.createdAt,
-        currentScore: sts.totalScore,
-        averageScore: sts.totalScore,
-        grade: this.calculateGrade(sts.totalScore, gradingModel?.model),
+        enrollmentDate: entry.earliestDate,
+        currentScore: entry.totalScore,
+        averageScore: entry.totalScore,
+        grade: this.calculateGrade(entry.totalScore, gradingModel?.model),
         totalAssessments,
         completedAssessments,
       };

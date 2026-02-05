@@ -62,7 +62,7 @@ export class BffAdminSubjectService {
       include: {
         department: true,
         category: true,
-        classArmSubjectTeachers: {
+        classArmSubjects: {
           where: {
             deletedAt: null,
             classArm: {
@@ -110,13 +110,12 @@ export class BffAdminSubjectService {
 
     // Process subject data for the list
     const subjectsData = subjects.map((subject) => {
-      // Calculate classes count (unique class arms teaching this subject)
-      const uniqueClasses = new Set(subject.classArmSubjectTeachers.map((cast) => cast.classArmId));
-      const classesCount = uniqueClasses.size;
+      // Count classes from classArmSubjects (each represents a unique class-subject pair)
+      const classesCount = subject.classArmSubjects.length;
 
       // Calculate student count (total students in all classes taking this subject)
-      const studentCount = subject.classArmSubjectTeachers.reduce(
-        (total, cast) => total + cast.classArm.classArmStudents.length,
+      const studentCount = subject.classArmSubjects.reduce(
+        (total, cas) => total + cas.classArm.classArmStudents.length,
         0,
       );
 
@@ -258,14 +257,9 @@ export class BffAdminSubjectService {
 
     // If name is being changed, check for existing assessment scores
     if (updateSubjectDto.name && updateSubjectDto.name !== existingSubject.name) {
-      const assessmentCount = await this.prisma.subjectTermStudentAssessment.count({
+      const assessmentCount = await this.prisma.classArmStudentAssessment.count({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              subjectId,
-              academicSession: { schoolId },
-            },
-          },
+          classArmSubject: { subjectId },
           deletedAt: null,
         },
       });
@@ -361,12 +355,13 @@ export class BffAdminSubjectService {
         deletedAt: null,
       },
       include: {
-        subjectTerms: {
+        classArmSubjects: {
+          where: { deletedAt: null },
           include: {
-            subjectTermStudents: {
-              include: {
-                assessments: true,
-              },
+            assessments: {
+              where: { deletedAt: null },
+              select: { id: true },
+              take: 1,
             },
           },
         },
@@ -378,8 +373,8 @@ export class BffAdminSubjectService {
     }
 
     // Check if subject has any assessments
-    const hasAssessments = subject.subjectTerms.some((subjectTerm) =>
-      subjectTerm.subjectTermStudents.some((student) => student.assessments.length > 0),
+    const hasAssessments = subject.classArmSubjects.some(
+      (cas) => cas.assessments.length > 0,
     );
 
     if (hasAssessments) {
@@ -425,24 +420,34 @@ export class BffAdminSubjectService {
       throw new NotFoundException('No active academic session found');
     }
 
-    // Get subject with teacher-class assignments
+    // Get subject with classArmSubjects and their teachers
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, schoolId, deletedAt: null },
       include: {
         department: true,
         category: true,
-        classArmSubjectTeachers: {
+        classArmSubjects: {
           where: {
             deletedAt: null,
             classArm: { academicSessionId: currentSession.id, deletedAt: null },
           },
           include: {
-            teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
+            teachers: {
+              where: { deletedAt: null },
+              include: {
+                teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
+              },
+            },
             classArm: {
               include: {
                 level: true,
                 classArmStudents: { where: { isActive: true } },
               },
+            },
+            assessments: {
+              where: { deletedAt: null },
+              select: { id: true },
+              take: 1,
             },
           },
         },
@@ -453,91 +458,26 @@ export class BffAdminSubjectService {
       throw new NotFoundException('Subject not found');
     }
 
-    // Build classes map from teacher assignments
-    const classesMap = new Map<string, {
-      classArmId: string;
-      classArmName: string;
-      levelName: string;
-      teacherName: string | null;
-      teacherId: string | null;
-      studentCount: number;
-      hasAssessments: boolean;
-    }>();
-
-    for (const cast of subject.classArmSubjectTeachers) {
-      const classArmId = cast.classArmId;
-      if (!classesMap.has(classArmId)) {
-        classesMap.set(classArmId, {
-          classArmId,
-          classArmName: cast.classArm.name,
-          levelName: cast.classArm.level?.name || '',
-          teacherName: cast.teacher?.user
-            ? `${cast.teacher.user.firstName} ${cast.teacher.user.lastName}`
-            : null,
-          teacherId: cast.teacherId,
-          studentCount: cast.classArm.classArmStudents.length,
-          hasAssessments: false,
-        });
-      }
-    }
-
-    // Find classes with assessment records (even without teacher assignments)
-    const subjectTerms = await this.prisma.subjectTerm.findMany({
-      where: {
-        subjectId,
-        academicSessionId: currentSession.id,
-      },
-      include: {
-        subjectTermStudents: {
-          where: { deletedAt: null },
-          include: {
-            assessments: { where: { deletedAt: null }, select: { id: true } },
-            student: {
-              include: {
-                classArmStudents: {
-                  where: { isActive: true },
-                  include: {
-                    classArm: { include: { level: true, classArmStudents: { where: { isActive: true } } } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+    // Build classes from classArmSubjects
+    const classes = subject.classArmSubjects.map((cas) => {
+      const firstTeacher = cas.teachers[0];
+      return {
+        classArmId: cas.classArmId,
+        classArmName: cas.classArm.name,
+        levelName: cas.classArm.level?.name || '',
+        teacherName: firstTeacher?.teacher?.user
+          ? `${firstTeacher.teacher.user.firstName} ${firstTeacher.teacher.user.lastName}`
+          : null,
+        teacherId: firstTeacher?.teacherId || null,
+        studentCount: cas.classArm.classArmStudents.length,
+        hasAssessments: cas.assessments.length > 0,
+      };
     });
 
-    // Track which classArms have assessments
-    for (const st of subjectTerms) {
-      for (const sts of st.subjectTermStudents) {
-        if (sts.assessments.length > 0) {
-          const classArmStudent = sts.student.classArmStudents[0];
-          if (classArmStudent) {
-            const classArmId = classArmStudent.classArmId;
-            if (classesMap.has(classArmId)) {
-              classesMap.get(classArmId)!.hasAssessments = true;
-            } else {
-              classesMap.set(classArmId, {
-                classArmId,
-                classArmName: classArmStudent.classArm.name,
-                levelName: classArmStudent.classArm.level?.name || '',
-                teacherName: null,
-                teacherId: null,
-                studentCount: classArmStudent.classArm.classArmStudents.length,
-                hasAssessments: true,
-              });
-            }
-          }
-        }
-      }
-    }
-
     // Check if subject has any assessment scores at all (for edit guard)
-    const hasAssessmentScores = await this.prisma.subjectTermStudentAssessment.count({
+    const hasAssessmentScores = await this.prisma.classArmStudentAssessment.count({
       where: {
-        subjectTermStudent: {
-          subjectTerm: { subjectId, academicSession: { schoolId } },
-        },
+        classArmSubject: { subjectId },
         deletedAt: null,
       },
     }) > 0;
@@ -550,7 +490,7 @@ export class BffAdminSubjectService {
         category: subject.category?.name || null,
         code: subject.name.substring(0, 3).toUpperCase(),
       },
-      classes: Array.from(classesMap.values()),
+      classes,
       hasAssessmentScores,
     };
   }
@@ -607,11 +547,21 @@ export class BffAdminSubjectService {
       throw new NotFoundException('Class not found');
     }
 
-    // Get teacher for this subject-class
-    const cast = await this.prisma.classArmSubjectTeacher.findFirst({
-      where: { subjectId, classArmId, deletedAt: null },
-      include: { teacher: { include: { user: { select: { firstName: true, lastName: true } } } } },
+    // Find the ClassArmSubject for this class-subject pair
+    const classArmSubject = await this.prisma.classArmSubject.findFirst({
+      where: { classArmId, subjectId, deletedAt: null },
+      include: {
+        teachers: {
+          where: { deletedAt: null },
+          include: {
+            teacher: { include: { user: { select: { firstName: true, lastName: true } } } },
+          },
+          take: 1,
+        },
+      },
     });
+
+    const teacher = classArmSubject?.teachers[0];
 
     // Get assessment structure
     const template = await this.templateService.findActiveTemplateForSchoolSession(
@@ -626,15 +576,6 @@ export class BffAdminSubjectService {
     // Get grading model
     const gradingModel = await this.prisma.gradingModel.findFirst({
       where: { schoolId, deletedAt: null },
-    });
-
-    // Get ALL SubjectTerms for this subject in the current session (all terms)
-    // This matches the teacher's query pattern which doesn't filter by termId
-    const subjectTerms = await this.prisma.subjectTerm.findMany({
-      where: {
-        subjectId,
-        academicSessionId: currentSession.id,
-      },
     });
 
     // Build student data
@@ -654,47 +595,33 @@ export class BffAdminSubjectService {
       };
     });
 
-    // If we have subjectTerms, fetch all student assessment data
-    if (subjectTerms.length > 0) {
-      const subjectTermStudents = await this.prisma.subjectTermStudent.findMany({
+    const totalMaxScore = sortedAssessments.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
+
+    // If we have a ClassArmSubject, fetch assessments directly
+    if (classArmSubject) {
+      const assessmentRecords = await this.prisma.classArmStudentAssessment.findMany({
         where: {
-          subjectTermId: { in: subjectTerms.map((st) => st.id) },
-          deletedAt: null,
+          classArmSubjectId: classArmSubject.id,
           studentId: { in: students.map((s) => s.id) },
-        },
-        include: {
-          assessments: { where: { deletedAt: null } },
-          subjectTerm: true,
+          deletedAt: null,
         },
       });
 
-      // Group by student, then deduplicate assessments by name (keep most recent)
-      const studentStsMap = new Map<string, typeof subjectTermStudents>();
-      for (const sts of subjectTermStudents) {
-        const existing = studentStsMap.get(sts.studentId) || [];
-        existing.push(sts);
-        studentStsMap.set(sts.studentId, existing);
+      // Group assessments by student
+      const studentAssessmentMap = new Map<string, typeof assessmentRecords>();
+      for (const record of assessmentRecords) {
+        const existing = studentAssessmentMap.get(record.studentId) || [];
+        existing.push(record);
+        studentAssessmentMap.set(record.studentId, existing);
       }
 
-      const totalMaxScore = sortedAssessments.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
-
       for (const student of students) {
-        const stsRecords = studentStsMap.get(student.id);
-        if (stsRecords && stsRecords.length > 0) {
-          // Aggregate all assessments across all SubjectTermStudent records
-          const allAssessments: any[] = [];
-          for (const sts of stsRecords) {
-            allAssessments.push(...sts.assessments);
-          }
-
-          // Deduplicate by assessment name (keep the most recent by updatedAt)
-          const assessmentsByName = new Map<string, any>();
-          for (const assessment of allAssessments) {
-            if (assessment.deletedAt) continue;
-            const existing = assessmentsByName.get(assessment.name);
-            if (!existing || new Date(assessment.updatedAt) > new Date(existing.updatedAt)) {
-              assessmentsByName.set(assessment.name, assessment);
-            }
+        const studentAssessments = studentAssessmentMap.get(student.id);
+        if (studentAssessments && studentAssessments.length > 0) {
+          // Build a map by assessment name (unique constraint prevents dupes)
+          const assessmentsByName = new Map<string, (typeof assessmentRecords)[0]>();
+          for (const assessment of studentAssessments) {
+            assessmentsByName.set(assessment.name, assessment);
           }
 
           // Map assessments to structure
@@ -712,8 +639,8 @@ export class BffAdminSubjectService {
             };
           });
 
-          const dedupedAssessments = Array.from(assessmentsByName.values());
-          student.totalScore = dedupedAssessments.reduce((sum, a) => sum + a.score, 0);
+          const allScores = Array.from(assessmentsByName.values());
+          student.totalScore = allScores.reduce((sum, a) => sum + a.score, 0);
           const totalPercentage = totalMaxScore > 0
             ? (student.totalScore / totalMaxScore) * 100
             : 0;
@@ -747,8 +674,8 @@ export class BffAdminSubjectService {
       },
       academicSession: { id: currentSession.id, name: currentSession.academicYear },
       currentTerm: { id: currentTerm.id, name: currentTerm.name },
-      teacher: cast?.teacher?.user
-        ? { id: cast.teacherId, name: `${cast.teacher.user.firstName} ${cast.teacher.user.lastName}` }
+      teacher: teacher?.teacher?.user
+        ? { id: teacher.teacherId, name: `${teacher.teacher.user.firstName} ${teacher.teacher.user.lastName}` }
         : null,
       assessmentStructure: sortedAssessments.map((a: any) => ({
         id: a.id,
@@ -828,16 +755,10 @@ export class BffAdminSubjectService {
     const previousTerms = currentSession.terms.filter((t) => t.id !== currentTerm.id);
     const allTerms = currentSession.terms;
 
-    // Fetch SubjectTerms for all terms
-    const subjectTerms = await this.prisma.subjectTerm.findMany({
-      where: {
-        subjectId,
-        academicSessionId: currentSession.id,
-        termId: { in: allTerms.map((t) => t.id) },
-      },
+    // Find the ClassArmSubject for this class-subject pair
+    const classArmSubject = await this.prisma.classArmSubject.findFirst({
+      where: { classArmId, subjectId, deletedAt: null },
     });
-
-    const subjectTermMap = new Map(subjectTerms.map((st) => [st.termId, st]));
 
     // For each student, gather data per term
     type StudentRow = {
@@ -868,28 +789,34 @@ export class BffAdminSubjectService {
         remarks: '',
       };
 
-      // Fetch all SubjectTermStudent records for this student across all terms
-      const stsRecords = await this.prisma.subjectTermStudent.findMany({
-        where: {
-          studentId: student.id,
-          subjectTermId: { in: subjectTerms.map((st) => st.id) },
-          deletedAt: null,
-        },
-        include: {
-          assessments: { where: { deletedAt: null } },
-          subjectTerm: true,
-        },
-      });
+      if (classArmSubject) {
+        // Fetch all assessments for this student grouped by term
+        const assessments = await this.prisma.classArmStudentAssessment.findMany({
+          where: {
+            classArmSubjectId: classArmSubject.id,
+            studentId: student.id,
+            termId: { in: allTerms.map((t) => t.id) },
+            deletedAt: null,
+          },
+        });
 
-      for (const sts of stsRecords) {
-        const termId = sts.subjectTerm.termId;
-        const total = sts.assessments.reduce((sum, a) => sum + a.score, 0);
-        row.termTotals.set(termId, total);
+        // Group by termId
+        const assessmentsByTerm = new Map<string, typeof assessments>();
+        for (const assessment of assessments) {
+          const existing = assessmentsByTerm.get(assessment.termId) || [];
+          existing.push(assessment);
+          assessmentsByTerm.set(assessment.termId, existing);
+        }
 
-        if (termId === currentTerm.id) {
-          row.currentTermTotal = total;
-          for (const assessment of sts.assessments) {
-            row.currentTermAssessments.set(assessment.name, assessment.score);
+        for (const [termId, termAssessments] of assessmentsByTerm) {
+          const total = termAssessments.reduce((sum, a) => sum + a.score, 0);
+          row.termTotals.set(termId, total);
+
+          if (termId === currentTerm.id) {
+            row.currentTermTotal = total;
+            for (const assessment of termAssessments) {
+              row.currentTermAssessments.set(assessment.name, assessment.score);
+            }
           }
         }
       }

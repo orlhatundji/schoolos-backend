@@ -158,13 +158,17 @@ export class AdminTeacherService {
             throw new Error('No class arms found for this school');
           }
 
-          // Create subject assignments for each class arm
+          // Upsert ClassArmSubject and create teacher assignments
           for (const classArm of classArms) {
             for (const subjectId of createTeacherDto.subjectIds) {
+              const classArmSubject = await tx.classArmSubject.upsert({
+                where: { classArmId_subjectId: { classArmId: classArm.id, subjectId } },
+                create: { classArmId: classArm.id, subjectId },
+                update: {},
+              });
               await tx.classArmSubjectTeacher.create({
                 data: {
-                  classArmId: classArm.id,
-                  subjectId,
+                  classArmSubjectId: classArmSubject.id,
                   teacherId: teacher.id,
                 },
               });
@@ -207,7 +211,7 @@ export class AdminTeacherService {
             user: true,
             department: true,
             classArmSubjectTeachers: {
-              include: { subject: true },
+              include: { classArmSubject: { include: { subject: true, classArm: true } } },
             },
             classArmTeachers: {
               include: { classArm: true },
@@ -292,16 +296,18 @@ export class AdminTeacherService {
         classArmSubjectTeachers: {
           where: targetSession ? {
             deletedAt: null,
-            classArm: {
-              academicSessionId: targetSession.id,
-              deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+                deletedAt: null,
+              },
             },
           } : undefined,
-          include: { 
-            subject: true,
-            classArm: {
+          include: {
+            classArmSubject: {
               include: {
-                level: true,
+                subject: true,
+                classArm: { include: { level: true } },
               },
             },
           },
@@ -375,7 +381,7 @@ export class AdminTeacherService {
         },
         department: true,
         classArmSubjectTeachers: {
-          include: { subject: true },
+          include: { classArmSubject: { include: { subject: true, classArm: true } } },
         },
         classArmTeachers: {
           include: { classArm: true },
@@ -568,12 +574,16 @@ export class AdminTeacherService {
               );
             }
 
-            // Create subject assignments for each specified class arm
+            // Upsert ClassArmSubject and create teacher assignments
             for (const classArmId of assignment.classArmIds) {
+              const classArmSubject = await tx.classArmSubject.upsert({
+                where: { classArmId_subjectId: { classArmId, subjectId: assignment.subjectId } },
+                create: { classArmId, subjectId: assignment.subjectId },
+                update: {},
+              });
               await tx.classArmSubjectTeacher.create({
                 data: {
-                  classArmId,
-                  subjectId: assignment.subjectId,
+                  classArmSubjectId: classArmSubject.id,
                   teacherId,
                 },
               });
@@ -612,13 +622,17 @@ export class AdminTeacherService {
               throw new BadRequestException('No class arms found for this school');
             }
 
-            // Create subject assignments for each class arm
+            // Upsert ClassArmSubject and create teacher assignments
             for (const classArm of classArms) {
               for (const subjectId of updateTeacherDto.subjectIds) {
+                const classArmSubject = await tx.classArmSubject.upsert({
+                  where: { classArmId_subjectId: { classArmId: classArm.id, subjectId } },
+                  create: { classArmId: classArm.id, subjectId },
+                  update: {},
+                });
                 await tx.classArmSubjectTeacher.create({
                   data: {
-                    classArmId: classArm.id,
-                    subjectId,
+                    classArmSubjectId: classArmSubject.id,
                     teacherId,
                   },
                 });
@@ -634,7 +648,7 @@ export class AdminTeacherService {
             user: true,
             department: true,
             classArmSubjectTeachers: {
-              include: { subject: true },
+              include: { classArmSubject: { include: { subject: true, classArm: true } } },
             },
             classArmTeachers: {
               include: { classArm: true },
@@ -762,7 +776,7 @@ export class AdminTeacherService {
   }
 
   private mapTeacherToResult(teacher: any): TeacherResult {
-    const subjects = teacher.classArmSubjectTeachers?.map((cast: any) => cast.subject.name) || [];
+    const subjects = teacher.classArmSubjectTeachers?.map((cast: any) => cast.classArmSubject.subject.name) || [];
     const assignedClasses = [
       ...(teacher.classArmTeachers?.map((cat: any) => cat.classArm.name) || []),
       ...(teacher.classArmsAsTeacher?.map((classArm: any) => classArm.name) || []),
@@ -816,17 +830,19 @@ export class AdminTeacherService {
         teacherId,
         deletedAt: null,
         ...(currentSession && {
-          classArm: {
-            academicSessionId: currentSession.id,
-            deletedAt: null,
+          classArmSubject: {
+            classArm: {
+              academicSessionId: currentSession.id,
+              deletedAt: null,
+            },
           },
         }),
       },
       include: {
-        subject: true,
-        classArm: {
+        classArmSubject: {
           include: {
-            level: true,
+            subject: true,
+            classArm: { include: { level: true } },
           },
         },
       },
@@ -844,19 +860,20 @@ export class AdminTeacherService {
     }>();
 
     for (const assignment of assignments) {
-      const existing = subjectMap.get(assignment.subjectId);
+      const { subject, classArm } = assignment.classArmSubject;
+      const existing = subjectMap.get(subject.id);
       const classArmInfo = {
-        id: assignment.classArm.id,
-        name: assignment.classArm.name,
-        level: assignment.classArm.level?.name || '',
+        id: classArm.id,
+        name: classArm.name,
+        level: classArm.level?.name || '',
       };
 
       if (existing) {
         existing.classArms.push(classArmInfo);
       } else {
-        subjectMap.set(assignment.subjectId, {
-          subjectId: assignment.subjectId,
-          subjectName: assignment.subject.name,
+        subjectMap.set(subject.id, {
+          subjectId: subject.id,
+          subjectName: subject.name,
           classArms: [classArmInfo],
         });
       }

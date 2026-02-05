@@ -123,10 +123,8 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
-          include: {
-            assessments: true,
-          },
+        assessments: {
+          where: { deletedAt: null },
         },
       },
       orderBy: [
@@ -154,9 +152,7 @@ export class BffAdminStudentService {
         : 0;
 
       // Calculate average grade from assessments
-      const allScores = student.subjectTermStudents.flatMap((sts) =>
-        sts.assessments.map((assessment) => assessment.score),
-      );
+      const allScores = student.assessments.map((a) => a.score);
       const averageGrade =
         allScores.length > 0
           ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
@@ -275,10 +271,8 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
-          include: {
-            assessments: true,
-          },
+        assessments: {
+          where: { deletedAt: null },
         },
       },
     });
@@ -296,9 +290,7 @@ export class BffAdminStudentService {
       : 0;
 
     // Calculate average grade from assessments
-    const allScores = student.subjectTermStudents.flatMap((sts) =>
-      sts.assessments.map((assessment) => assessment.score),
-    );
+    const allScores = student.assessments.map((a) => a.score);
     const averageGrade =
       allScores.length > 0
         ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
@@ -421,14 +413,14 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
+        assessments: {
           where: {
-            subjectTerm: {
-              academicSessionId: targetSession.id,
+            deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+              },
             },
-          },
-          include: {
-            assessments: true,
           },
         },
       },
@@ -546,14 +538,14 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
+        assessments: {
           where: {
-            subjectTerm: {
-              academicSessionId: targetSession.id,
+            deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+              },
             },
-          },
-          include: {
-            assessments: true,
           },
         },
       },
@@ -598,9 +590,7 @@ export class BffAdminStudentService {
         : 0;
 
       // Calculate average grade from assessments
-      const allScores = student.subjectTermStudents.flatMap((sts) =>
-        sts.assessments.map((assessment) => assessment.score),
-      );
+      const allScores = student.assessments.map((a) => a.score);
       const averageGrade =
         allScores.length > 0
           ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length

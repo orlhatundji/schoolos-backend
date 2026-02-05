@@ -185,7 +185,7 @@ export class AssessmentStructureTemplateService {
 
       // Propagate name changes to existing score records so they remain visible
       for (const rename of renamedAssessments) {
-        await this.prisma.subjectTermStudentAssessment.updateMany({
+        await this.prisma.classArmStudentAssessment.updateMany({
           where: {
             assessmentTypeId: rename.assessmentTypeId,
             deletedAt: null,
@@ -410,7 +410,7 @@ export class AssessmentStructureTemplateService {
 
     if (assessmentTypeIds.length === 0) return false;
 
-    const count = await this.prisma.subjectTermStudentAssessment.count({
+    const count = await this.prisma.classArmStudentAssessment.count({
       where: {
         assessmentTypeId: { in: assessmentTypeIds },
         deletedAt: null,
@@ -480,7 +480,7 @@ export class AssessmentStructureTemplateService {
 
     if (assessmentTypeIds.length === 0) return;
 
-    const inUseCount = await this.prisma.subjectTermStudentAssessment.count({
+    const inUseCount = await this.prisma.classArmStudentAssessment.count({
       where: {
         assessmentTypeId: { in: assessmentTypeIds },
         deletedAt: null,

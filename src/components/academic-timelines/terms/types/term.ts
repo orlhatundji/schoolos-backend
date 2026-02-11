@@ -1,6 +1,6 @@
-import { Term as PrismaTerm, StudentAttendance, SubjectTermStudent } from '@prisma/client';
+import { Term as PrismaTerm, StudentAttendance, ClassArmStudentAssessment } from '@prisma/client';
 
 export interface Term extends PrismaTerm {
   studentAttendance?: StudentAttendance[];
-  subjectTermStudent?: SubjectTermStudent[];
+  assessments?: ClassArmStudentAssessment[];
 }

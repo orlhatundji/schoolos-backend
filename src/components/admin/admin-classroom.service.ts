@@ -95,8 +95,11 @@ export class AdminClassroomService {
             deletedAt: null,
           },
         },
-        classArmSubjectTeachers: {
+        classArmSubjects: {
           where: { deletedAt: null },
+          include: {
+            teachers: { where: { deletedAt: null } },
+          },
         },
         classArmTeachers: {
           where: { deletedAt: null },
@@ -116,7 +119,7 @@ export class AdminClassroomService {
     }
 
     // Check if classroom has any teacher assignments
-    const hasSubjectTeachers = classroom.classArmSubjectTeachers.length > 0;
+    const hasSubjectTeachers = classroom.classArmSubjects.some((cas) => cas.teachers.length > 0);
     const hasClassTeachers = classroom.classArmTeachers.length > 0;
 
     if (hasSubjectTeachers || hasClassTeachers) {

@@ -105,22 +105,17 @@ export class SubjectsService {
       throw new NotFoundException('Subject not found or access denied');
     }
 
-    // Check if subject is being used in any curriculum or assessments
-    const subjectUsage = await this.prisma.subjectTerm.findFirst({
-      where: { subjectId },
-      include: {
-        subjectTermStudents: true,
+    // Check if subject has any assessments
+    const assessmentCount = await this.prisma.classArmStudentAssessment.count({
+      where: {
+        classArmSubject: { subjectId },
+        deletedAt: null,
       },
     });
 
-    if (subjectUsage) {
-      if (subjectUsage.subjectTermStudents.length > 0) {
-        throw new BadRequestException(
-          'Cannot delete subject. It has associated student enrollments. Please remove all student enrollments first.',
-        );
-      }
+    if (assessmentCount > 0) {
       throw new BadRequestException(
-        'Cannot delete subject. It is being used in curriculum or assessments.',
+        'Cannot delete subject. It has associated assessments. Please remove all assessments first.',
       );
     }
 

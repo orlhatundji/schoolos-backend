@@ -65,8 +65,15 @@ export class AuthService extends BaseService {
 
     // Determine login method: email or userNo+userType
     if (email) {
-      // Email-based login (for system/platform admins)
+      // Email-based login (only for platform/system admins without a school)
       user = await this.userService.findByEmail(email);
+
+      // Restrict email login to platform admins only (no schoolId)
+      if (user && user.schoolId) {
+        throw new UnauthorizedException(
+          'Email login is only available for platform administrators. Please use your ID number to login.',
+        );
+      }
     } else if (userNo && userType) {
       // UserNo-based login (for students, teachers, admins)
       const result = await this._findUserByUserNo(userNo, userType);

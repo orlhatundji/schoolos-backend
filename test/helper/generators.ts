@@ -30,7 +30,8 @@ export async function generateUser(type: UserType, schoolId: string) {
       email: faker.getEmail(),
       phone: faker.getPhoneNumber(),
       password: hashedPassword,
-      schoolId,
+      gender: 'MALE',
+      school: { connect: { id: schoolId } },
     },
   });
 
@@ -64,16 +65,31 @@ export async function generateStudent(
 ) {
   const seq = await counterService.getNextSequenceNo(UserType.STUDENT, schoolId);
   const studentNo = getNextUserEntityNoFormatted(UserType.STUDENT, schoolId, new Date(), seq);
-  return prisma.student.create({
+  const student = await prisma.student.create({
     data: {
-      userId,
-      classArmId,
-      guardianId,
+      user: { connect: { id: userId } },
       studentNo,
       admissionDate: faker.getAdmissionDate(),
       admissionNo: faker.getAdmissionNo(),
+      ...(guardianId ? { guardian: { connect: { id: guardianId } } } : {}),
     },
   });
+
+  // Create ClassArmStudent relationship
+  const classArm = await prisma.classArm.findUniqueOrThrow({
+    where: { id: classArmId },
+    select: { academicSessionId: true },
+  });
+  await prisma.classArmStudent.create({
+    data: {
+      student: { connect: { id: student.id } },
+      classArm: { connect: { id: classArmId } },
+      academicSession: { connect: { id: classArm.academicSessionId } },
+      isActive: true,
+    },
+  });
+
+  return student;
 }
 
 export async function generateGuardian(userId: string) {
@@ -94,7 +110,8 @@ export async function generateLevel(schoolId: string, name = 'SS1') {
   return prisma.level.create({
     data: {
       name,
-      schoolId,
+      code: `LVL-${name}-${Date.now()}`,
+      school: { connect: { id: schoolId } },
       order: nextOrder,
     },
   });
@@ -102,7 +119,7 @@ export async function generateLevel(schoolId: string, name = 'SS1') {
 
 export async function generateDepartment(schoolId: string, name = 'Science') {
   return prisma.department.create({
-    data: { name, schoolId },
+    data: { name, code: `DEPT-${name}-${Date.now()}`, school: { connect: { id: schoolId } } },
   });
 }
 
@@ -142,68 +159,55 @@ export async function generateTerm(academicSessionId: string, name = faker.getTe
   return prisma.term.create({
     data: {
       name,
-      academicSessionId,
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+      academicSession: { connect: { id: academicSessionId } },
     },
   });
 }
 
-export async function generateSubject(schoolId: string, departmentId: string, isElective = false) {
+export async function generateSubject(schoolId: string, departmentId: string) {
   return prisma.subject.create({
     data: {
       name: faker.getSubjectName(),
-      isElective,
-      schoolId,
-      departmentId,
+      school: { connect: { id: schoolId } },
+      department: { connect: { id: departmentId } },
     },
   });
 }
 
-export async function generateSubjectTerm(
-  subjectId: string,
-  academicSessionId: string,
+export async function generateClassArmSubject(classArmId: string, subjectId: string) {
+  return prisma.classArmSubject.upsert({
+    where: {
+      classArmId_subjectId: { classArmId, subjectId },
+    },
+    create: { classArmId, subjectId },
+    update: {},
+  });
+}
+
+export async function generateAssessments(
+  classArmSubjectId: string,
+  studentId: string,
   termId: string,
 ) {
-  return prisma.subjectTerm.create({
-    data: {
-      subject: { connect: { id: subjectId } },
-      academicSession: { connect: { id: academicSessionId } },
-      term: { connect: { id: termId } },
-    },
-  });
-}
-
-export async function generateSubjectTermStudent(studentId: string, subjectTermId: string) {
-  return prisma.subjectTermStudent.create({
-    data: {
-      student: { connect: { id: studentId } },
-      subjectTerm: { connect: { id: subjectTermId } },
-      totalScore: 0,
-    },
-  });
-}
-
-export async function generateAssessments(subjectTermStudentId: string) {
   const names = [faker.getAssessmentName(), faker.getAssessmentName()] as const;
 
   const assessments = await Promise.all(
     names.map((name) =>
-      prisma.subjectTermStudentAssessment.create({
+      prisma.classArmStudentAssessment.create({
         data: {
+          classArmSubjectId,
+          studentId,
+          termId,
           name,
           score: faker.getScore(),
           isExam: false,
-          subjectTermStudent: { connect: { id: subjectTermStudentId } },
+          maxScore: 100,
         },
       }),
     ),
   );
-
-  const totalScore = assessments.reduce((sum, a) => sum + a.score, 0);
-
-  await prisma.subjectTermStudent.update({
-    where: { id: subjectTermStudentId },
-    data: { totalScore },
-  });
 
   return assessments;
 }
@@ -234,36 +238,12 @@ export async function generateClassArmTeacher(teacherId: string, classArmId: str
 
 export async function generateClassArmSubjectTeacher(
   teacherId: string,
-  subjectId: string,
-  classArmId: string,
+  classArmSubjectId: string,
 ) {
   return prisma.classArmSubjectTeacher.create({
     data: {
-      teacherId,
-      subjectId,
-      classArmId,
-    },
-  });
-}
-
-export async function generateCurriculum(subjectTermId: string) {
-  return prisma.curriculum.create({
-    data: {
-      subjectTerm: { connect: { id: subjectTermId } },
-      items: {
-        create: Array.from({ length: 3 }).map(() => ({
-          title: faker.getCurriculumTopic(),
-        })),
-      },
-    },
-  });
-}
-
-export async function generateCurriculumItem(curriculumId: string) {
-  return prisma.curriculumItem.create({
-    data: {
-      curriculumId,
-      title: faker.getCurriculumTopic(),
+      teacher: { connect: { id: teacherId } },
+      classArmSubject: { connect: { id: classArmSubjectId } },
     },
   });
 }
@@ -299,19 +279,15 @@ export async function generateFullSchoolSetup() {
 
   const student = await generateStudent(studentUser.user.id, school.id, classArm.id, guardian.id);
   const subject = await generateSubject(school.id, department.id);
-  const subjectTerm = await generateSubjectTerm(subject.id, academicSession.id, term.id);
+  const classArmSubject = await generateClassArmSubject(classArm.id, subject.id);
 
-  const [classArmTeacher, classArmSubjectTeacher, curriculum, academicSessionCalendar] =
-    await Promise.all([
-      generateClassArmTeacher(teacher.id, classArm.id),
-      generateClassArmSubjectTeacher(teacher.id, subject.id, classArm.id),
-      generateCurriculum(subjectTerm.id),
-      generateAcademicSessionCalendar(academicSession.id),
-    ]);
+  const [classArmTeacher, classArmSubjectTeacher, academicSessionCalendar] = await Promise.all([
+    generateClassArmTeacher(teacher.id, classArm.id),
+    generateClassArmSubjectTeacher(teacher.id, classArmSubject.id),
+    generateAcademicSessionCalendar(academicSession.id),
+  ]);
 
-  const curriculumItem = await generateCurriculumItem(curriculum.id);
-  const subjectTermStudent = await generateSubjectTermStudent(student.id, subjectTerm.id);
-  const assessments = await generateAssessments(subjectTermStudent.id);
+  const assessments = await generateAssessments(classArmSubject.id, student.id, term.id);
 
   return {
     school,
@@ -329,13 +305,10 @@ export async function generateFullSchoolSetup() {
     teacher,
     student,
     subject,
-    subjectTermStudent,
+    classArmSubject,
     assessments,
     classArmTeacher,
     classArmSubjectTeacher,
-    curriculum,
-    curriculumItem,
     academicSessionCalendar,
-    subjectTerm,
   };
 }

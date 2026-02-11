@@ -169,7 +169,9 @@ export class AcademicSessionsService extends BaseService {
             deletedAt: null,
           },
         },
-        classArmSubjectTeachers: true,
+        classArmSubjects: {
+          include: { teachers: { where: { deletedAt: null } } },
+        },
         classArmTeachers: true,
       },
     });
@@ -180,7 +182,7 @@ export class AcademicSessionsService extends BaseService {
       const hasStudents = classArms.some((classArm) => classArm.classArmStudents.length > 0);
       const hasTeacherAssignments = classArms.some(
         (classArm) =>
-          classArm.classArmSubjectTeachers.length > 0 || classArm.classArmTeachers.length > 0,
+          classArm.classArmSubjects.some((cas) => cas.teachers.length > 0) || classArm.classArmTeachers.length > 0,
       );
 
       if (hasStudents) {
@@ -214,7 +216,7 @@ export class AcademicSessionsService extends BaseService {
         where: { 
           academicSessionId: id,
           OR: [
-            { subjectTerms: { some: {} } },
+            { assessments: { some: {} } },
             { studentAttendances: { some: {} } },
             { paymentStructures: { some: {} } }
           ]
@@ -228,21 +230,20 @@ export class AcademicSessionsService extends BaseService {
       }
     }
 
-    // Check if academic session has associated subject terms with student enrollments
-    const subjectTerms = await this.prisma.subjectTerm.findMany({
-      where: { academicSessionId: id },
-      include: {
-        subjectTermStudents: true,
+    // Check if academic session has associated assessments
+    const assessmentCount = await this.prisma.classArmStudentAssessment.count({
+      where: {
+        classArmSubject: {
+          classArm: { academicSessionId: id },
+        },
+        deletedAt: null,
       },
     });
 
-    // Check if any subject terms have student enrollments
-    for (const subjectTerm of subjectTerms) {
-      if (subjectTerm.subjectTermStudents.length > 0) {
-        throw new BadRequestException(
-          'Cannot delete academic session. It has associated student enrollments. Please remove all student enrollments first.',
-        );
-      }
+    if (assessmentCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete academic session. It has associated assessments. Please remove all assessments first.',
+      );
     }
 
     // Delete associated assessment structure templates
@@ -269,9 +270,9 @@ export class AcademicSessionsService extends BaseService {
       where: { academicSessionId: id },
     });
 
-    // Delete any remaining related data
-    await this.prisma.subjectTerm.deleteMany({
-      where: { academicSessionId: id },
+    // Delete any remaining related data (ClassArmSubjects for this session's class arms)
+    await this.prisma.classArmSubject.deleteMany({
+      where: { classArm: { academicSessionId: id } },
     });
 
     await this.prisma.paymentStructure.deleteMany({

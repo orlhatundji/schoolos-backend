@@ -67,35 +67,6 @@ export class AdminTeacherService {
       createTeacherDto.teacherId ||
       (await this.generateTeacherNumber(user.schoolId, school.code));
 
-    // Check for email/phone conflicts within the school scope
-    if (createTeacherDto.email) {
-      const existingEmail = await this.prisma.user.findFirst({
-        where: {
-          email: createTeacherDto.email,
-          schoolId: user.schoolId,
-          deletedAt: null,
-        },
-      });
-
-      if (existingEmail) {
-        throw new ConflictException('Email address is already in use in this school');
-      }
-    }
-
-    if (createTeacherDto.phone) {
-      const existingPhone = await this.prisma.user.findFirst({
-        where: {
-          phone: createTeacherDto.phone,
-          schoolId: user.schoolId,
-          deletedAt: null,
-        },
-      });
-
-      if (existingPhone) {
-        throw new ConflictException('Phone number is already in use in this school');
-      }
-    }
-
     // Hash password
     const hashedPassword = await this.passwordHasher.hash(createTeacherDto.password);
 
@@ -158,13 +129,17 @@ export class AdminTeacherService {
             throw new Error('No class arms found for this school');
           }
 
-          // Create subject assignments for each class arm
+          // Upsert ClassArmSubject and create teacher assignments
           for (const classArm of classArms) {
             for (const subjectId of createTeacherDto.subjectIds) {
+              const classArmSubject = await tx.classArmSubject.upsert({
+                where: { classArmId_subjectId: { classArmId: classArm.id, subjectId } },
+                create: { classArmId: classArm.id, subjectId },
+                update: {},
+              });
               await tx.classArmSubjectTeacher.create({
                 data: {
-                  classArmId: classArm.id,
-                  subjectId,
+                  classArmSubjectId: classArmSubject.id,
                   teacherId: teacher.id,
                 },
               });
@@ -207,7 +182,7 @@ export class AdminTeacherService {
             user: true,
             department: true,
             classArmSubjectTeachers: {
-              include: { subject: true },
+              include: { classArmSubject: { include: { subject: true, classArm: true } } },
             },
             classArmTeachers: {
               include: { classArm: true },
@@ -222,24 +197,8 @@ export class AdminTeacherService {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = error.meta?.target as string[];
-          if (target && target.length >= 2) {
-            if (target.includes('email') && target.includes('schoolId')) {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (target.includes('phone') && target.includes('schoolId')) {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (target.includes('teacherNo')) {
-              throw new ConflictException('Teacher ID is already in use');
-            }
-          } else {
-            // Fallback for other unique constraint violations
-            const field = target?.[0];
-            if (field === 'email') {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (field === 'phone') {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (field === 'teacherNo') {
-              throw new ConflictException('Teacher ID is already in use');
-            }
+          if (target?.includes('teacherNo')) {
+            throw new ConflictException('Teacher ID is already in use');
           }
         }
       }
@@ -292,16 +251,18 @@ export class AdminTeacherService {
         classArmSubjectTeachers: {
           where: targetSession ? {
             deletedAt: null,
-            classArm: {
-              academicSessionId: targetSession.id,
-              deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+                deletedAt: null,
+              },
             },
           } : undefined,
-          include: { 
-            subject: true,
-            classArm: {
+          include: {
+            classArmSubject: {
               include: {
-                level: true,
+                subject: true,
+                classArm: { include: { level: true } },
               },
             },
           },
@@ -375,7 +336,7 @@ export class AdminTeacherService {
         },
         department: true,
         classArmSubjectTeachers: {
-          include: { subject: true },
+          include: { classArmSubject: { include: { subject: true, classArm: true } } },
         },
         classArmTeachers: {
           include: { classArm: true },
@@ -437,37 +398,6 @@ export class AdminTeacherService {
 
     if (!existingTeacher) {
       throw new NotFoundException('Teacher not found');
-    }
-
-    // Check for email/phone conflicts within the school scope (excluding current teacher)
-    if (updateTeacherDto.email && updateTeacherDto.email !== existingTeacher.user.email) {
-      const existingEmail = await this.prisma.user.findFirst({
-        where: {
-          email: updateTeacherDto.email,
-          schoolId: user.schoolId,
-          deletedAt: null,
-          id: { not: existingTeacher.userId },
-        },
-      });
-
-      if (existingEmail) {
-        throw new ConflictException('Email address is already in use in this school');
-      }
-    }
-
-    if (updateTeacherDto.phone && updateTeacherDto.phone !== existingTeacher.user.phone) {
-      const existingPhone = await this.prisma.user.findFirst({
-        where: {
-          phone: updateTeacherDto.phone,
-          schoolId: user.schoolId,
-          deletedAt: null,
-          id: { not: existingTeacher.userId },
-        },
-      });
-
-      if (existingPhone) {
-        throw new ConflictException('Phone number is already in use in this school');
-      }
     }
 
     // Check if teacher ID is being updated and if it already exists globally
@@ -568,12 +498,16 @@ export class AdminTeacherService {
               );
             }
 
-            // Create subject assignments for each specified class arm
+            // Upsert ClassArmSubject and create teacher assignments
             for (const classArmId of assignment.classArmIds) {
+              const classArmSubject = await tx.classArmSubject.upsert({
+                where: { classArmId_subjectId: { classArmId, subjectId: assignment.subjectId } },
+                create: { classArmId, subjectId: assignment.subjectId },
+                update: {},
+              });
               await tx.classArmSubjectTeacher.create({
                 data: {
-                  classArmId,
-                  subjectId: assignment.subjectId,
+                  classArmSubjectId: classArmSubject.id,
                   teacherId,
                 },
               });
@@ -612,13 +546,17 @@ export class AdminTeacherService {
               throw new BadRequestException('No class arms found for this school');
             }
 
-            // Create subject assignments for each class arm
+            // Upsert ClassArmSubject and create teacher assignments
             for (const classArm of classArms) {
               for (const subjectId of updateTeacherDto.subjectIds) {
+                const classArmSubject = await tx.classArmSubject.upsert({
+                  where: { classArmId_subjectId: { classArmId: classArm.id, subjectId } },
+                  create: { classArmId: classArm.id, subjectId },
+                  update: {},
+                });
                 await tx.classArmSubjectTeacher.create({
                   data: {
-                    classArmId: classArm.id,
-                    subjectId,
+                    classArmSubjectId: classArmSubject.id,
                     teacherId,
                   },
                 });
@@ -634,7 +572,7 @@ export class AdminTeacherService {
             user: true,
             department: true,
             classArmSubjectTeachers: {
-              include: { subject: true },
+              include: { classArmSubject: { include: { subject: true, classArm: true } } },
             },
             classArmTeachers: {
               include: { classArm: true },
@@ -649,24 +587,8 @@ export class AdminTeacherService {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = error.meta?.target as string[];
-          if (target && target.length >= 2) {
-            if (target.includes('email') && target.includes('schoolId')) {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (target.includes('phone') && target.includes('schoolId')) {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (target.includes('teacherNo')) {
-              throw new ConflictException('Teacher ID is already in use');
-            }
-          } else {
-            // Fallback for other unique constraint violations
-            const field = target?.[0];
-            if (field === 'email') {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (field === 'phone') {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (field === 'teacherNo') {
-              throw new ConflictException('Teacher ID is already in use');
-            }
+          if (target?.includes('teacherNo')) {
+            throw new ConflictException('Teacher ID is already in use');
           }
         }
       }
@@ -762,7 +684,7 @@ export class AdminTeacherService {
   }
 
   private mapTeacherToResult(teacher: any): TeacherResult {
-    const subjects = teacher.classArmSubjectTeachers?.map((cast: any) => cast.subject.name) || [];
+    const subjects = teacher.classArmSubjectTeachers?.map((cast: any) => cast.classArmSubject.subject.name) || [];
     const assignedClasses = [
       ...(teacher.classArmTeachers?.map((cat: any) => cat.classArm.name) || []),
       ...(teacher.classArmsAsTeacher?.map((classArm: any) => classArm.name) || []),
@@ -816,17 +738,19 @@ export class AdminTeacherService {
         teacherId,
         deletedAt: null,
         ...(currentSession && {
-          classArm: {
-            academicSessionId: currentSession.id,
-            deletedAt: null,
+          classArmSubject: {
+            classArm: {
+              academicSessionId: currentSession.id,
+              deletedAt: null,
+            },
           },
         }),
       },
       include: {
-        subject: true,
-        classArm: {
+        classArmSubject: {
           include: {
-            level: true,
+            subject: true,
+            classArm: { include: { level: true } },
           },
         },
       },
@@ -844,19 +768,20 @@ export class AdminTeacherService {
     }>();
 
     for (const assignment of assignments) {
-      const existing = subjectMap.get(assignment.subjectId);
+      const { subject, classArm } = assignment.classArmSubject;
+      const existing = subjectMap.get(subject.id);
       const classArmInfo = {
-        id: assignment.classArm.id,
-        name: assignment.classArm.name,
-        level: assignment.classArm.level?.name || '',
+        id: classArm.id,
+        name: classArm.name,
+        level: classArm.level?.name || '',
       };
 
       if (existing) {
         existing.classArms.push(classArmInfo);
       } else {
-        subjectMap.set(assignment.subjectId, {
-          subjectId: assignment.subjectId,
-          subjectName: assignment.subject.name,
+        subjectMap.set(subject.id, {
+          subjectId: subject.id,
+          subjectName: subject.name,
           classArms: [classArmInfo],
         });
       }

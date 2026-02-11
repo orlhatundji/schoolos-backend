@@ -5,8 +5,6 @@ import { PasswordHasher } from '../../utils/hasher';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserMessages } from './results';
-import { User } from './types';
 import { UsersRepository } from './users.repository';
 
 @Injectable()
@@ -24,8 +22,6 @@ export class UsersService extends BaseService {
   }
 
   async save(createUserDto: CreateUserDto) {
-    // await this.throwIfUserExists(createUserDto);
-
     const { password, email, dateOfBirth, ...others } = createUserDto;
     const hashedPassword = await this.hasher.hash(password);
 
@@ -41,25 +37,6 @@ export class UsersService extends BaseService {
     return createdUser;
   }
 
-  private async throwIfUserExists(createUserDto: CreateUserDto) {
-    const { email, phone } = createUserDto;
-
-    let whereClause = {};
-    if (email || phone) {
-      whereClause = {
-        OR: [email ? { email } : undefined, phone ? { phone } : undefined].filter(Boolean),
-      };
-
-      const existingUser = await this.userRepository.findOne({
-        where: whereClause,
-      });
-
-      if (existingUser) {
-        throw new BadRequestException(UserMessages.FAILURE.USER_EXISTS);
-      }
-    }
-  }
-
   async findByEmail(email: string) {
     return this.userRepository.findOne({
       where: { email },
@@ -72,29 +49,6 @@ export class UsersService extends BaseService {
   }
 
   async update(id: string, updateObj: UpdateUserDto) {
-    // Check if user exists
-    const existingUser = await this.userRepository.findById(id);
-    if (!existingUser) {
-      throw new BadRequestException('User not found');
-    }
-
-    // Check for email/phone conflicts if updating those fields
-    if (updateObj.email || updateObj.phone) {
-      const whereClause = {
-        OR: [
-          updateObj.email ? { email: updateObj.email } : undefined,
-          updateObj.phone ? { phone: updateObj.phone } : undefined,
-        ].filter(Boolean),
-        id: { not: id }, // Exclude current user
-        schoolId: existingUser.schoolId, // Same school scope
-      };
-
-      const conflictingUser = await this.userRepository.findOne({ where: whereClause });
-      if (conflictingUser) {
-        throw new BadRequestException('Email or phone number already exists in this school');
-      }
-    }
-
     // Hash password if provided
     const updateData: any = { ...updateObj };
 

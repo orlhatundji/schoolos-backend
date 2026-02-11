@@ -1,12 +1,11 @@
 import {
   ClassArm,
   ClassArmStudent,
-  CurriculumItemRating,
+  ClassArmStudentAssessment,
   Guardian,
   Student as PrismaStudent,
   School,
   StudentAttendance,
-  SubjectTermStudent,
   Level,
   User as PrismaUser,
 } from '@prisma/client';
@@ -15,9 +14,8 @@ import { User } from '../../users/types';
 export interface Student extends PrismaStudent {
   user?: User;
   classArmStudents?: ClassArmStudent[];
-  subjectTermStudents?: SubjectTermStudent[];
+  assessments?: ClassArmStudentAssessment[];
   guardian?: Guardian;
-  curriculumItemRatings?: CurriculumItemRating[];
   studentAttendances?: StudentAttendance[];
   school?: School[];
 }

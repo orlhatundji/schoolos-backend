@@ -488,6 +488,91 @@ export interface DashboardOperationalStats {
   totalNetProfit: number;
 }
 
+// Subject Details types
+export interface SubjectClassInfo {
+  classArmId: string;
+  classArmName: string;
+  levelName: string;
+  teacherName: string | null;
+  teacherId: string | null;
+  studentCount: number;
+  hasAssessments: boolean;
+}
+
+export interface SubjectDetailsData {
+  subject: {
+    id: string;
+    name: string;
+    department: string | null;
+    category: string | null;
+    code: string;
+  };
+  classes: SubjectClassInfo[];
+  hasAssessmentScores: boolean;
+}
+
+// Subject Class Assessment types
+export interface StudentAssessmentScoreInfo {
+  id: string;
+  name: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  isExam: boolean;
+}
+
+export interface StudentAssessmentInfo {
+  id: string;
+  studentNo: string;
+  fullName: string;
+  gender: string;
+  avatarUrl: string | null;
+  assessments: StudentAssessmentScoreInfo[];
+  totalScore: number;
+  averageScore: number;
+  grade: string | undefined;
+}
+
+export interface SubjectClassAssessmentData {
+  subject: {
+    id: string;
+    name: string;
+  };
+  classArm: {
+    id: string;
+    name: string;
+    levelName: string;
+  };
+  academicSession: {
+    id: string;
+    name: string;
+  };
+  currentTerm: {
+    id: string;
+    name: string;
+  };
+  teacher: {
+    id: string;
+    name: string;
+  } | null;
+  assessmentStructure: {
+    id: string;
+    name: string;
+    maxScore: number;
+    isExam: boolean;
+    order: number;
+  }[];
+  classStats: {
+    totalStudents: number;
+    averageScore: number;
+    highestScore: number;
+    lowestScore: number;
+    passRate: number;
+  };
+  students: StudentAssessmentInfo[];
+  gradingModel: Record<string, [number, number]> | null;
+}
+
 export interface DashboardSummaryData {
   overview: DashboardOverview;
   studentStats: DashboardStudentStats;

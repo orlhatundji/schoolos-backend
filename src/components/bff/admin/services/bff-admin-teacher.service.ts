@@ -53,16 +53,22 @@ export class BffAdminTeacherService {
         classArmSubjectTeachers: {
           where: {
             deletedAt: null,
-            classArm: {
-              academicSessionId: targetSession.id,
-              deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+                deletedAt: null,
+              },
             },
           },
           include: {
-            subject: true,
-            classArm: {
+            classArmSubject: {
               include: {
-                level: true,
+                subject: true,
+                classArm: {
+                  include: {
+                    level: true,
+                  },
+                },
               },
             },
           },
@@ -107,7 +113,7 @@ export class BffAdminTeacherService {
       const department = teacher.department?.name || 'Unassigned';
 
       // Get subjects taught
-      const subjects = teacher.classArmSubjectTeachers.map((cast) => cast.subject.name);
+      const subjects = teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name);
 
       // Get classes assigned
       const classesAssigned = [
@@ -206,7 +212,11 @@ export class BffAdminTeacherService {
         },
         classArmSubjectTeachers: {
           include: {
-            subject: true,
+            classArmSubject: {
+              include: {
+                subject: true,
+              },
+            },
           },
         },
         classArmTeachers: {
@@ -238,7 +248,7 @@ export class BffAdminTeacherService {
     const department = teacher.department?.name || 'Unassigned';
 
     // Get subjects taught
-    const subjects = teacher.classArmSubjectTeachers.map((cast) => cast.subject.name);
+    const subjects = teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name);
 
     // Get classes assigned
     const classesAssigned = [

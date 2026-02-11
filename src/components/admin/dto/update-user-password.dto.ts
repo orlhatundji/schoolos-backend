@@ -1,8 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
 export class UpdateUserPasswordDto {
-  @ApiProperty()
-  @IsEmail()
-  email: string;
+  @ApiProperty({ description: 'User ID to reset password for' })
+  @IsUUID()
+  userId: string;
 }

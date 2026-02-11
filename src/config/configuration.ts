@@ -34,6 +34,11 @@ const getConfiguration = () => ({
     lastName: process.env.PLATFORM_ADMIN_LAST_NAME || 'Admin',
   },
   frontendBaseUrl: process.env.FRONTEND_BASE_URL,
+  adminAppBaseUrl: process.env.ADMIN_APP_BASE_URL,
+  teacherAppBaseUrl: process.env.TEACHER_APP_BASE_URL,
+  studentAppBaseUrl: process.env.STUDENT_APP_BASE_URL,
+  platformAppBaseUrl: process.env.PLATFORM_APP_BASE_URL,
+  websiteBaseUrl: process.env.WEBSITE_BASE_URL,
   otpGeneratorKey: process.env.OTP_GENERATOR_KEY,
   paystack: {
     secretKey: process.env.PAYSTACK_SECRET_KEY,

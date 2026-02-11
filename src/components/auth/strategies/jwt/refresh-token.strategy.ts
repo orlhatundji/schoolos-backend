@@ -27,7 +27,7 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, StrategyEnu
 
     if (!refreshToken) throw new ForbiddenException(AuthMessages.FAILURE.TOKEN_NOT_FOUND);
 
-    await this._findUserOrThrow(payload.email);
+    await this._findUserOrThrow(payload.sub);
 
     return {
       ...payload,
@@ -35,8 +35,8 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, StrategyEnu
     };
   }
 
-  private async _findUserOrThrow(email: string): Promise<User> {
-    const foundUser = await this.userService.findByEmail(email);
+  private async _findUserOrThrow(userId: string): Promise<User> {
+    const foundUser = await this.userService.findById(userId);
     if (!foundUser) {
       throw new ForbiddenException('Access Denied');
     }

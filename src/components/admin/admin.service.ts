@@ -35,6 +35,6 @@ export class AdminService {
   }
 
   async resetUserPassword(dto: UpdateUserPasswordDto): Promise<ResetPasswordByAdminResult> {
-    return this.resetPasswordService.resetUserPassword(dto.email);
+    return this.resetPasswordService.resetUserPassword(dto.userId);
   }
 }

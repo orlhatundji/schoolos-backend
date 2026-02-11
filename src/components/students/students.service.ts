@@ -39,15 +39,18 @@ export class StudentsService extends BaseService {
 
   async create(createStudentDto: CreateStudentDto, schoolId: string): Promise<Student> {
     if (createStudentDto.admissionNo) {
-      await this.throwIfStudentAdmissionNoExists(createStudentDto.admissionNo);
+      await this.throwIfStudentAdmissionNoExists(createStudentDto.admissionNo, schoolId);
     }
 
     return this.save(createStudentDto, schoolId);
   }
 
-  private async throwIfStudentAdmissionNoExists(admissionNo: string) {
+  private async throwIfStudentAdmissionNoExists(admissionNo: string, schoolId: string) {
     const existingStudent = await this.studentsRepository.findOne({
-      where: { admissionNo },
+      where: {
+        admissionNo,
+        user: { schoolId },
+      },
     });
 
     if (existingStudent) {
@@ -97,13 +100,31 @@ export class StudentsService extends BaseService {
       nextSeq,
     );
 
-    const studentData = {
+    const studentData: any = {
       userId: user.id,
       studentNo,
       guardianId,
       admissionNo,
       admissionDate: dateTime,
     };
+
+    // Add guardian information if provided
+    if (guardianInformation) {
+      studentData.guardianFirstName = guardianInformation.firstName;
+      studentData.guardianLastName = guardianInformation.lastName;
+      studentData.guardianEmail = guardianInformation.email;
+      studentData.guardianPhone = guardianInformation.phone;
+    }
+
+    // Add address as JSON if provided
+    if (address) {
+      studentData.address = { ...address };
+    }
+
+    // Add medical information as JSON if provided
+    if (medicalInformation) {
+      studentData.medicalInformation = JSON.parse(JSON.stringify(medicalInformation));
+    }
 
     const student = await this.studentsRepository.create(studentData, {
       include: { user: true },
@@ -124,19 +145,6 @@ export class StudentsService extends BaseService {
 
     // Create ClassArmStudent relationship
     await this.classArmStudentService.enrollStudent(student.id, classArmId, currentSession.id);
-
-    // Note: guardianInformation, medicalInformation, and address handling
-    // These fields are received but not yet processed - requires additional
-    // database models and service logic to be implemented
-    if (guardianInformation) {
-      // Guardian information processing not yet implemented
-    }
-    if (medicalInformation) {
-      // Medical information processing not yet implemented
-    }
-    if (address) {
-      // Address information processing not yet implemented
-    }
 
     return student;
   }
@@ -435,28 +443,29 @@ export class StudentsService extends BaseService {
       });
     }
 
-    // Handle guardianInformation - this should create/update guardian
+    // Handle guardianInformation - store directly on student
     if (
       updateStudentDto.guardianInformation &&
       Object.keys(updateStudentDto.guardianInformation).length > 0
     ) {
-      // TODO: Implement guardian information update logic
-      // This would involve creating or updating a guardian record
+      const { firstName, lastName, email, phone } = updateStudentDto.guardianInformation;
+      if (firstName) updateData.guardianFirstName = firstName;
+      if (lastName) updateData.guardianLastName = lastName;
+      if (email) updateData.guardianEmail = email;
+      if (phone) updateData.guardianPhone = phone;
     }
 
-    // Handle medicalInformation - this should be stored in user or separate medical record
+    // Handle address - store as JSON on student
+    if (updateStudentDto.address && Object.keys(updateStudentDto.address).length > 0) {
+      updateData.address = { ...updateStudentDto.address };
+    }
+
+    // Handle medical information - store as JSON on student
     if (
       updateStudentDto.medicalInformation &&
       Object.keys(updateStudentDto.medicalInformation).length > 0
     ) {
-      // TODO: Implement medical information update logic
-      // This would involve creating or updating medical records
-    }
-
-    // Handle address - this should create/update address
-    if (updateStudentDto.address && Object.keys(updateStudentDto.address).length > 0) {
-      // TODO: Implement address update logic
-      // This would involve creating or updating an address record
+      updateData.medicalInformation = JSON.parse(JSON.stringify(updateStudentDto.medicalInformation));
     }
 
     // Only update if there's actual data to update

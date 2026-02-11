@@ -431,40 +431,6 @@ export class TeacherService {
     if (updateData.gender) userUpdateData.gender = updateData.gender;
     if (updateData.stateOfOrigin) userUpdateData.stateOfOrigin = updateData.stateOfOrigin;
 
-    // Check for phone number conflicts if phone is being updated
-    if (updateData.phone && updateData.phone !== teacher.user.phone) {
-      const existingUser = await this.prisma.user.findFirst({
-        where: {
-          phone: updateData.phone,
-          schoolId: teacher.user.schoolId,
-          id: { not: teacher.userId },
-        },
-      });
-
-      if (existingUser) {
-        throw new ConflictException(
-          'Phone number is already in use by another user in this school',
-        );
-      }
-    }
-
-    // Check for email conflicts if email is being updated
-    if (updateData.email && updateData.email !== teacher.user.email) {
-      const existingUser = await this.prisma.user.findFirst({
-        where: {
-          email: updateData.email,
-          schoolId: teacher.user.schoolId,
-          id: { not: teacher.userId },
-        },
-      });
-
-      if (existingUser) {
-        throw new ConflictException(
-          'Email address is already in use by another user in this school',
-        );
-      }
-    }
-
     // Update user if there are changes
     if (Object.keys(userUpdateData).length > 0) {
       await this.prisma.user.update({

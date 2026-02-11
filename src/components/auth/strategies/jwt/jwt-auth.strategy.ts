@@ -22,7 +22,8 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, StrategyEnum.JWT
   }
 
   async validate(payload: IJwtPayload) {
-    const user = await this._findUserOrThrow(payload.email);
+    // Use userId (sub) from JWT, not email - email is not unique across schools
+    const user = await this._findUserOrThrow(payload.sub);
     return {
       sub: user.id,
       email: user.email,
@@ -31,8 +32,8 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, StrategyEnum.JWT
     };
   }
 
-  private async _findUserOrThrow(email: string): Promise<User> {
-    const foundUser = await this.userService.findByEmail(email);
+  private async _findUserOrThrow(userId: string): Promise<User> {
+    const foundUser = await this.userService.findById(userId);
     if (!foundUser) {
       throw new ForbiddenException(AuthMessages.FAILURE.ACCESS_DENIED);
     }

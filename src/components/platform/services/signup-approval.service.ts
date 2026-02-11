@@ -226,8 +226,8 @@ export class SignupApprovalService {
     password: string;
   }) {
     const { email, firstName, lastName, schoolName, adminNo, password } = data;
-    const frontendBaseUrl = this.configService.get<string>('frontendBaseUrl');
-    const adminPortalUrl = frontendBaseUrl ? `${frontendBaseUrl}/admin/login` : 'https://admin.schos.ng/login';
+    const adminAppBaseUrl = this.configService.get<string>('adminAppBaseUrl') || this.configService.get<string>('frontendBaseUrl');
+    const adminPortalUrl = adminAppBaseUrl ? `${adminAppBaseUrl}/login` : 'https://admin.schos.ng/login';
 
     await this.mailService.sendEmail({
       recipientAddress: email,

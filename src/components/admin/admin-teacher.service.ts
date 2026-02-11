@@ -67,35 +67,6 @@ export class AdminTeacherService {
       createTeacherDto.teacherId ||
       (await this.generateTeacherNumber(user.schoolId, school.code));
 
-    // Check for email/phone conflicts within the school scope
-    if (createTeacherDto.email) {
-      const existingEmail = await this.prisma.user.findFirst({
-        where: {
-          email: createTeacherDto.email,
-          schoolId: user.schoolId,
-          deletedAt: null,
-        },
-      });
-
-      if (existingEmail) {
-        throw new ConflictException('Email address is already in use in this school');
-      }
-    }
-
-    if (createTeacherDto.phone) {
-      const existingPhone = await this.prisma.user.findFirst({
-        where: {
-          phone: createTeacherDto.phone,
-          schoolId: user.schoolId,
-          deletedAt: null,
-        },
-      });
-
-      if (existingPhone) {
-        throw new ConflictException('Phone number is already in use in this school');
-      }
-    }
-
     // Hash password
     const hashedPassword = await this.passwordHasher.hash(createTeacherDto.password);
 
@@ -226,24 +197,8 @@ export class AdminTeacherService {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = error.meta?.target as string[];
-          if (target && target.length >= 2) {
-            if (target.includes('email') && target.includes('schoolId')) {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (target.includes('phone') && target.includes('schoolId')) {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (target.includes('teacherNo')) {
-              throw new ConflictException('Teacher ID is already in use');
-            }
-          } else {
-            // Fallback for other unique constraint violations
-            const field = target?.[0];
-            if (field === 'email') {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (field === 'phone') {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (field === 'teacherNo') {
-              throw new ConflictException('Teacher ID is already in use');
-            }
+          if (target?.includes('teacherNo')) {
+            throw new ConflictException('Teacher ID is already in use');
           }
         }
       }
@@ -445,37 +400,6 @@ export class AdminTeacherService {
       throw new NotFoundException('Teacher not found');
     }
 
-    // Check for email/phone conflicts within the school scope (excluding current teacher)
-    if (updateTeacherDto.email && updateTeacherDto.email !== existingTeacher.user.email) {
-      const existingEmail = await this.prisma.user.findFirst({
-        where: {
-          email: updateTeacherDto.email,
-          schoolId: user.schoolId,
-          deletedAt: null,
-          id: { not: existingTeacher.userId },
-        },
-      });
-
-      if (existingEmail) {
-        throw new ConflictException('Email address is already in use in this school');
-      }
-    }
-
-    if (updateTeacherDto.phone && updateTeacherDto.phone !== existingTeacher.user.phone) {
-      const existingPhone = await this.prisma.user.findFirst({
-        where: {
-          phone: updateTeacherDto.phone,
-          schoolId: user.schoolId,
-          deletedAt: null,
-          id: { not: existingTeacher.userId },
-        },
-      });
-
-      if (existingPhone) {
-        throw new ConflictException('Phone number is already in use in this school');
-      }
-    }
-
     // Check if teacher ID is being updated and if it already exists globally
     if (updateTeacherDto.teacherId && updateTeacherDto.teacherId !== existingTeacher.teacherNo) {
       const existingTeacherId = await this.prisma.teacher.findFirst({
@@ -663,24 +587,8 @@ export class AdminTeacherService {
       if (error instanceof PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = error.meta?.target as string[];
-          if (target && target.length >= 2) {
-            if (target.includes('email') && target.includes('schoolId')) {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (target.includes('phone') && target.includes('schoolId')) {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (target.includes('teacherNo')) {
-              throw new ConflictException('Teacher ID is already in use');
-            }
-          } else {
-            // Fallback for other unique constraint violations
-            const field = target?.[0];
-            if (field === 'email') {
-              throw new ConflictException('Email address is already in use in this school');
-            } else if (field === 'phone') {
-              throw new ConflictException('Phone number is already in use in this school');
-            } else if (field === 'teacherNo') {
-              throw new ConflictException('Teacher ID is already in use');
-            }
+          if (target?.includes('teacherNo')) {
+            throw new ConflictException('Teacher ID is already in use');
           }
         }
       }

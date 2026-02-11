@@ -469,6 +469,12 @@ model Student {
   admissionDate         DateTime
   admissionNo           String?                @unique
   guardianId            String?
+  guardianFirstName     String?
+  guardianLastName      String?
+  guardianEmail         String?
+  guardianPhone         String?
+  address               Json?
+  medicalInformation    Json?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   deletedAt             DateTime?

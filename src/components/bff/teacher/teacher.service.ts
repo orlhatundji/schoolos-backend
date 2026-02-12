@@ -1103,7 +1103,6 @@ export class TeacherService {
 
         const totalScore = assessments.reduce((sum, a) => sum + a.score, 0);
         const totalMaxScore = assessments.reduce((sum, a) => sum + a.maxScore, 0);
-        const averageScore = assessments.length > 0 ? Math.round(totalScore / assessments.length) : 0;
         const totalPercentage = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
 
         return {
@@ -1113,7 +1112,7 @@ export class TeacherService {
           gender: student.user.gender,
           assessments,
           totalScore,
-          averageScore,
+          averageScore: totalPercentage,
           grade: this.calculateGradeFromModel(totalPercentage, gradingModel?.model),
         };
       }),

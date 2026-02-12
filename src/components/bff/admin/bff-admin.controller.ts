@@ -61,6 +61,7 @@ import { SingleStudentDetailsResult } from './results/single-student-details.res
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
 import { DashboardSummaryResult } from './results/dashboard-summary.result';
+import { AdminTopClassChampionsResult } from './results/admin-top-class-champions.result';
 
 @Controller('bff/admin')
 @ApiTags('BFF - Admin')
@@ -105,6 +106,13 @@ export class BffAdminController {
   async getClassroomsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getClassroomsViewData(userId);
     return new AdminClassroomsViewResult(data);
+  }
+
+  @Get('top-class-champions')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getTopClassChampions(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getTopClassChampions(userId);
+    return new AdminTopClassChampionsResult(data);
   }
 
   @Get('teachers-view')

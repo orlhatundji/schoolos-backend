@@ -589,3 +589,19 @@ export interface DashboardSummaryData {
   operationalStats: DashboardOperationalStats;
   academicInfo: AcademicInfo;
 }
+
+export interface ClassChampion {
+  id: string;
+  name: string;
+  score: number;
+  className: string;
+  classLevel: string;
+  teacherName: string;
+  avatarUrl: string | null;
+}
+
+export interface TopClassChampionsData {
+  champions: ClassChampion[];
+  academicSession: string;
+  term: string;
+}

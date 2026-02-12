@@ -29,6 +29,7 @@ import {
   StudentsViewData,
   SubjectsViewData,
   TeachersViewData,
+  TopClassChampionsData,
 } from './types';
 
 @Injectable()
@@ -65,6 +66,10 @@ export class BffAdminService {
     limit: number = 20,
   ): Promise<ClassroomDetailsData> {
     return this.classroomService.getClassroomDetailsDataBySlug(userId, slug, page, limit);
+  }
+
+  async getTopClassChampions(userId: string): Promise<TopClassChampionsData> {
+    return this.classroomService.getTopClassChampions(userId);
   }
 
   async getStudentDetailsData(

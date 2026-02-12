@@ -472,26 +472,66 @@ export class ClassArmStudentService {
       },
     });
 
+    // Separate students already in the TARGET class arm from those in a DIFFERENT class arm
+    const alreadyInTargetClassIds: string[] = [];
+    const needsReassignmentIds: string[] = [];
+    const enrollmentsToDeactivate: string[] = [];
+
+    for (const enrollment of existingEnrollments) {
+      if (enrollment.classArmId === targetClassArmId) {
+        // Already in the target class — truly skip
+        alreadyInTargetClassIds.push(enrollment.studentId);
+      } else {
+        // In a different class arm in the same session — reassign
+        needsReassignmentIds.push(enrollment.studentId);
+        enrollmentsToDeactivate.push(enrollment.id);
+      }
+    }
+
     const alreadyEnrolledStudentIds = existingEnrollments.map((e) => e.studentId);
-    const availableStudentIds = studentIds.filter((id) => !alreadyEnrolledStudentIds.includes(id));
+    const newStudentIds = studentIds.filter((id) => !alreadyEnrolledStudentIds.includes(id));
+    const availableStudentIds = [...newStudentIds, ...needsReassignmentIds];
 
     if (availableStudentIds.length === 0) {
       return {
         success: false,
-        message: 'All selected students are already enrolled in this session',
+        message: 'All selected students are already enrolled in this class',
         importedCount: 0,
-        skippedCount: studentIds.length,
-        skippedStudents: studentIds,
+        skippedCount: alreadyInTargetClassIds.length,
+        skippedStudents: alreadyInTargetClassIds,
       };
     }
 
-    // Create enrollments in transaction
+    // Deactivate old enrollments and create new ones in transaction
     const results = await this.prisma.$transaction(async (tx) => {
+      // Deactivate old enrollments for students being reassigned
+      if (enrollmentsToDeactivate.length > 0) {
+        await tx.classArmStudent.updateMany({
+          where: { id: { in: enrollmentsToDeactivate } },
+          data: { isActive: false, leftAt: new Date() },
+        });
+      }
+
       const enrollments = [];
 
       for (const studentId of availableStudentIds) {
-        const enrollment = await tx.classArmStudent.create({
-          data: {
+        // Use upsert to handle case where a deactivated enrollment already exists
+        // (unique constraint on studentId+classArmId+academicSessionId)
+        const enrollment = await tx.classArmStudent.upsert({
+          where: {
+            studentId_classArmId_academicSessionId: {
+              studentId,
+              classArmId: targetClassArmId,
+              academicSessionId: targetClassArm.academicSessionId,
+            },
+          },
+          update: {
+            isActive: true,
+            enrolledAt: new Date(),
+            leftAt: null,
+            deletedAt: null,
+          },
+          create: {
             studentId,
             classArmId: targetClassArmId,
             academicSessionId: targetClassArm.academicSessionId,
@@ -509,8 +549,8 @@ export class ClassArmStudentService {
       success: true,
       message: `Successfully imported ${results.length} students`,
       importedCount: results.length,
-      skippedCount: alreadyEnrolledStudentIds.length,
-      skippedStudents: alreadyEnrolledStudentIds,
+      skippedCount: alreadyInTargetClassIds.length,
+      skippedStudents: alreadyInTargetClassIds,
     };
   }
 }

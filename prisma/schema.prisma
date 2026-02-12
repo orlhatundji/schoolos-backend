@@ -78,6 +78,7 @@ model School {
   schoolType                   String?
   studentCapacity              String?
   colorScheme                  String?
+  resultTemplateId             String?                       @default("classic") @map("result_template_id")
   academicSessions             AcademicSession[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
   bulkImportJobs               BulkImportJob[]

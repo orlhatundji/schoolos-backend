@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Arial Rounded MT', Arial, sans-serif; font-size: 12px; color: #333; background: #fff; }
+
+  .header {
+    background: linear-gradient(135deg, #ff6b6b 0%, #feca57 25%, #48dbfb 50%, #ff9ff3 75%, #54a0ff 100%);
+    padding: 18px 20px; text-align: center; position: relative;
+  }
+  .header { position: relative; }
+  .header-overlay {
+    background: rgba(255,255,255,0.15); border-radius: 12px;
+    padding: 12px 20px; display: inline-block;
+  }
+  .logo-img {
+    position: absolute; left: 18px; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 48px; border-radius: 50%; object-fit: contain;
+    background: rgba(255,255,255,0.25); border: 2px solid rgba(255,255,255,0.5);
+    padding: 2px;
+  }
+  .school-name { font-size: 22px; font-weight: 800; color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
+  .school-subtitle { font-size: 10px; color: rgba(255,255,255,0.9); margin-top: 3px; }
+  .report-chip {
+    display: inline-block; margin-top: 8px;
+    background: #fff; color: #ff6b6b;
+    padding: 4px 18px; border-radius: 15px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+
+  .content { padding: 12px 18px; }
+
+  .info-cards {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px; margin-bottom: 12px;
+  }
+  .info-card {
+    border-radius: 10px; padding: 8px 10px;
+    border: 2px solid transparent; position: relative; overflow: hidden;
+  }
+  .info-card:nth-child(1) { background: #fff5f5; border-color: #ff6b6b; }
+  .info-card:nth-child(2) { background: #fffbf0; border-color: #feca57; }
+  .info-card:nth-child(3) { background: #f0fbff; border-color: #48dbfb; }
+  .info-card:nth-child(4) { background: #fff0fb; border-color: #ff9ff3; }
+  .info-card:nth-child(5) { background: #f0f4ff; border-color: #54a0ff; }
+  .info-card:nth-child(6) { background: #f0fff4; border-color: #2ed573; }
+  .info-label { font-size: 8px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; opacity: 0.7; }
+  .info-value { font-size: 11px; font-weight: 700; color: #2d3436; margin-top: 2px; }
+
+  .results-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+  .results-table thead th {
+    background: linear-gradient(135deg, #ff6b6b, #54a0ff);
+    color: #fff; padding: 8px 4px; font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+    font-weight: 700;
+  }
+  .results-table tbody td {
+    padding: 7px 4px; text-align: center; font-size: 10px;
+    border-bottom: 1px solid #f1f2f6;
+  }
+  .results-table tbody tr:nth-child(even) { background: #fafbfc; }
+  .subject-name { text-align: left !important; font-weight: 700; padding-left: 10px !important; }
+
+  .grade-pill {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-weight: 800; font-size: 10px; color: #fff;
+  }
+  .pill-A { background: #2ed573; }
+  .pill-B { background: #7bed9f; color: #2d3436; }
+  .pill-C { background: #48dbfb; }
+  .pill-D { background: #feca57; color: #2d3436; }
+  .pill-E { background: #ff9ff3; }
+  .pill-F { background: #ff6b6b; }
+
+  .summary-cards {
+    display: flex; gap: 8px; margin-top: 12px; justify-content: center;
+  }
+  .stat-card {
+    text-align: center; padding: 8px 12px; border-radius: 10px;
+    min-width: 80px; color: #fff; font-weight: 700;
+  }
+  .stat-card:nth-child(1) { background: #ff6b6b; }
+  .stat-card:nth-child(2) { background: #feca57; color: #2d3436; }
+  .stat-card:nth-child(3) { background: #48dbfb; }
+  .stat-card:nth-child(4) { background: #ff9ff3; }
+  .stat-card:nth-child(5) { background: #54a0ff; }
+  .stat-label { font-size: 7px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85; }
+  .stat-value { font-size: 16px; font-weight: 800; }
+
+  .grading-key { margin-top: 10px; }
+  .grading-key table { border-collapse: collapse; font-size: 9px; border-radius: 6px; overflow: hidden; }
+  .grading-key th { background: linear-gradient(135deg, #ff6b6b, #54a0ff); color: #fff; padding: 3px 8px; }
+  .grading-key td { border: 1px solid #f1f2f6; padding: 3px 8px; text-align: center; }
+
+  .bottom-section { margin-top: 12px; }
+  .remark-card {
+    background: linear-gradient(135deg, #fff5f5, #f0f4ff);
+    border-radius: 10px; padding: 10px 15px; margin-bottom: 8px;
+    border-left: 4px solid #ff6b6b;
+  }
+  .remark-card:last-child { border-left-color: #54a0ff; }
+  .remark-title { font-size: 10px; font-weight: 700; color: #ff6b6b; text-transform: uppercase; margin-bottom: 4px; }
+  .remark-card:last-child .remark-title { color: #54a0ff; }
+  .remark-line { border-bottom: 2px dashed #ddd; height: 16px; }
+
+  .footer {
+    margin-top: 12px; padding: 8px 20px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #feca57 25%, #48dbfb 50%, #ff9ff3 75%, #54a0ff 100%);
+    color: #fff; display: flex; justify-content: space-between;
+    font-size: 9px; font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img class="logo-img" src="{{logoSrc}}" alt="Logo">
+  <div class="header-overlay">
+    <div class="school-name">{{school.name}}</div>
+    {{#if school.motto}}
+    <div class="school-subtitle">{{school.motto}}{{#if school.address}} &bull; {{school.address}}{{/if}}</div>
+    {{/if}}
+    <div class="report-chip">ACADEMIC REPORT CARD</div>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="info-cards">
+    <div class="info-card">
+      <div class="info-label">Student Name</div>
+      <div class="info-value">{{student.fullName}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Student No</div>
+      <div class="info-value">{{student.studentNo}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Class</div>
+      <div class="info-value">{{student.classArm.level.name}} {{student.classArm.name}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Academic Session</div>
+      <div class="info-value">{{academicSession.academicYear}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Term</div>
+      <div class="info-value">{{term.name}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Period</div>
+      <div class="info-value">{{termStartDate}} - {{termEndDate}}</div>
+    </div>
+  </div>
+
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th style="width:28px">S/N</th>
+        <th style="text-align:left; padding-left:10px;">Subject</th>
+        {{#each assessmentStructures}}
+        <th>{{this.name}}<br><small>({{this.maxScore}})</small></th>
+        {{/each}}
+        <th>Total</th>
+        <th>Grade</th>
+        <th style="width:70px">Remark</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each subjects}}
+      <tr>
+        <td>{{this.serialNumber}}</td>
+        <td class="subject-name">{{this.name}}</td>
+        {{#each this.assessments}}
+        <td style="font-weight:700; color:{{#if this.score}}{{../scoreColor}}{{else}}#ddd{{/if}}">
+          {{#if this.score}}{{this.score}}{{else}}-{{/if}}
+        </td>
+        {{/each}}
+        <td style="font-weight:800; font-size:11px;">{{this.totalScore}}</td>
+        <td>
+          <span class="grade-pill pill-{{or this.grade 'F'}}">{{or this.grade "-"}}</span>
+        </td>
+        <td style="color:{{this.remarkColor}}; font-weight:700; font-size:9px;">{{this.remark}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="summary-cards">
+    <div class="stat-card">
+      <div class="stat-label">Subjects</div>
+      <div class="stat-value">{{overallStats.totalSubjects}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total</div>
+      <div class="stat-value">{{overallStats.totalScore}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Average</div>
+      <div class="stat-value">{{fixed overallStats.averageScore 1}}%</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Grade</div>
+      <div class="stat-value">{{or overallStats.grade "N/A"}}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Position</div>
+      <div class="stat-value">{{or overallStats.position "N/A"}}<small>/{{overallStats.totalStudents}}</small></div>
+    </div>
+  </div>
+
+  {{#if gradingModel}}
+  <div class="grading-key">
+    <table>
+      <tr>
+        <th>Grade</th>
+        {{#each gradingModel}}
+        <th>{{@key}}</th>
+        {{/each}}
+      </tr>
+      <tr>
+        <td><strong>Range</strong></td>
+        {{#each gradingModel}}
+        <td>{{this.[0]}} - {{this.[1]}}</td>
+        {{/each}}
+      </tr>
+    </table>
+  </div>
+  {{/if}}
+
+  <div class="bottom-section">
+    <div class="remark-card">
+      <div class="remark-title">Class Teacher's Remark</div>
+      <div class="remark-line"></div>
+    </div>
+    <div class="remark-card">
+      <div class="remark-title">Principal's Remark</div>
+      <div class="remark-line"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>Generated on: {{generatedDate}}</span>
+  <span>Powered by Schos</span>
+</div>
+
+</body>
+</html>

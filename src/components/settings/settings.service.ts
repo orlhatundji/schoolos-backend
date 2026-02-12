@@ -53,6 +53,7 @@ export class SettingsService {
       studentCapacity: school.studentCapacity || '',
       description: school.description || '',
       colorScheme: school.colorScheme || 'default',
+      resultTemplateId: school.resultTemplateId || 'classic',
       schoolAddress: primaryAddress ? {
         street: primaryAddress.street1,
         street2: primaryAddress.street2,
@@ -142,6 +143,14 @@ export class SettingsService {
     if (updateData.colorScheme !== undefined) {
       updatePayload.colorScheme = updateData.colorScheme;
       updatedFields.push('colorScheme');
+    }
+    if (updateData.resultTemplateId !== undefined) {
+      const validTemplates = ['classic', 'modern', 'traditional', 'colorful', 'professional'];
+      if (!validTemplates.includes(updateData.resultTemplateId)) {
+        throw new BadRequestException('Invalid result template ID');
+      }
+      updatePayload.resultTemplateId = updateData.resultTemplateId;
+      updatedFields.push('resultTemplateId');
     }
 
     // Handle contact info updates

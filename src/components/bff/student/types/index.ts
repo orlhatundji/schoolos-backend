@@ -57,6 +57,7 @@ export interface StudentResultsData {
     motto?: string;
     logoUrl?: string;
     address?: string;
+    resultTemplateId?: string;
   };
   student: {
     id: string;

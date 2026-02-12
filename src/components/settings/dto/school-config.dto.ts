@@ -96,6 +96,9 @@ export class SchoolConfigDto {
   @ApiProperty({ description: 'School color scheme', required: false })
   colorScheme?: string;
 
+  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'] })
+  resultTemplateId?: string;
+
   @ApiProperty({ description: 'School address', type: SchoolAddressDto, required: false })
   schoolAddress?: SchoolAddressDto;
 

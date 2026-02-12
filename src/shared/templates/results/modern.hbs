@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; }
+
+  .header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px 25px; color: #fff; position: relative;
+  }
+  .header-content { text-align: center; }
+  .school-name { font-size: 22px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .school-subtitle { font-size: 10px; opacity: 0.85; margin-top: 4px; letter-spacing: 0.5px; }
+  .report-badge {
+    display: inline-block; margin-top: 10px;
+    background: rgba(255,255,255,0.2); backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 4px 20px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+  }
+
+  .logo-img {
+    position: absolute; left: 25px; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%; object-fit: contain;
+    background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.5);
+    padding: 2px;
+  }
+
+  .content { padding: 15px 20px; }
+
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px; margin-bottom: 15px;
+  }
+  .info-card {
+    background: #f8f9ff; border-radius: 8px; padding: 8px 12px;
+    border-left: 3px solid #667eea;
+  }
+  .info-label { font-size: 8px; text-transform: uppercase; color: #667eea; font-weight: 600; letter-spacing: 0.5px; }
+  .info-value { font-size: 11px; font-weight: 600; color: #1a1a2e; margin-top: 2px; }
+
+  .results-table { width: 100%; border-collapse: collapse; border-radius: 8px; overflow: hidden; }
+  .results-table thead th {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff; padding: 8px 5px; font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+  }
+  .results-table tbody td {
+    padding: 7px 5px; text-align: center; font-size: 10px;
+    border-bottom: 1px solid #eef0f8;
+  }
+  .results-table tbody tr:hover { background: #f8f9ff; }
+  .subject-name { text-align: left !important; font-weight: 600; padding-left: 10px !important; }
+
+  .grade-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-weight: 700; font-size: 10px; color: #fff; min-width: 24px;
+  }
+  .grade-A { background: #27ae60; }
+  .grade-B { background: #2ecc71; }
+  .grade-C { background: #3498db; }
+  .grade-D { background: #f39c12; }
+  .grade-E { background: #e67e22; }
+  .grade-F { background: #e74c3c; }
+
+  .summary-strip {
+    margin-top: 12px; padding: 12px 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px; color: #fff;
+    display: flex; justify-content: space-around; text-align: center;
+  }
+  .summary-item .label { font-size: 8px; text-transform: uppercase; opacity: 0.8; }
+  .summary-item .value { font-size: 16px; font-weight: 700; }
+
+  .grading-key { margin-top: 10px; }
+  .grading-key table { border-collapse: collapse; font-size: 9px; }
+  .grading-key th { background: #667eea; color: #fff; padding: 3px 8px; border-radius: 0; }
+  .grading-key td { border: 1px solid #eef0f8; padding: 3px 8px; text-align: center; }
+
+  .bottom-section { margin-top: 12px; }
+  .remark-box {
+    background: #f8f9ff; border-radius: 8px; padding: 10px 15px;
+    border-left: 3px solid #667eea; margin-bottom: 10px;
+  }
+  .remark-title { font-size: 10px; font-weight: 600; color: #667eea; text-transform: uppercase; margin-bottom: 5px; }
+  .remark-line { border-bottom: 1px dashed #bbb; height: 18px; }
+
+  .footer {
+    margin-top: 15px; padding: 8px 20px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff; display: flex; justify-content: space-between;
+    font-size: 9px; opacity: 0.9;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img class="logo-img" src="{{logoSrc}}" alt="Logo">
+  <div class="header-content">
+    <div class="school-name">{{school.name}}</div>
+    {{#if school.motto}}
+    <div class="school-subtitle">{{school.motto}}{{#if school.address}} &bull; {{school.address}}{{/if}}</div>
+    {{/if}}
+    <div class="report-badge">ACADEMIC REPORT CARD</div>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-label">Student Name</div>
+      <div class="info-value">{{student.fullName}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Student No</div>
+      <div class="info-value">{{student.studentNo}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Class</div>
+      <div class="info-value">{{student.classArm.level.name}} {{student.classArm.name}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Academic Session</div>
+      <div class="info-value">{{academicSession.academicYear}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Term</div>
+      <div class="info-value">{{term.name}}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">Period</div>
+      <div class="info-value">{{termStartDate}} - {{termEndDate}}</div>
+    </div>
+  </div>
+
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th style="width:28px">S/N</th>
+        <th style="text-align:left; padding-left:10px;">Subject</th>
+        {{#each assessmentStructures}}
+        <th>{{this.name}}<br><small>({{this.maxScore}})</small></th>
+        {{/each}}
+        <th>Total</th>
+        <th>Grade</th>
+        <th style="width:70px">Remark</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each subjects}}
+      <tr>
+        <td>{{this.serialNumber}}</td>
+        <td class="subject-name">{{this.name}}</td>
+        {{#each this.assessments}}
+        <td style="font-weight:600; color:{{#if this.score}}{{../scoreColor}}{{else}}#ccc{{/if}}">
+          {{#if this.score}}{{this.score}}{{else}}-{{/if}}
+        </td>
+        {{/each}}
+        <td style="font-weight:700; font-size:11px;">{{this.totalScore}}</td>
+        <td>
+          <span class="grade-badge grade-{{or this.grade 'F'}}">{{or this.grade "-"}}</span>
+        </td>
+        <td style="color:{{this.remarkColor}}; font-weight:600; font-size:9px;">{{this.remark}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="summary-strip">
+    <div class="summary-item">
+      <div class="label">Subjects</div>
+      <div class="value">{{overallStats.totalSubjects}}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Total Score</div>
+      <div class="value">{{overallStats.totalScore}}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Average</div>
+      <div class="value">{{fixed overallStats.averageScore 1}}%</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Grade</div>
+      <div class="value">{{or overallStats.grade "N/A"}}</div>
+    </div>
+    <div class="summary-item">
+      <div class="label">Position</div>
+      <div class="value">{{or overallStats.position "N/A"}}<small>/{{overallStats.totalStudents}}</small></div>
+    </div>
+  </div>
+
+  {{#if gradingModel}}
+  <div class="grading-key">
+    <table>
+      <tr>
+        <th>Grade</th>
+        {{#each gradingModel}}
+        <th>{{@key}}</th>
+        {{/each}}
+      </tr>
+      <tr>
+        <td><strong>Range</strong></td>
+        {{#each gradingModel}}
+        <td>{{this.[0]}} - {{this.[1]}}</td>
+        {{/each}}
+      </tr>
+    </table>
+  </div>
+  {{/if}}
+
+  <div class="bottom-section">
+    <div class="remark-box">
+      <div class="remark-title">Class Teacher's Remark</div>
+      <div class="remark-line"></div>
+    </div>
+    <div class="remark-box">
+      <div class="remark-title">Principal's Remark</div>
+      <div class="remark-line"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>Generated on: {{generatedDate}}</span>
+  <span>Powered by Schos</span>
+</div>
+
+</body>
+</html>

@@ -272,8 +272,9 @@ export class StudentController {
         termId,
       );
 
-      // Generate PDF
-      const pdfBuffer = await this.pdfService.generateStudentResultPDF(resultsData);
+      // Generate PDF with school's selected template
+      const templateId = resultsData.school.resultTemplateId || 'classic';
+      const pdfBuffer = await this.pdfService.generateStudentResultPDF(resultsData, templateId);
 
       // Set response headers for PDF download
       const filename = `results_${resultsData.student.studentNo}_${resultsData.term.name.replace(/\s+/g, '_')}.pdf`;

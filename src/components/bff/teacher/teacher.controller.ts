@@ -660,4 +660,46 @@ export class TeacherController {
       data: result,
     };
   }
+
+  @Get('attendance/subject/status')
+  @ApiOperation({ summary: 'Check if subject attendance has been taken for a class/subject on a specific date' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String })
+  @ApiQuery({ name: 'subjectId', required: true, type: String })
+  @ApiQuery({ name: 'date', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Subject attendance status retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized' })
+  async checkSubjectAttendanceStatus(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('subjectId') subjectId: string,
+    @Query('date') date: string,
+  ) {
+    const result = await this.teacherService.checkSubjectAttendanceStatus(userId, classArmId, subjectId, date);
+    return {
+      success: true,
+      message: 'Subject attendance status retrieved successfully',
+      data: result,
+    };
+  }
+
+  @Get('attendance/subject/data')
+  @ApiOperation({ summary: 'Get existing subject attendance data for a class/subject on a specific date' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String })
+  @ApiQuery({ name: 'subjectId', required: true, type: String })
+  @ApiQuery({ name: 'date', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Subject attendance data retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized' })
+  async getSubjectAttendanceData(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('subjectId') subjectId: string,
+    @Query('date') date: string,
+  ) {
+    const result = await this.teacherService.getSubjectAttendanceData(userId, classArmId, subjectId, date);
+    return {
+      success: true,
+      message: 'Subject attendance data retrieved successfully',
+      data: result,
+    };
+  }
 }

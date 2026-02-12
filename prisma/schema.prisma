@@ -208,6 +208,7 @@ model Term {
   paymentStructures  PaymentStructure[]
   assessments        ClassArmStudentAssessment[]
   studentAttendances StudentAttendance[]
+  subjectAttendances SubjectAttendance[]
   academicSession    AcademicSession            @relation(fields: [academicSessionId], references: [id])
 
   @@map("terms")
@@ -514,9 +515,10 @@ model ClassArmStudent {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
-  classArm           ClassArm            @relation(fields: [classArmId], references: [id], onDelete: Cascade)
-  student            Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentAttendances StudentAttendance[]
+  classArm            ClassArm             @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  student             Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentAttendances  StudentAttendance[]
+  subjectAttendances  SubjectAttendance[]
 
   @@unique([studentId, classArmId, academicSessionId])
   @@index([studentId])
@@ -566,6 +568,7 @@ model Subject {
   deletedAt               DateTime?
   categoryId              String?
   classArmSubjects        ClassArmSubject[]
+  subjectAttendances      SubjectAttendance[]
   category                Category?         @relation(fields: [categoryId], references: [id])
   department              Department?       @relation(fields: [departmentId], references: [id])
   school                  School            @relation(fields: [schoolId], references: [id])
@@ -706,6 +709,31 @@ model StudentAttendance {
   @@unique([classArmStudentId, date])
   @@unique([class_arm_student_id, date])
   @@map("student_attendances")
+}
+
+/// *
+/// * SubjectAttendance
+/// * -----------------
+/// * Tracks a student's attendance for a specific subject on each day.
+/// * Separated from StudentAttendance (class attendance) to allow independent tracking.
+/// * Multiple subject attendances can exist per student per day (one per subject).
+model SubjectAttendance {
+  id                String           @id @default(uuid())
+  date              DateTime
+  status            AttendanceStatus
+  subjectId         String
+  termId            String
+  classArmStudentId String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  classArmStudent   ClassArmStudent  @relation(fields: [classArmStudentId], references: [id], onDelete: Cascade)
+  term              Term             @relation(fields: [termId], references: [id])
+  subject           Subject          @relation(fields: [subjectId], references: [id])
+
+  @@unique([classArmStudentId, date, subjectId])
+  @@map("subject_attendances")
 }
 
 /// *

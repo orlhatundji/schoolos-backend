@@ -17,6 +17,12 @@ export class ClassroomBroadsheetBuilder {
   ) {}
 
   async buildBroadsheetData(schoolId: string, classArmId: string): Promise<ClassroomBroadsheetData> {
+    // 0. Get school name
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { name: true },
+    });
+
     // 1. Get current academic session with all terms
     const currentSession = await this.prisma.academicSession.findFirst({
       where: { schoolId, isCurrent: true },
@@ -207,6 +213,7 @@ export class ClassroomBroadsheetBuilder {
     }
 
     return {
+      schoolName: school?.name || '',
       classroom: {
         id: classArm.id,
         name: classArm.name,
@@ -237,23 +244,76 @@ export class ClassroomBroadsheetBuilder {
     };
   }
 
-  async generateBroadsheetExcel(data: ClassroomBroadsheetData): Promise<Buffer> {
+  async generateBroadsheetExcel(
+    data: ClassroomBroadsheetData,
+    termId?: string,
+    isCumulative?: boolean,
+  ): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Classroom Broadsheet');
+    const sheet = workbook.addWorksheet('Broadsheet');
 
-    // Build header row: S/N | Name | Student No | Gender | [Subject1] | [Subject2] | ... | Rank | Remarks
+    // Determine the effective term
+    const effectiveTermId = termId || data.terms.find((t) => t.isCurrent)?.id || data.terms[0]?.id;
+    const effectiveTermName = data.terms.find((t) => t.id === effectiveTermId)?.name || '';
+
+    // For term-only mode, recalculate overallAverage, rank, remarks per selected term
+    let students = data.students;
+    if (!isCumulative && effectiveTermId) {
+      const recalculated = students.map((student) => {
+        const subjectPercentages: number[] = [];
+        for (const subj of student.subjects) {
+          const termScore = subj.termScores.find((ts) => ts.termId === effectiveTermId);
+          if (termScore && termScore.total > 0) {
+            subjectPercentages.push(termScore.percentage);
+          }
+        }
+        const overallAverage =
+          subjectPercentages.length > 0
+            ? Math.round(
+                (subjectPercentages.reduce((sum, p) => sum + p, 0) / subjectPercentages.length) * 100,
+              ) / 100
+            : 0;
+        return { ...student, overallAverage, rank: 0, remarks: '' };
+      });
+
+      // Dense ranking
+      const sorted = [...recalculated].sort((a, b) => b.overallAverage - a.overallAverage);
+      let rank = 0;
+      let prevAvg = -1;
+      for (const s of sorted) {
+        if (s.overallAverage !== prevAvg) {
+          rank++;
+          prevAvg = s.overallAverage;
+        }
+        s.rank = rank;
+      }
+      for (const s of recalculated) {
+        s.remarks = this.calculateGradeFromModel(s.overallAverage, data.gradingModel);
+      }
+      students = recalculated;
+    }
+
+    // Build header row: S/N | Name | Student No | Gender | [Subject1] | [Subject2] | ... | Total | Rank | Remarks
     const headers: string[] = ['S/N', 'Name', 'Student No', 'Gender'];
     for (const subject of data.subjects) {
       headers.push(subject.name);
     }
-    headers.push('Rank', 'Remarks');
+    headers.push('Total', 'Rank', 'Remarks');
 
     // Title row
-    const titleRow = sheet.addRow([
-      `Classroom Broadsheet - ${data.classroom.levelName} ${data.classroom.name} - ${data.academicSession.name}`,
-    ]);
+    const modeLabel = isCumulative ? 'Cumulative' : effectiveTermName;
+    // School name row
+    const schoolRow = sheet.addRow([data.schoolName]);
     sheet.mergeCells(1, 1, 1, headers.length);
-    titleRow.font = { bold: true, size: 14 };
+    schoolRow.font = { bold: true, size: 16 };
+    schoolRow.alignment = { horizontal: 'center' };
+
+    // Broadsheet title row
+    const titleRow = sheet.addRow([
+      `Broadsheet - ${data.classroom.levelName} ${data.classroom.name} - ${data.academicSession.name} (${modeLabel})`,
+    ]);
+    sheet.mergeCells(2, 1, 2, headers.length);
+    titleRow.font = { bold: true, size: 12 };
     titleRow.alignment = { horizontal: 'center' };
 
     // Empty row
@@ -286,7 +346,7 @@ export class ClassroomBroadsheetBuilder {
     });
 
     // Data rows
-    data.students.forEach((student, index) => {
+    students.forEach((student, index) => {
       const rowData: (string | number)[] = [
         index + 1,
         student.fullName,
@@ -294,13 +354,29 @@ export class ClassroomBroadsheetBuilder {
         student.gender,
       ];
 
-      // One value per subject: sum of all term totals
       for (const subject of student.subjects) {
-        const total = subject.termScores.reduce((sum, ts) => sum + ts.total, 0);
-        rowData.push(total);
+        if (isCumulative) {
+          // Cumulative: average percentage across terms
+          rowData.push(Math.round(subject.average) || 0);
+        } else {
+          // Term-only: score for the selected term
+          const termScore = subject.termScores.find((ts) => ts.termId === effectiveTermId);
+          rowData.push(termScore?.total || 0);
+        }
       }
 
-      rowData.push(student.rank, student.remarks);
+      // Total: sum of all displayed subject scores
+      let total = 0;
+      for (const subject of student.subjects) {
+        if (isCumulative) {
+          total += Math.round(subject.average) || 0;
+        } else {
+          const termScore = subject.termScores.find((ts) => ts.termId === effectiveTermId);
+          total += termScore?.total || 0;
+        }
+      }
+
+      rowData.push(total, student.rank, student.remarks);
 
       const dataRow = sheet.addRow(rowData);
       dataRow.eachCell((cell) => {
@@ -332,8 +408,8 @@ export class ClassroomBroadsheetBuilder {
         let rowIdx = 0;
         col.eachCell?.({ includeEmpty: true }, (cell) => {
           rowIdx++;
-          // Skip title (row 1), empty (row 2), header (row 3) since header is rotated
-          if (rowIdx <= 3) return;
+          // Skip school name (row 1), title (row 2), empty (row 3), header (row 4) since header is rotated
+          if (rowIdx <= 4) return;
           const len = cell.value ? cell.value.toString().length : 0;
           if (len > maxWidth) maxWidth = len;
         });
@@ -355,12 +431,15 @@ export class ClassroomBroadsheetBuilder {
       return 'F';
     }
 
-    for (const [grade, range] of Object.entries(gradingModel)) {
-      if (Array.isArray(range) && range.length === 2) {
-        const [min, max] = range as [number, number];
-        if (score >= min && score <= max) {
-          return grade;
-        }
+    // Sort by min descending so the first match is the correct grade
+    const sortedEntries = Object.entries(gradingModel)
+      .filter(([, range]) => Array.isArray(range) && (range as number[]).length === 2)
+      .sort((a, b) => (b[1] as [number, number])[0] - (a[1] as [number, number])[0]);
+
+    for (const [grade, range] of sortedEntries) {
+      const [min] = range as [number, number];
+      if (score >= min) {
+        return grade;
       }
     }
 

@@ -229,8 +229,11 @@ export class BffAdminController {
     @GetCurrentUserId() userId: string,
     @Param('classArmId') classArmId: string,
     @Res() res: Response,
+    @Query('termId') termId?: string,
+    @Query('cumulative') cumulative?: string,
   ) {
-    const buffer = await this.bffAdminService.downloadClassroomBroadsheet(userId, classArmId);
+    const isCumulative = cumulative === 'true';
+    const buffer = await this.bffAdminService.downloadClassroomBroadsheet(userId, classArmId, termId, isCumulative);
     res.set({
       'Content-Disposition': 'attachment; filename="classroom-broadsheet.xlsx"',
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

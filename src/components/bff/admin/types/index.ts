@@ -608,6 +608,7 @@ export interface TopClassChampionsData {
 
 // Classroom Broadsheet types
 export interface ClassroomBroadsheetData {
+  schoolName: string;
   classroom: { id: string; name: string; levelName: string };
   academicSession: { id: string; name: string };
   terms: { id: string; name: string; isCurrent: boolean }[];

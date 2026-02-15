@@ -341,14 +341,17 @@ export class BffAdminClassroomService {
         name: `${student.user.firstName} ${student.user.lastName}`,
         gender: student.user.gender,
         age,
-        admissionNumber: student.admissionNo || 'N/A',
-        guardianPhone: student.user.phone,
+        admissionNumber: student.studentNo || student.admissionNo || 'N/A',
+        guardianPhone: student.guardianPhone || student.guardian?.user?.phone || student.user.phone,
         guardianName,
+        guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
         stateOfOrigin,
+        email: student.user.email || null,
+        status: student.status,
+        admissionDate: student.admissionDate?.toISOString() || null,
+        avatarUrl: student.user.avatarUrl || null,
       };
     });
-
-    // Create pagination info
 
     // Return flattened students array
     const students = studentsData;
@@ -387,7 +390,7 @@ export class BffAdminClassroomService {
         ? {
             id: classCaptain.id,
             name: `${classCaptain.user.firstName} ${classCaptain.user.lastName}`,
-            admissionNumber: classCaptain.admissionNo,
+            admissionNumber: classCaptain.studentNo || classCaptain.admissionNo,
           }
         : null,
       students,

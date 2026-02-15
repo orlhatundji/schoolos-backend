@@ -716,9 +716,9 @@ export class TeacherController {
 
   // Classroom Broadsheet Endpoints
   @Get('classroom-broadsheet')
-  @ApiOperation({ summary: 'Get classroom broadsheet data (class teacher only)' })
+  @ApiOperation({ summary: 'Get broadsheet data (class teacher only)' })
   @ApiQuery({ name: 'classArmId', required: true, type: String, description: 'Class arm ID' })
-  @ApiResponse({ status: 200, description: 'Classroom broadsheet data retrieved successfully' })
+  @ApiResponse({ status: 200, description: 'Broadsheet data retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - not a class teacher for this classroom' })
   async getClassroomBroadsheet(
     @GetCurrentUserId() userId: string,
@@ -727,13 +727,13 @@ export class TeacherController {
     const data = await this.teacherService.getClassroomBroadsheet(userId, classArmId);
     return {
       success: true,
-      message: 'Classroom broadsheet data retrieved successfully',
+      message: 'Broadsheet data retrieved successfully',
       data,
     };
   }
 
   @Get('classroom-broadsheet/download')
-  @ApiOperation({ summary: 'Download classroom broadsheet as Excel (class teacher only)' })
+  @ApiOperation({ summary: 'Download broadsheet as Excel (class teacher only)' })
   @ApiQuery({ name: 'classArmId', required: true, type: String, description: 'Class arm ID' })
   @ApiResponse({ status: 200, description: 'Excel file downloaded successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - not a class teacher for this classroom' })
@@ -742,10 +742,13 @@ export class TeacherController {
     @GetCurrentUserId() userId: string,
     @Query('classArmId') classArmId: string,
     @Res() res: Response,
+    @Query('termId') termId?: string,
+    @Query('cumulative') cumulative?: string,
   ) {
-    const buffer = await this.teacherService.downloadClassroomBroadsheet(userId, classArmId);
+    const isCumulative = cumulative === 'true';
+    const buffer = await this.teacherService.downloadClassroomBroadsheet(userId, classArmId, termId, isCumulative);
     res.set({
-      'Content-Disposition': 'attachment; filename="classroom-broadsheet.xlsx"',
+      'Content-Disposition': 'attachment; filename="broadsheet.xlsx"',
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     res.send(buffer);

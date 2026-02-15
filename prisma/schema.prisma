@@ -204,6 +204,7 @@ model Term {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   isCurrent          Boolean             @default(false)
+  isLocked           Boolean             @default(false)
   endDate            DateTime
   startDate          DateTime
   paymentStructures  PaymentStructure[]

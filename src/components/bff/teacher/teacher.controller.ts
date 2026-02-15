@@ -169,15 +169,23 @@ export class TeacherController {
     type: String,
     description: 'Subject name (e.g., Mathematics, English)',
   })
+  @ApiQuery({
+    name: 'termId',
+    required: false,
+    type: String,
+    description: 'Term ID to filter by (defaults to current term)',
+  })
   async getSubjectAssessmentScores(
     @GetCurrentUserId() userId: string,
     @Query('classArmId') classArmId: string,
     @Query('subjectName') subjectName: string,
+    @Query('termId') termId?: string,
   ) {
     const scores = await this.teacherService.getSubjectAssessmentScores(
       userId,
       classArmId,
       subjectName,
+      termId,
     );
     return new SubjectAssessmentScoresResult(scores);
   }

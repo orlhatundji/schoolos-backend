@@ -1043,6 +1043,7 @@ export class TeacherService {
     userId: string,
     classArmId: string,
     subjectName: string,
+    termId?: string,
   ): Promise<SubjectAssessmentScores> {
     const teacher = await this.getTeacherWithRelations(userId);
     const schoolId = teacher.user.schoolId;
@@ -1085,9 +1086,33 @@ export class TeacherService {
     // Get current session/term
     const currentSession = await this.prisma.academicSession.findFirst({
       where: { isCurrent: true, schoolId },
-      include: { terms: { where: { deletedAt: null, isCurrent: true } } },
+      include: { terms: { where: { deletedAt: null } } },
     });
-    const currentTerm = currentSession?.terms?.[0];
+
+    // Resolve selected term: use termId if provided, otherwise fall back to current term
+    let selectedTerm: { id: string; name: string; isLocked: boolean; isCurrent: boolean } | undefined;
+    if (termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: { id: termId, academicSession: { schoolId }, deletedAt: null },
+      });
+      if (!termRecord) {
+        throw new NotFoundException(`Term with ID "${termId}" not found`);
+      }
+      selectedTerm = { id: termRecord.id, name: termRecord.name, isLocked: termRecord.isLocked, isCurrent: termRecord.isCurrent };
+    } else {
+      const currentTermRecord = currentSession?.terms?.find((t) => t.isCurrent);
+      if (currentTermRecord) {
+        selectedTerm = { id: currentTermRecord.id, name: currentTermRecord.name, isLocked: currentTermRecord.isLocked, isCurrent: currentTermRecord.isCurrent };
+      }
+    }
+
+    // Build availableTerms from all terms in the current session
+    const availableTerms = (currentSession?.terms || []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      isCurrent: t.isCurrent,
+      isLocked: t.isLocked,
+    }));
 
     // Get grading model
     const gradingModel = await this.prisma.gradingModel.findUnique({
@@ -1100,14 +1125,16 @@ export class TeacherService {
       include: { student: { include: { user: true } } },
     });
 
-    // Get all assessments for this classArmSubject (current session)
-    const allAssessments = await this.prisma.classArmStudentAssessment.findMany({
-      where: {
-        classArmSubjectId: classArmSubject.id,
-        deletedAt: null,
-        term: { academicSession: { isCurrent: true } },
-      },
-    });
+    // Get all assessments for this classArmSubject (selected term only)
+    const allAssessments = selectedTerm
+      ? await this.prisma.classArmStudentAssessment.findMany({
+          where: {
+            classArmSubjectId: classArmSubject.id,
+            deletedAt: null,
+            termId: selectedTerm.id,
+          },
+        })
+      : [];
 
     // Group assessments by student
     const assessmentsByStudent = new Map<string, typeof allAssessments>();
@@ -1187,9 +1214,11 @@ export class TeacherService {
         isCurrent: currentSession?.isCurrent,
       },
       currentTerm: {
-        id: currentTerm?.id,
-        name: currentTerm?.name,
+        id: selectedTerm?.id,
+        name: selectedTerm?.name,
+        isLocked: selectedTerm?.isLocked ?? false,
       },
+      availableTerms,
       classStats,
       students: studentsWithScores,
       gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
@@ -1306,13 +1335,13 @@ export class TeacherService {
     if (!authorized) throw new Error('You are not authorized to teach this subject in this class');
 
     // Resolve term
-    let term: { id: string; academicSessionId: string };
+    let term: { id: string; academicSessionId: string; isLocked: boolean };
     if (createDto.termId) {
       const termRecord = await this.prisma.term.findFirst({
         where: { id: createDto.termId, academicSession: { schoolId } },
       });
       if (!termRecord) throw new Error(`Term with ID "${createDto.termId}" not found`);
-      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     } else {
       const currentSession = await this.prisma.academicSession.findFirst({
         where: { isCurrent: true, schoolId },
@@ -1321,7 +1350,12 @@ export class TeacherService {
       if (!currentSession) throw new Error('No current academic session found');
       const termRecord = currentSession.terms[0];
       if (!termRecord) throw new Error(`Term "${createDto.termName}" not found in current academic session`);
-      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+    }
+
+    // Check term lock
+    if (term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
     }
 
     // Look up assessment type from template
@@ -1395,6 +1429,11 @@ export class TeacherService {
     });
     if (!authorized) throw new ForbiddenException('You are not authorized to modify this assessment score');
 
+    // Check term lock
+    if (existing.term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+    }
+
     // Update directly — no totalScore recalculation needed
     const updated = await this.prisma.classArmStudentAssessment.update({
       where: { id: assessmentId },
@@ -1443,6 +1482,11 @@ export class TeacherService {
       where: { classArmSubjectId: existing.classArmSubjectId, teacherId: teacher.id, deletedAt: null },
     });
     if (!authorized) throw new Error('You are not authorized to delete this assessment score');
+
+    // Check term lock
+    if (existing.term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+    }
 
     // Soft delete — no totalScore recalculation needed
     await this.prisma.classArmStudentAssessment.update({
@@ -1560,13 +1604,13 @@ export class TeacherService {
 
     // ── 3. Resolve term ──
     if (!termId && !termName) throw new Error('Either termId or termName is required');
-    let term: { id: string; name: string; academicSessionId: string };
+    let term: { id: string; name: string; academicSessionId: string; isLocked: boolean };
     if (termId) {
       const termRecord = await this.prisma.term.findFirst({
         where: { id: termId, academicSession: { schoolId } },
       });
       if (!termRecord) throw new Error(`Term with ID "${termId}" not found`);
-      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     } else {
       const currentSession = await this.prisma.academicSession.findFirst({
         where: { isCurrent: true, schoolId },
@@ -1575,7 +1619,12 @@ export class TeacherService {
       if (!currentSession) throw new Error('No current academic session found');
       const termRecord = currentSession.terms[0];
       if (!termRecord) throw new Error(`Term "${termName}" not found in current academic session`);
-      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+    }
+
+    // ── 3a. Check term lock ──
+    if (term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
     }
 
     // ── 4. Resolve assessment template ──

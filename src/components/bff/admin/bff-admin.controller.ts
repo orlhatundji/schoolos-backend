@@ -211,6 +211,33 @@ export class BffAdminController {
     res.send(buffer);
   }
 
+  @Get('classroom/:classArmId/broadsheet')
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('classArmId') classArmId: string,
+  ) {
+    return this.bffAdminService.getClassroomBroadsheet(userId, classArmId);
+  }
+
+  @Get('classroom/:classArmId/broadsheet/download')
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async downloadClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('classArmId') classArmId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.bffAdminService.downloadClassroomBroadsheet(userId, classArmId);
+    res.set({
+      'Content-Disposition': 'attachment; filename="classroom-broadsheet.xlsx"',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    res.send(buffer);
+  }
+
   @Patch('subjects/:subjectId')
   @ApiParam({ name: 'subjectId', description: 'Subject UUID' })
   @CheckPolicies(new ManageStudentPolicyHandler())

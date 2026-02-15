@@ -3,14 +3,17 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -709,5 +712,42 @@ export class TeacherController {
       message: 'Subject attendance data retrieved successfully',
       data: result,
     };
+  }
+
+  // Classroom Broadsheet Endpoints
+  @Get('classroom-broadsheet')
+  @ApiOperation({ summary: 'Get classroom broadsheet data (class teacher only)' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String, description: 'Class arm ID' })
+  @ApiResponse({ status: 200, description: 'Classroom broadsheet data retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a class teacher for this classroom' })
+  async getClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+  ) {
+    const data = await this.teacherService.getClassroomBroadsheet(userId, classArmId);
+    return {
+      success: true,
+      message: 'Classroom broadsheet data retrieved successfully',
+      data,
+    };
+  }
+
+  @Get('classroom-broadsheet/download')
+  @ApiOperation({ summary: 'Download classroom broadsheet as Excel (class teacher only)' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String, description: 'Class arm ID' })
+  @ApiResponse({ status: 200, description: 'Excel file downloaded successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a class teacher for this classroom' })
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async downloadClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.teacherService.downloadClassroomBroadsheet(userId, classArmId);
+    res.set({
+      'Content-Disposition': 'attachment; filename="classroom-broadsheet.xlsx"',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    res.send(buffer);
   }
 }

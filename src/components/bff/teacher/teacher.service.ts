@@ -9,6 +9,7 @@ import { PrismaService } from '../../../prisma';
 import { PasswordHasher } from '../../../utils/hasher';
 import { PaystackService } from '../../../shared/services/paystack.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
+import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import {
   ClassDetails,
   ClassStudentInfo,
@@ -35,6 +36,7 @@ export class TeacherService {
     private readonly passwordHasher: PasswordHasher,
     private readonly paystackService: PaystackService,
     private readonly templateService: AssessmentStructureTemplateService,
+    private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
   ) {}
 
   async getTeacherDashboardData(userId: string): Promise<TeacherDashboardData> {
@@ -1086,7 +1088,7 @@ export class TeacherService {
     // Get current session/term
     const currentSession = await this.prisma.academicSession.findFirst({
       where: { isCurrent: true, schoolId },
-      include: { terms: { where: { deletedAt: null } } },
+      include: { terms: { where: { deletedAt: null }, orderBy: { startDate: 'asc' } } },
     });
 
     // Resolve selected term: use termId if provided, otherwise fall back to current term
@@ -2650,5 +2652,49 @@ export class TeacherService {
       excusedCount,
       attendancePercentage,
     };
+  }
+
+  // Classroom Broadsheet methods
+  async getClassroomBroadsheet(userId: string, classArmId: string) {
+    const { schoolId } = await this.verifyClassTeacher(userId, classArmId);
+    return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+  }
+
+  async downloadClassroomBroadsheet(userId: string, classArmId: string): Promise<Buffer> {
+    const { schoolId } = await this.verifyClassTeacher(userId, classArmId);
+    const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data);
+  }
+
+  private async verifyClassTeacher(
+    userId: string,
+    classArmId: string,
+  ): Promise<{ schoolId: string; teacherId: string }> {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+      include: { user: { select: { schoolId: true } } },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    const classArm = await this.prisma.classArm.findFirst({
+      where: {
+        id: classArmId,
+        deletedAt: null,
+        academicSession: { isCurrent: true },
+      },
+    });
+
+    if (!classArm) {
+      throw new NotFoundException('Class not found in current session');
+    }
+
+    if (classArm.classTeacherId !== teacher.id) {
+      throw new ForbiddenException('You are not the class teacher for this classroom');
+    }
+
+    return { schoolId: teacher.user.schoolId, teacherId: teacher.id };
   }
 }

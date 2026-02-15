@@ -852,6 +852,17 @@ export class TeacherService {
             student: {
               include: {
                 user: true,
+                assessments: {
+                  where: {
+                    deletedAt: null,
+                    classArmSubject: { classArmId: classArmId },
+                  },
+                  include: {
+                    classArmSubject: {
+                      include: { subject: true },
+                    },
+                  },
+                },
               },
             },
             studentAttendances: {
@@ -920,6 +931,38 @@ export class TeacherService {
     // Get recent activities (empty for new teachers)
     const recentActivities: any[] = [];
 
+    // Calculate top performers from assessment data
+    const performanceMap = new Map<
+      string,
+      { totalScore: number; totalMaxScore: number; student: any }
+    >();
+
+    classArmData.classArmStudents.forEach((cas) => {
+      const student = cas.student;
+      const assessments = (student as any).assessments || [];
+      if (assessments.length > 0) {
+        const totalScore = assessments.reduce((sum: number, a: any) => sum + a.score, 0);
+        const totalMaxScore = assessments.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
+        performanceMap.set(student.id, { totalScore, totalMaxScore, student });
+      }
+    });
+
+    const topPerformers = Array.from(performanceMap.entries())
+      .map(([studentId, data]) => ({
+        id: studentId,
+        name: `${data.student.user.firstName} ${data.student.user.lastName}`,
+        score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    // Calculate real average score from all students with assessments
+    const allScores = Array.from(performanceMap.values())
+      .map((data) => data.totalMaxScore > 0 ? (data.totalScore / data.totalMaxScore) * 100 : 0);
+    const averageScore = allScores.length > 0
+      ? Math.round((allScores.reduce((sum, s) => sum + s, 0) / allScores.length) * 100) / 100
+      : 0;
+
     return {
       id: classArmData.id,
       name: classArmData.name,
@@ -943,8 +986,9 @@ export class TeacherService {
         femaleStudents,
         averageAge,
         attendanceRate,
-        averageScore: 78.5, // Mock data - would calculate from actual assessments
+        averageScore,
       },
+      topPerformers,
       recentActivities,
     };
   }
@@ -2660,10 +2704,10 @@ export class TeacherService {
     return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
   }
 
-  async downloadClassroomBroadsheet(userId: string, classArmId: string): Promise<Buffer> {
+  async downloadClassroomBroadsheet(userId: string, classArmId: string, termId?: string, isCumulative?: boolean): Promise<Buffer> {
     const { schoolId } = await this.verifyClassTeacher(userId, classArmId);
     const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
-    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data);
+    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data, termId, isCumulative);
   }
 
   private async verifyClassTeacher(

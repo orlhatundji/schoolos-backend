@@ -135,10 +135,10 @@ export class BffAdminService {
     return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
   }
 
-  async downloadClassroomBroadsheet(userId: string, classArmId: string): Promise<Buffer> {
+  async downloadClassroomBroadsheet(userId: string, classArmId: string, termId?: string, isCumulative?: boolean): Promise<Buffer> {
     const schoolId = await this.getUserSchoolId(userId);
     const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
-    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data);
+    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data, termId, isCumulative);
   }
 
   // Department methods

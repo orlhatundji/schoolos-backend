@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import * as ExcelJS from 'exceljs';
@@ -551,6 +551,7 @@ export class ExcelBulkUploadService {
     fileBuffer: Buffer,
     schoolId: string,
     teacherId: string,
+    termId?: string,
   ): Promise<BulkUploadResult> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(fileBuffer);
@@ -560,9 +561,36 @@ export class ExcelBulkUploadService {
     if (!metadata) {
       throw new BadRequestException('Invalid template: Metadata not found in hidden sources');
     }
-    
+
     // Validate metadata
     await this.validateMetadata(metadata, schoolId, teacherId);
+
+    // If termId is provided, resolve the term by ID and override the metadata term name
+    if (termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: { id: termId, academicSession: { schoolId }, deletedAt: null },
+      });
+      if (!termRecord) {
+        throw new NotFoundException(`Term with ID "${termId}" not found`);
+      }
+      if (termRecord.isLocked) {
+        throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+      }
+      metadata.termName = termRecord.name;
+    } else {
+      // Check lock on the term resolved from metadata
+      const academicSession = await this.prisma.academicSession.findFirst({
+        where: { academicYear: metadata.sessionName, schoolId, deletedAt: null },
+      });
+      if (academicSession) {
+        const termRecord = await this.prisma.term.findFirst({
+          where: { name: { equals: metadata.termName, mode: 'insensitive' }, academicSessionId: academicSession.id, deletedAt: null },
+        });
+        if (termRecord?.isLocked) {
+          throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+        }
+      }
+    }
 
     // Get main data sheet (should be named after the class)
     const worksheet = workbook.worksheets[0]; // Get the first (and only) worksheet

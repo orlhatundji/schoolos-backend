@@ -16,9 +16,11 @@ import { BffAdminLevelService } from './services/bff-admin-level.service';
 import { BffAdminStudentService } from './services/bff-admin-student.service';
 import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
+import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import {
   AdminClassroomsViewData,
   AdminsViewData,
+  ClassroomBroadsheetData,
   ClassroomDetailsData,
   DashboardSummaryData,
   DepartmentsViewData,
@@ -44,6 +46,7 @@ export class BffAdminService {
     private readonly departmentService: BffAdminDepartmentService,
     private readonly levelService: BffAdminLevelService,
     private readonly adminService: BffAdminAdminService,
+    private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
   ) {}
 
   async getClassroomsViewData(userId: string): Promise<AdminClassroomsViewData> {
@@ -124,6 +127,18 @@ export class BffAdminService {
 
   async generateBroadsheet(userId: string, subjectId: string, classArmId: string) {
     return this.subjectService.generateBroadsheet(userId, subjectId, classArmId);
+  }
+
+  // Classroom Broadsheet methods
+  async getClassroomBroadsheet(userId: string, classArmId: string): Promise<ClassroomBroadsheetData> {
+    const schoolId = await this.getUserSchoolId(userId);
+    return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+  }
+
+  async downloadClassroomBroadsheet(userId: string, classArmId: string): Promise<Buffer> {
+    const schoolId = await this.getUserSchoolId(userId);
+    const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data);
   }
 
   // Department methods
@@ -1350,5 +1365,16 @@ export class BffAdminService {
       page,
       limit,
     );
+  }
+
+  private async getUserSchoolId(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    if (!user?.schoolId) {
+      throw new Error('User not associated with a school');
+    }
+    return user.schoolId;
   }
 }

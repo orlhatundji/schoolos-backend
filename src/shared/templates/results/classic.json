@@ -1,0 +1,53 @@
+{
+  "school": {
+    "name": "Example Value",
+    "motto": "Example Value",
+    "address": "Example Value"
+  },
+  "student": {
+    "fullName": "Example Value",
+    "studentNo": "Example Value",
+    "classArm": {
+      "level": {
+        "name": "Example Value"
+      },
+      "name": "Example Value"
+    }
+  },
+  "academicSession": {
+    "academicYear": "Example Value"
+  },
+  "term": {
+    "name": "Example Value"
+  },
+  "termStartDate": "Example Value",
+  "termEndDate": "Example Value",
+  "this": {
+    "name": "Example Value",
+    "maxScore": "Example Value",
+    "serialNumber": "Example Value",
+    "score": "Example Value",
+    "totalScore": "Example Value",
+    "gradeColor": "Example Value",
+    "grade": "Example Value",
+    "remarkColor": "Example Value",
+    "remark": "Example Value",
+    "[0]": "Example Value",
+    "[1]": "Example Value"
+  },
+  "": {
+    "": {
+      "/scoreColor": "Example Value"
+    }
+  },
+  "overallStats": {
+    "totalSubjects": "Example Value",
+    "totalScore": "Example Value",
+    "averageScore": "Example Value",
+    "grade": "Example Value",
+    "position": "Example Value",
+    "totalStudents": "Example Value"
+  },
+  "@key": "Example Value",
+  "generatedDate": "Example Value"
+}

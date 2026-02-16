@@ -49,6 +49,7 @@ export interface TopPerformer {
   name: string;
   score: number;
   subject: string;
+  avatarUrl: string | null;
 }
 
 export interface StudentInfo {
@@ -91,11 +92,13 @@ export interface ClassroomDetailsData {
     name: string;
     phone: string | null;
     email: string;
+    avatarUrl: string | null;
   } | null;
   classCaptain: {
     id: string;
     name: string;
     admissionNumber: string;
+    avatarUrl: string | null;
   } | null;
   students: StudentInfo[];
   topPerformers: TopPerformer[];

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SchoolsService } from '../schools/schools.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { SchoolConfigDto, UpdateSchoolConfigDto } from './dto';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class SettingsService {
   constructor(
     private readonly schoolsService: SchoolsService,
     private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
   ) {}
 
   async getSchoolConfig(userId: string): Promise<SchoolConfigDto> {
@@ -103,6 +105,13 @@ export class SettingsService {
     }
 
     if (updateData.logoUrl) {
+      // Delete old logo from S3 if it exists
+      if (user.school.logoUrl) {
+        const oldKey = this.storageService.extractKeyFromUrl(user.school.logoUrl);
+        if (oldKey) {
+          this.storageService.deleteObject(oldKey);
+        }
+      }
       updatePayload.logoUrl = updateData.logoUrl;
       updatedFields.push('logoUrl');
     }

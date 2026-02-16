@@ -63,11 +63,13 @@ export interface ClassDetails {
     id: string;
     name: string;
     email: string;
+    avatarUrl: string | null;
   };
   captain?: {
     id: string;
     name: string;
     studentNo: string;
+    avatarUrl: string | null;
   };
   stats: {
     totalStudents: number;
@@ -81,6 +83,7 @@ export interface ClassDetails {
     id: string;
     name: string;
     score: number;
+    avatarUrl: string | null;
   }[];
   recentActivities: {
     id: string;
@@ -141,6 +144,7 @@ export interface SubjectAssessmentScores {
     studentNo: string;
     fullName: string;
     gender: string;
+    avatarUrl: string | null;
     assessments: {
       id: string;
       name: string;

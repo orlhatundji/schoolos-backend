@@ -315,6 +315,7 @@ export class BffAdminClassroomService {
         name: `${data.student.user.firstName} ${data.student.user.lastName}`,
         score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
         subject: data.latestSubject,
+        avatarUrl: data.student.user.avatarUrl || null,
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
@@ -384,6 +385,7 @@ export class BffAdminClassroomService {
             name: `${classTeacher.user.firstName} ${classTeacher.user.lastName}`,
             phone: classTeacher.user.phone,
             email: classTeacher.user.email,
+            avatarUrl: classTeacher.user.avatarUrl || null,
           }
         : null,
       classCaptain: classCaptain
@@ -391,6 +393,7 @@ export class BffAdminClassroomService {
             id: classCaptain.id,
             name: `${classCaptain.user.firstName} ${classCaptain.user.lastName}`,
             admissionNumber: classCaptain.studentNo || classCaptain.admissionNo,
+            avatarUrl: classCaptain.user.avatarUrl || null,
           }
         : null,
       students,
@@ -654,6 +657,7 @@ export class BffAdminClassroomService {
             name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
             phone: classroom.classTeacher.user.phone || '',
             email: classroom.classTeacher.user.email || '',
+            avatarUrl: classroom.classTeacher.user.avatarUrl || null,
           }
         : null,
       classCaptain: classroom.captain
@@ -661,6 +665,7 @@ export class BffAdminClassroomService {
             id: classroom.captain.id,
             name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
             admissionNumber: classroom.captain.studentNo || '',
+            avatarUrl: classroom.captain.user.avatarUrl || null,
           }
         : null,
       students: students.map((student) => ({
@@ -836,6 +841,7 @@ export class BffAdminClassroomService {
           name: `${student.user.firstName} ${student.user.lastName}`,
           score: Math.round(totalPercentage),
           subject: student.assessments[0]?.classArmSubject?.subject?.name || 'N/A',
+          avatarUrl: student.user.avatarUrl || null,
         };
       })
       .sort((a, b) => b.score - a.score)
@@ -869,6 +875,7 @@ export class BffAdminClassroomService {
             name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
             phone: classroom.classTeacher.user.phone,
             email: classroom.classTeacher.user.email,
+            avatarUrl: classroom.classTeacher.user.avatarUrl || null,
           }
         : null,
       classCaptain: classroom.captain
@@ -876,6 +883,7 @@ export class BffAdminClassroomService {
             id: classroom.captain.id,
             name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
             admissionNumber: classroom.captain.studentNo,
+            avatarUrl: classroom.captain.user.avatarUrl || null,
           }
         : null,
       students: paginatedStudents.map((student) => ({

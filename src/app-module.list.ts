@@ -18,6 +18,7 @@ import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
 import { PaymentsModule } from './components/payments/payments.module';
 import { PlatformModule } from './components/platform/platform.module';
+import { StorageModule } from './components/storage/storage.module';
 import { RolesManagerModule } from './components/roles-manager';
 import { SchoolsModule } from './components/schools/schools.module';
 import { SettingsModule } from './components/settings/settings.module';
@@ -76,4 +77,5 @@ export const AppModuleList = [
   AssessmentStructuresModule,
   PaymentsModule,
   PlatformModule,
+  StorageModule,
 ];

@@ -10,6 +10,7 @@ import { PasswordHasher } from '../../../utils/hasher';
 import { PaystackService } from '../../../shared/services/paystack.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
+import { StorageService } from '../../storage/storage.service';
 import {
   ClassDetails,
   ClassStudentInfo,
@@ -37,6 +38,7 @@ export class TeacherService {
     private readonly paystackService: PaystackService,
     private readonly templateService: AssessmentStructureTemplateService,
     private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
+    private readonly storageService: StorageService,
   ) {}
 
   async getTeacherDashboardData(userId: string): Promise<TeacherDashboardData> {
@@ -421,6 +423,14 @@ export class TeacherService {
   // Update teacher profile information
   async updateTeacherProfile(userId: string, updateData: any): Promise<TeacherProfile> {
     const teacher = await this.getTeacherWithRelations(userId);
+
+    // Delete old avatar from S3 if a new one is being set
+    if (updateData.avatarUrl && teacher.user.avatarUrl) {
+      const oldKey = this.storageService.extractKeyFromUrl(teacher.user.avatarUrl);
+      if (oldKey) {
+        this.storageService.deleteObject(oldKey);
+      }
+    }
 
     // Prepare user update data
     const userUpdateData: any = {};
@@ -952,6 +962,7 @@ export class TeacherService {
         id: studentId,
         name: `${data.student.user.firstName} ${data.student.user.lastName}`,
         score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
+        avatarUrl: data.student.user.avatarUrl || null,
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
@@ -972,12 +983,14 @@ export class TeacherService {
         id: classArmData.classTeacher.id,
         name: `${classArmData.classTeacher.user.firstName} ${classArmData.classTeacher.user.lastName}`,
         email: classArmData.classTeacher.user.email || '',
+        avatarUrl: classArmData.classTeacher.user.avatarUrl || null,
       },
       captain: classArmData.captain
         ? {
             id: classArmData.captain.id,
             name: `${classArmData.captain.user.firstName} ${classArmData.captain.user.lastName}`,
             studentNo: classArmData.captain.studentNo,
+            avatarUrl: classArmData.captain.user.avatarUrl || null,
           }
         : undefined,
       stats: {
@@ -1223,6 +1236,7 @@ export class TeacherService {
           studentNo: student.studentNo,
           fullName: `${student.user.firstName} ${student.user.lastName}`,
           gender: student.user.gender,
+          avatarUrl: student.user.avatarUrl || null,
           assessments,
           totalScore,
           averageScore: totalPercentage,

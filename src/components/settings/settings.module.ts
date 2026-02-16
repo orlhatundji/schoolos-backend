@@ -3,10 +3,11 @@ import { SettingsController } from './settings.controller';
 import { SettingsService } from './settings.service';
 import { SchoolsModule } from '../schools/schools.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { StorageModule } from '../storage/storage.module';
 import { Encryptor } from '../../utils/encryptor';
 
 @Module({
-  imports: [SchoolsModule, PrismaModule],
+  imports: [SchoolsModule, PrismaModule, StorageModule],
   controllers: [SettingsController],
   providers: [SettingsService, Encryptor],
   exports: [SettingsService],

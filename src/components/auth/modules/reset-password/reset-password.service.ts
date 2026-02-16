@@ -68,11 +68,27 @@ export class ResetPasswordService extends BaseService {
     const resetPasswordUrl = this._generateResetPasswordUrl(userNo, userType, otp);
 
     if (user.email) {
+      const userTypeLabel = this._getUserTypeLabel(userType);
       const emailInput: SendEmailInputType = {
         recipientAddress: user.email,
         recipientName: user.lastName,
         subject: 'Reset Password',
-        html: `<p>Hi ${user.firstName},</p><p>Please click the link below to reset your password:</p><p><a href="${resetPasswordUrl}">Reset Password</a></p>`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Password Reset Request</h2>
+            <p>Hi ${user.firstName},</p>
+            <p>We received a request to reset the password for your account.</p>
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0;"><strong>${userTypeLabel}:</strong> ${userNo}</p>
+            </div>
+            <p>Please click the button below to reset your password:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetPasswordUrl}" style="display: inline-block; background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+            </div>
+            <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email. Your password will remain unchanged.</p>
+            <p>Best regards,<br/>The Schos Team</p>
+          </div>
+        `,
       };
       await this.mailService.sendEmail(emailInput);
     }
@@ -102,11 +118,23 @@ export class ResetPasswordService extends BaseService {
     await this.userService.update(user.id, { password, mustUpdatePassword: false });
 
     if (user.email) {
+      const userTypeLabel = this._getUserTypeLabel(userType);
       const emailInput: SendEmailInputType = {
         recipientAddress: user.email,
         recipientName: user.lastName,
         subject: 'Password Reset Confirmation',
-        html: `<p>Hi ${user.firstName},</p><p>Your password has been successfully reset.</p>`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Password Reset Successful</h2>
+            <p>Hi ${user.firstName},</p>
+            <p>Your password has been successfully reset for your account.</p>
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0;"><strong>${userTypeLabel}:</strong> ${userNo}</p>
+            </div>
+            <p style="color: #e74c3c;"><strong>Important:</strong> If you didn't make this change, please contact support immediately.</p>
+            <p>Best regards,<br/>The Schos Team</p>
+          </div>
+        `,
       };
       await this.mailService.sendEmail(emailInput);
     }
@@ -156,6 +184,20 @@ export class ResetPasswordService extends BaseService {
         return this.configService.get<string>('adminAppBaseUrl') || this.configService.get<string>('frontendBaseUrl');
       default:
         return this.configService.get<string>('frontendBaseUrl');
+    }
+  }
+
+  private _getUserTypeLabel(userType: UserType): string {
+    switch (userType) {
+      case UserType.STUDENT:
+        return 'Student ID';
+      case UserType.TEACHER:
+        return 'Teacher ID';
+      case UserType.ADMIN:
+      case UserType.SUPER_ADMIN:
+        return 'Admin ID';
+      default:
+        return 'User ID';
     }
   }
 

@@ -4,7 +4,6 @@ import { Prisma, StudentStatus, UserType } from '@prisma/client';
 import { BaseService } from '../../common/base-service';
 import { CounterService } from '../../common/counter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PasswordHasher } from '../../utils/hasher/hasher';
 import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { SchoolsService } from '../schools';
@@ -31,7 +30,6 @@ export class StudentsService extends BaseService {
     private readonly counterService: CounterService,
     private readonly prisma: PrismaService,
     private readonly passwordGenerator: PasswordGenerator,
-    private readonly passwordHasher: PasswordHasher,
     private readonly classArmStudentService: ClassArmStudentService,
   ) {
     super(StudentsService.name);
@@ -70,17 +68,17 @@ export class StudentsService extends BaseService {
       ...userData
     } = createStudentDto;
 
-    // Use fixed default password for all students
-    const defaultPassword = 'default123';
-    const hashedPassword = await this.passwordHasher.hash(defaultPassword);
+    // Use student's surname (lowercase) as default password
+    // Note: userService.save() handles the password hashing
+    const defaultPassword = userData.lastName.toLowerCase();
 
     // Create user data with only User model fields
     const userCreateData = {
       ...userData,
-      password: hashedPassword,
+      password: defaultPassword,
       type: UserType.STUDENT,
       schoolId: schoolId,
-      mustUpdatePassword: false, // Allow students to use default password without forcing change
+      mustUpdatePassword: true, // Force students to update password on first login
       dateOfBirth: userData.dateOfBirth || new Date().toISOString().split('T')[0], // Provide default date string if not set
       email:
         userData.email ||

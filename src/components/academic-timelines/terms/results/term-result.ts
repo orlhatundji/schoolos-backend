@@ -31,6 +31,9 @@ export class TermEntity implements Term {
   @ApiProperty()
   isCurrent: boolean;
 
+  @ApiProperty()
+  isLocked: boolean;
+
   public static from(term: Term): TermEntity {
     return Object.assign(new TermEntity(), term);
   }

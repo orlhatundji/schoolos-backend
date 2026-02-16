@@ -75,4 +75,24 @@ export class TermsController {
     });
   }
 
+  @Patch(':id/lock')
+  async lockTerm(@Param('id') id: string) {
+    const term = await this.termsService.lockTerm(id);
+
+    return TermResult.from(term, {
+      status: HttpStatus.OK,
+      message: 'Term locked successfully',
+    });
+  }
+
+  @Patch(':id/unlock')
+  async unlockTerm(@Param('id') id: string) {
+    const term = await this.termsService.unlockTerm(id);
+
+    return TermResult.from(term, {
+      status: HttpStatus.OK,
+      message: 'Term unlocked successfully',
+    });
+  }
+
 }

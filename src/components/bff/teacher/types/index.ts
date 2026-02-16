@@ -77,6 +77,11 @@ export interface ClassDetails {
     attendanceRate: number;
     averageScore: number;
   };
+  topPerformers: {
+    id: string;
+    name: string;
+    score: number;
+  }[];
   recentActivities: {
     id: string;
     type: string;
@@ -123,7 +128,14 @@ export interface SubjectAssessmentScores {
   currentTerm: {
     id: string;
     name: string;
+    isLocked: boolean;
   };
+  availableTerms: {
+    id: string;
+    name: string;
+    isCurrent: boolean;
+    isLocked: boolean;
+  }[];
   students: {
     id: string;
     studentNo: string;

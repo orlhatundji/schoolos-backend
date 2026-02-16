@@ -3,14 +3,17 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -169,15 +172,23 @@ export class TeacherController {
     type: String,
     description: 'Subject name (e.g., Mathematics, English)',
   })
+  @ApiQuery({
+    name: 'termId',
+    required: false,
+    type: String,
+    description: 'Term ID to filter by (defaults to current term)',
+  })
   async getSubjectAssessmentScores(
     @GetCurrentUserId() userId: string,
     @Query('classArmId') classArmId: string,
     @Query('subjectName') subjectName: string,
+    @Query('termId') termId?: string,
   ) {
     const scores = await this.teacherService.getSubjectAssessmentScores(
       userId,
       classArmId,
       subjectName,
+      termId,
     );
     return new SubjectAssessmentScoresResult(scores);
   }
@@ -659,5 +670,87 @@ export class TeacherController {
       message: 'Attendance data retrieved successfully',
       data: result,
     };
+  }
+
+  @Get('attendance/subject/status')
+  @ApiOperation({ summary: 'Check if subject attendance has been taken for a class/subject on a specific date' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String })
+  @ApiQuery({ name: 'subjectId', required: true, type: String })
+  @ApiQuery({ name: 'date', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Subject attendance status retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized' })
+  async checkSubjectAttendanceStatus(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('subjectId') subjectId: string,
+    @Query('date') date: string,
+  ) {
+    const result = await this.teacherService.checkSubjectAttendanceStatus(userId, classArmId, subjectId, date);
+    return {
+      success: true,
+      message: 'Subject attendance status retrieved successfully',
+      data: result,
+    };
+  }
+
+  @Get('attendance/subject/data')
+  @ApiOperation({ summary: 'Get existing subject attendance data for a class/subject on a specific date' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String })
+  @ApiQuery({ name: 'subjectId', required: true, type: String })
+  @ApiQuery({ name: 'date', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Subject attendance data retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized' })
+  async getSubjectAttendanceData(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('subjectId') subjectId: string,
+    @Query('date') date: string,
+  ) {
+    const result = await this.teacherService.getSubjectAttendanceData(userId, classArmId, subjectId, date);
+    return {
+      success: true,
+      message: 'Subject attendance data retrieved successfully',
+      data: result,
+    };
+  }
+
+  // Classroom Broadsheet Endpoints
+  @Get('classroom-broadsheet')
+  @ApiOperation({ summary: 'Get broadsheet data (class teacher only)' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String, description: 'Class arm ID' })
+  @ApiResponse({ status: 200, description: 'Broadsheet data retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a class teacher for this classroom' })
+  async getClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+  ) {
+    const data = await this.teacherService.getClassroomBroadsheet(userId, classArmId);
+    return {
+      success: true,
+      message: 'Broadsheet data retrieved successfully',
+      data,
+    };
+  }
+
+  @Get('classroom-broadsheet/download')
+  @ApiOperation({ summary: 'Download broadsheet as Excel (class teacher only)' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String, description: 'Class arm ID' })
+  @ApiResponse({ status: 200, description: 'Excel file downloaded successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a class teacher for this classroom' })
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async downloadClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Query('classArmId') classArmId: string,
+    @Res() res: Response,
+    @Query('termId') termId?: string,
+    @Query('cumulative') cumulative?: string,
+  ) {
+    const isCumulative = cumulative === 'true';
+    const buffer = await this.teacherService.downloadClassroomBroadsheet(userId, classArmId, termId, isCumulative);
+    res.set({
+      'Content-Disposition': 'attachment; filename="broadsheet.xlsx"',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    res.send(buffer);
   }
 }

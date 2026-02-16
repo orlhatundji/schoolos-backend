@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Calibri', Arial, sans-serif; font-size: 12px; color: #2c2c2c; background: #fff; }
+
+  .header {
+    background: #f7f7f7; border-bottom: 3px solid #333;
+    padding: 15px 25px; display: flex; align-items: center; gap: 15px;
+  }
+  .logo-box {
+    width: 50px; height: 50px; border: 2px solid #555;
+    overflow: hidden; background: #fff; flex-shrink: 0;
+  }
+  .logo-box img { width: 100%; height: 100%; object-fit: contain; padding: 2px; }
+  .header-text { flex: 1; }
+  .school-name { font-size: 20px; font-weight: 700; color: #1a1a1a; text-transform: uppercase; letter-spacing: 1px; }
+  .school-details { font-size: 10px; color: #666; margin-top: 2px; }
+  .report-label {
+    text-align: right; font-size: 11px; font-weight: 600;
+    color: #555; text-transform: uppercase; letter-spacing: 2px;
+    border-left: 3px solid #333; padding-left: 12px;
+  }
+  .report-label-main { font-size: 14px; color: #1a1a1a; }
+
+  .content { padding: 15px 20px; }
+
+  .info-table { width: 100%; margin-bottom: 12px; }
+  .info-table td { padding: 3px 0; font-size: 10px; vertical-align: top; }
+  .info-table .label { font-weight: 600; color: #555; width: 90px; text-transform: uppercase; font-size: 9px; }
+  .info-table .value { color: #1a1a1a; font-weight: 600; }
+  .info-table .divider { width: 20px; }
+
+  .section-divider { height: 1px; background: #ddd; margin: 8px 0; }
+
+  .results-table { width: 100%; border-collapse: collapse; }
+  .results-table thead th {
+    background: #333; color: #fff;
+    padding: 7px 4px; font-size: 9px; text-align: center;
+    text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600;
+  }
+  .results-table tbody td {
+    padding: 6px 4px; text-align: center; font-size: 10px;
+    border-bottom: 1px solid #eee;
+  }
+  .results-table tbody tr:nth-child(even) { background: #fafafa; }
+  .subject-name { text-align: left !important; font-weight: 600; padding-left: 8px !important; color: #1a1a1a; }
+  .total-cell { font-weight: 700; }
+
+  .score-bar {
+    display: inline-block; height: 4px; border-radius: 2px;
+    vertical-align: middle; margin-left: 4px;
+  }
+
+  .summary-bar {
+    margin-top: 12px; background: #f7f7f7; border: 1px solid #ddd;
+    display: flex; padding: 0;
+  }
+  .summary-cell {
+    flex: 1; text-align: center; padding: 8px 5px;
+    border-right: 1px solid #ddd;
+  }
+  .summary-cell:last-child { border-right: none; }
+  .summary-cell .label { font-size: 8px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; }
+  .summary-cell .value { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+
+  .grading-key { margin-top: 10px; }
+  .grading-key table { border-collapse: collapse; font-size: 9px; }
+  .grading-key th { background: #333; color: #fff; padding: 3px 8px; }
+  .grading-key td { border: 1px solid #ddd; padding: 3px 8px; text-align: center; background: #fafafa; }
+
+  .remarks-section { margin-top: 12px; }
+  .remark-block {
+    padding: 8px 0; border-bottom: 1px solid #eee;
+  }
+  .remark-label {
+    font-size: 9px; font-weight: 600; text-transform: uppercase;
+    color: #555; letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+  .remark-underline { border-bottom: 1px solid #ccc; height: 16px; }
+
+  .signature-grid {
+    margin-top: 15px; display: flex; justify-content: space-between; gap: 30px;
+  }
+  .sig-block { flex: 1; text-align: center; }
+  .sig-line { border-bottom: 1px solid #333; height: 25px; margin-bottom: 4px; }
+  .sig-title { font-size: 9px; font-weight: 600; text-transform: uppercase; color: #555; letter-spacing: 0.3px; }
+
+  .footer {
+    margin-top: 15px; padding: 6px 20px;
+    background: #333; color: #ccc;
+    display: flex; justify-content: space-between;
+    font-size: 8px; letter-spacing: 0.3px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-box">
+    <img src="{{logoSrc}}" alt="Logo">
+  </div>
+  <div class="header-text">
+    <div class="school-name">{{school.name}}</div>
+    <div class="school-details">
+      {{#if school.motto}}{{school.motto}}{{/if}}
+      {{#if school.address}} &mdash; {{school.address}}{{/if}}
+    </div>
+  </div>
+  <div class="report-label">
+    <div class="report-label-main">Report Card</div>
+    Academic Report
+  </div>
+</div>
+
+<div class="content">
+
+  <table class="info-table">
+    <tr>
+      <td class="label">Name</td>
+      <td class="value">{{student.fullName}}</td>
+      <td class="divider"></td>
+      <td class="label">Student No</td>
+      <td class="value">{{student.studentNo}}</td>
+      <td class="divider"></td>
+      <td class="label">Class</td>
+      <td class="value">{{student.classArm.level.name}} {{student.classArm.name}}</td>
+    </tr>
+    <tr>
+      <td class="label">Session</td>
+      <td class="value">{{academicSession.academicYear}}</td>
+      <td class="divider"></td>
+      <td class="label">Term</td>
+      <td class="value">{{term.name}}</td>
+      <td class="divider"></td>
+      <td class="label">Period</td>
+      <td class="value">{{termStartDate}} - {{termEndDate}}</td>
+    </tr>
+  </table>
+
+  <div class="section-divider"></div>
+
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th style="width:28px">S/N</th>
+        <th style="text-align:left; padding-left:8px;">Subject</th>
+        {{#each assessmentStructures}}
+        <th>{{this.name}}<br><small>({{this.maxScore}})</small></th>
+        {{/each}}
+        <th>Total</th>
+        <th>Grade</th>
+        <th style="width:70px">Remark</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each subjects}}
+      <tr>
+        <td style="color:#888;">{{this.serialNumber}}</td>
+        <td class="subject-name">{{this.name}}</td>
+        {{#each this.assessments}}
+        <td style="font-weight:600;">
+          {{#if this.score}}{{this.score}}{{else}}<span style="color:#ddd">-</span>{{/if}}
+        </td>
+        {{/each}}
+        <td class="total-cell">{{this.totalScore}}</td>
+        <td style="font-weight:700; color:{{this.gradeColor}};">{{or this.grade "-"}}</td>
+        <td style="color:{{this.remarkColor}}; font-weight:600; font-size:9px;">{{this.remark}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <div class="summary-bar">
+    <div class="summary-cell">
+      <div class="label">Total Subjects</div>
+      <div class="value">{{overallStats.totalSubjects}}</div>
+    </div>
+    <div class="summary-cell">
+      <div class="label">Total Score</div>
+      <div class="value">{{overallStats.totalScore}}</div>
+    </div>
+    <div class="summary-cell">
+      <div class="label">Average Score</div>
+      <div class="value">{{fixed overallStats.averageScore 1}}%</div>
+    </div>
+    <div class="summary-cell">
+      <div class="label">Overall Grade</div>
+      <div class="value">{{or overallStats.grade "N/A"}}</div>
+    </div>
+    <div class="summary-cell">
+      <div class="label">Class Position</div>
+      <div class="value">{{or overallStats.position "N/A"}} / {{overallStats.totalStudents}}</div>
+    </div>
+  </div>
+
+  {{#if gradingModel}}
+  <div class="grading-key">
+    <table>
+      <tr>
+        <th>Grade</th>
+        {{#each gradingModel}}
+        <th>{{@key}}</th>
+        {{/each}}
+      </tr>
+      <tr>
+        <td><strong>Range</strong></td>
+        {{#each gradingModel}}
+        <td>{{this.[0]}} - {{this.[1]}}</td>
+        {{/each}}
+      </tr>
+    </table>
+  </div>
+  {{/if}}
+
+  <div class="remarks-section">
+    <div class="remark-block">
+      <div class="remark-label">Class Teacher's Remark</div>
+      <div class="remark-underline"></div>
+    </div>
+    <div class="remark-block">
+      <div class="remark-label">Principal's Remark</div>
+      <div class="remark-underline"></div>
+    </div>
+  </div>
+
+  <div class="signature-grid">
+    <div class="sig-block">
+      <div class="sig-line"></div>
+      <div class="sig-title">Class Teacher</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line"></div>
+      <div class="sig-title">Head of Department</div>
+    </div>
+    <div class="sig-block">
+      <div class="sig-line"></div>
+      <div class="sig-title">Principal</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <span>Generated on: {{generatedDate}}</span>
+  <span>Powered by Schos</span>
+</div>
+
+</body>
+</html>

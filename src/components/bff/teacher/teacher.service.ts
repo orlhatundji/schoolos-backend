@@ -9,6 +9,7 @@ import { PrismaService } from '../../../prisma';
 import { PasswordHasher } from '../../../utils/hasher';
 import { PaystackService } from '../../../shared/services/paystack.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
+import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import {
   ClassDetails,
   ClassStudentInfo,
@@ -35,6 +36,7 @@ export class TeacherService {
     private readonly passwordHasher: PasswordHasher,
     private readonly paystackService: PaystackService,
     private readonly templateService: AssessmentStructureTemplateService,
+    private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
   ) {}
 
   async getTeacherDashboardData(userId: string): Promise<TeacherDashboardData> {
@@ -731,10 +733,50 @@ export class TeacherService {
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private async getAttendanceRate(_teacherId: string, _sessionId: string, _termId?: string) {
-    // For new teachers with no data, return 0
-    return 0;
+  private async getAttendanceRate(teacherId: string, sessionId: string, termId?: string) {
+    // Get class arms where this teacher is the class teacher
+    const classArmIds = await this.prisma.classArm.findMany({
+      where: {
+        classTeacherId: teacherId,
+        academicSessionId: sessionId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (classArmIds.length === 0) return 0;
+
+    const ids = classArmIds.map((ca) => ca.id);
+
+    // Get today's date boundaries
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+    // Count today's class attendance records for the teacher's classes
+    const [presentCount, totalRecords] = await Promise.all([
+      this.prisma.studentAttendance.count({
+        where: {
+          classArmStudent: { classArmId: { in: ids } },
+          date: { gte: today, lt: tomorrow },
+          status: 'PRESENT',
+          deletedAt: null,
+          ...(termId && { termId }),
+        },
+      }),
+      this.prisma.studentAttendance.count({
+        where: {
+          classArmStudent: { classArmId: { in: ids } },
+          date: { gte: today, lt: tomorrow },
+          deletedAt: null,
+          ...(termId && { termId }),
+        },
+      }),
+    ]);
+
+    if (totalRecords === 0) return 0;
+
+    return Math.round((presentCount / totalRecords) * 100);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -810,6 +852,17 @@ export class TeacherService {
             student: {
               include: {
                 user: true,
+                assessments: {
+                  where: {
+                    deletedAt: null,
+                    classArmSubject: { classArmId: classArmId },
+                  },
+                  include: {
+                    classArmSubject: {
+                      include: { subject: true },
+                    },
+                  },
+                },
               },
             },
             studentAttendances: {
@@ -878,6 +931,38 @@ export class TeacherService {
     // Get recent activities (empty for new teachers)
     const recentActivities: any[] = [];
 
+    // Calculate top performers from assessment data
+    const performanceMap = new Map<
+      string,
+      { totalScore: number; totalMaxScore: number; student: any }
+    >();
+
+    classArmData.classArmStudents.forEach((cas) => {
+      const student = cas.student;
+      const assessments = (student as any).assessments || [];
+      if (assessments.length > 0) {
+        const totalScore = assessments.reduce((sum: number, a: any) => sum + a.score, 0);
+        const totalMaxScore = assessments.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
+        performanceMap.set(student.id, { totalScore, totalMaxScore, student });
+      }
+    });
+
+    const topPerformers = Array.from(performanceMap.entries())
+      .map(([studentId, data]) => ({
+        id: studentId,
+        name: `${data.student.user.firstName} ${data.student.user.lastName}`,
+        score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    // Calculate real average score from all students with assessments
+    const allScores = Array.from(performanceMap.values())
+      .map((data) => data.totalMaxScore > 0 ? (data.totalScore / data.totalMaxScore) * 100 : 0);
+    const averageScore = allScores.length > 0
+      ? Math.round((allScores.reduce((sum, s) => sum + s, 0) / allScores.length) * 100) / 100
+      : 0;
+
     return {
       id: classArmData.id,
       name: classArmData.name,
@@ -901,8 +986,9 @@ export class TeacherService {
         femaleStudents,
         averageAge,
         attendanceRate,
-        averageScore: 78.5, // Mock data - would calculate from actual assessments
+        averageScore,
       },
+      topPerformers,
       recentActivities,
     };
   }
@@ -1003,6 +1089,7 @@ export class TeacherService {
     userId: string,
     classArmId: string,
     subjectName: string,
+    termId?: string,
   ): Promise<SubjectAssessmentScores> {
     const teacher = await this.getTeacherWithRelations(userId);
     const schoolId = teacher.user.schoolId;
@@ -1045,9 +1132,33 @@ export class TeacherService {
     // Get current session/term
     const currentSession = await this.prisma.academicSession.findFirst({
       where: { isCurrent: true, schoolId },
-      include: { terms: { where: { deletedAt: null, isCurrent: true } } },
+      include: { terms: { where: { deletedAt: null }, orderBy: { startDate: 'asc' } } },
     });
-    const currentTerm = currentSession?.terms?.[0];
+
+    // Resolve selected term: use termId if provided, otherwise fall back to current term
+    let selectedTerm: { id: string; name: string; isLocked: boolean; isCurrent: boolean } | undefined;
+    if (termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: { id: termId, academicSession: { schoolId }, deletedAt: null },
+      });
+      if (!termRecord) {
+        throw new NotFoundException(`Term with ID "${termId}" not found`);
+      }
+      selectedTerm = { id: termRecord.id, name: termRecord.name, isLocked: termRecord.isLocked, isCurrent: termRecord.isCurrent };
+    } else {
+      const currentTermRecord = currentSession?.terms?.find((t) => t.isCurrent);
+      if (currentTermRecord) {
+        selectedTerm = { id: currentTermRecord.id, name: currentTermRecord.name, isLocked: currentTermRecord.isLocked, isCurrent: currentTermRecord.isCurrent };
+      }
+    }
+
+    // Build availableTerms from all terms in the current session
+    const availableTerms = (currentSession?.terms || []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      isCurrent: t.isCurrent,
+      isLocked: t.isLocked,
+    }));
 
     // Get grading model
     const gradingModel = await this.prisma.gradingModel.findUnique({
@@ -1060,14 +1171,16 @@ export class TeacherService {
       include: { student: { include: { user: true } } },
     });
 
-    // Get all assessments for this classArmSubject (current session)
-    const allAssessments = await this.prisma.classArmStudentAssessment.findMany({
-      where: {
-        classArmSubjectId: classArmSubject.id,
-        deletedAt: null,
-        term: { academicSession: { isCurrent: true } },
-      },
-    });
+    // Get all assessments for this classArmSubject (selected term only)
+    const allAssessments = selectedTerm
+      ? await this.prisma.classArmStudentAssessment.findMany({
+          where: {
+            classArmSubjectId: classArmSubject.id,
+            deletedAt: null,
+            termId: selectedTerm.id,
+          },
+        })
+      : [];
 
     // Group assessments by student
     const assessmentsByStudent = new Map<string, typeof allAssessments>();
@@ -1103,7 +1216,6 @@ export class TeacherService {
 
         const totalScore = assessments.reduce((sum, a) => sum + a.score, 0);
         const totalMaxScore = assessments.reduce((sum, a) => sum + a.maxScore, 0);
-        const averageScore = assessments.length > 0 ? Math.round(totalScore / assessments.length) : 0;
         const totalPercentage = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
 
         return {
@@ -1113,7 +1225,7 @@ export class TeacherService {
           gender: student.user.gender,
           assessments,
           totalScore,
-          averageScore,
+          averageScore: totalPercentage,
           grade: this.calculateGradeFromModel(totalPercentage, gradingModel?.model),
         };
       }),
@@ -1148,9 +1260,11 @@ export class TeacherService {
         isCurrent: currentSession?.isCurrent,
       },
       currentTerm: {
-        id: currentTerm?.id,
-        name: currentTerm?.name,
+        id: selectedTerm?.id,
+        name: selectedTerm?.name,
+        isLocked: selectedTerm?.isLocked ?? false,
       },
+      availableTerms,
       classStats,
       students: studentsWithScores,
       gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
@@ -1267,13 +1381,13 @@ export class TeacherService {
     if (!authorized) throw new Error('You are not authorized to teach this subject in this class');
 
     // Resolve term
-    let term: { id: string; academicSessionId: string };
+    let term: { id: string; academicSessionId: string; isLocked: boolean };
     if (createDto.termId) {
       const termRecord = await this.prisma.term.findFirst({
         where: { id: createDto.termId, academicSession: { schoolId } },
       });
       if (!termRecord) throw new Error(`Term with ID "${createDto.termId}" not found`);
-      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     } else {
       const currentSession = await this.prisma.academicSession.findFirst({
         where: { isCurrent: true, schoolId },
@@ -1282,7 +1396,12 @@ export class TeacherService {
       if (!currentSession) throw new Error('No current academic session found');
       const termRecord = currentSession.terms[0];
       if (!termRecord) throw new Error(`Term "${createDto.termName}" not found in current academic session`);
-      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+    }
+
+    // Check term lock
+    if (term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
     }
 
     // Look up assessment type from template
@@ -1356,6 +1475,11 @@ export class TeacherService {
     });
     if (!authorized) throw new ForbiddenException('You are not authorized to modify this assessment score');
 
+    // Check term lock
+    if (existing.term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+    }
+
     // Update directly — no totalScore recalculation needed
     const updated = await this.prisma.classArmStudentAssessment.update({
       where: { id: assessmentId },
@@ -1404,6 +1528,11 @@ export class TeacherService {
       where: { classArmSubjectId: existing.classArmSubjectId, teacherId: teacher.id, deletedAt: null },
     });
     if (!authorized) throw new Error('You are not authorized to delete this assessment score');
+
+    // Check term lock
+    if (existing.term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+    }
 
     // Soft delete — no totalScore recalculation needed
     await this.prisma.classArmStudentAssessment.update({
@@ -1521,13 +1650,13 @@ export class TeacherService {
 
     // ── 3. Resolve term ──
     if (!termId && !termName) throw new Error('Either termId or termName is required');
-    let term: { id: string; name: string; academicSessionId: string };
+    let term: { id: string; name: string; academicSessionId: string; isLocked: boolean };
     if (termId) {
       const termRecord = await this.prisma.term.findFirst({
         where: { id: termId, academicSession: { schoolId } },
       });
       if (!termRecord) throw new Error(`Term with ID "${termId}" not found`);
-      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     } else {
       const currentSession = await this.prisma.academicSession.findFirst({
         where: { isCurrent: true, schoolId },
@@ -1536,7 +1665,12 @@ export class TeacherService {
       if (!currentSession) throw new Error('No current academic session found');
       const termRecord = currentSession.terms[0];
       if (!termRecord) throw new Error(`Term "${termName}" not found in current academic session`);
-      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId };
+      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+    }
+
+    // ── 3a. Check term lock ──
+    if (term.isLocked) {
+      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
     }
 
     // ── 4. Resolve assessment template ──
@@ -2035,7 +2169,7 @@ export class TeacherService {
       throw new NotFoundException('Term not found');
     }
 
-    // Get students in the class arm
+    // Get students in the class arm with their ClassArmStudent records
     const students = await this.prisma.student.findMany({
       where: {
         classArmStudents: {
@@ -2048,6 +2182,12 @@ export class TeacherService {
       },
       include: {
         user: true,
+        classArmStudents: {
+          where: {
+            classArmId: dto.classArmId,
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -2064,24 +2204,34 @@ export class TeacherService {
         );
       }
 
-      // Upsert attendance record
-      const attendanceRecord = await this.prisma.studentAttendance.upsert({
+      // Get the ClassArmStudent record for this student and class
+      const classArmStudent = student.classArmStudents.find(
+        (cas) => cas.classArmId === dto.classArmId && cas.isActive,
+      );
+      if (!classArmStudent) {
+        throw new NotFoundException(
+          `Student with ID ${studentAttendance.studentId} is not enrolled in this class`,
+        );
+      }
+
+      // Upsert attendance record in the SubjectAttendance table
+      const attendanceRecord = await this.prisma.subjectAttendance.upsert({
         where: {
-          classArmStudentId_date: {
-            classArmStudentId: studentAttendance.studentId,
+          classArmStudentId_date_subjectId: {
+            classArmStudentId: classArmStudent.id,
             date: attendanceDate,
+            subjectId: dto.subjectId,
           },
         },
         update: {
           status: studentAttendance.status,
-          ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
           termId: dto.termId,
         },
         create: {
-          classArmStudentId: studentAttendance.studentId,
+          classArmStudentId: classArmStudent.id,
           date: attendanceDate,
           status: studentAttendance.status,
-          ...(studentAttendance.remarks && { remarks: studentAttendance.remarks }),
+          subjectId: dto.subjectId,
           termId: dto.termId,
         },
       });
@@ -2266,6 +2416,156 @@ export class TeacherService {
   }
 
   /**
+   * Check if subject attendance has been taken for a class/subject on a specific date
+   */
+  async checkSubjectAttendanceStatus(userId: string, classArmId: string, subjectId: string, date: string) {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+      include: { user: { include: { school: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    // Check if teacher is authorized (subject teacher or class teacher)
+    const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: { teacherId: teacher.id, deletedAt: null, classArmSubject: { classArmId, subjectId } },
+    });
+    if (!classArmTeacher && !subjectTeacher) {
+      throw new ForbiddenException('You are not authorized to check attendance for this subject and class');
+    }
+
+    // Parse date
+    let attendanceDate: Date;
+    if (date.includes('T')) {
+      attendanceDate = new Date(date);
+    } else {
+      const [year, month, day] = date.split('-').map(Number);
+      attendanceDate = new Date(year, month - 1, day);
+    }
+    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+
+    const attendanceCount = await this.prisma.subjectAttendance.count({
+      where: {
+        classArmStudent: { classArmId },
+        subjectId,
+        date: { gte: startOfDay, lte: endOfDay },
+        deletedAt: null,
+      },
+    });
+
+    return {
+      classArmId,
+      subjectId,
+      date: attendanceDate,
+      hasAttendanceBeenTaken: attendanceCount > 0,
+      attendanceCount,
+    };
+  }
+
+  /**
+   * Get existing subject attendance data for a class/subject on a specific date
+   */
+  async getSubjectAttendanceData(userId: string, classArmId: string, subjectId: string, date: string) {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+      include: { user: { include: { school: true } } },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    // Check if teacher is authorized
+    const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: { teacherId: teacher.id, deletedAt: null, classArmSubject: { classArmId, subjectId } },
+    });
+    if (!classArmTeacher && !subjectTeacher) {
+      throw new ForbiddenException('You are not authorized to view attendance for this subject and class');
+    }
+
+    // Parse date
+    let attendanceDate: Date;
+    if (date.includes('T')) {
+      attendanceDate = new Date(date);
+    } else {
+      const [year, month, day] = date.split('-').map(Number);
+      attendanceDate = new Date(year, month - 1, day);
+    }
+    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+
+    // Get class arm info
+    const classArm = await this.prisma.classArm.findFirst({
+      where: { id: classArmId, deletedAt: null },
+      include: { level: true },
+    });
+    if (!classArm) throw new NotFoundException('Class arm not found');
+
+    // Get all students in the class
+    const students = await this.prisma.student.findMany({
+      where: {
+        classArmStudents: { some: { classArmId, isActive: true } },
+        deletedAt: null,
+      },
+      include: {
+        user: true,
+        classArmStudents: { where: { classArmId, isActive: true } },
+      },
+    });
+
+    // Get subject attendance records for this date and subject
+    const attendanceRecords = await this.prisma.subjectAttendance.findMany({
+      where: {
+        classArmStudent: { classArmId },
+        subjectId,
+        date: { gte: startOfDay, lte: endOfDay },
+        deletedAt: null,
+      },
+    });
+
+    // Create attendance data for all students
+    const attendanceData = students.map((student) => {
+      const classArmStudent = student.classArmStudents[0];
+      const attendanceRecord = classArmStudent
+        ? attendanceRecords.find((record) => record.classArmStudentId === classArmStudent.id)
+        : undefined;
+      return {
+        studentId: student.id,
+        studentName: `${student.user.firstName} ${student.user.lastName}`,
+        studentNo: student.studentNo,
+        status: attendanceRecord?.status || 'ABSENT',
+        remarks: '',
+        date: attendanceRecord?.date || attendanceDate,
+      };
+    });
+
+    // Calculate statistics
+    const presentCount = attendanceData.filter((record) => record.status === 'PRESENT').length;
+    const absentCount = attendanceData.filter((record) => record.status === 'ABSENT').length;
+    const lateCount = attendanceData.filter((record) => record.status === 'LATE').length;
+    const excusedCount = attendanceData.filter((record) => record.status === 'EXCUSED').length;
+    const totalStudents = attendanceData.length;
+    const attendancePercentage = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+
+    return {
+      classArmId,
+      subjectId,
+      classArmName: classArm.name,
+      date: attendanceDate,
+      attendanceData,
+      totalStudents,
+      presentCount,
+      absentCount,
+      lateCount,
+      excusedCount,
+      attendancePercentage,
+    };
+  }
+
+  /**
    * Get existing attendance data for a class on a specific date
    */
   async getClassAttendanceData(userId: string, classArmId: string, date: string) {
@@ -2289,11 +2589,23 @@ export class TeacherService {
       throw new ForbiddenException('You are not authorized to view attendance for this class');
     }
 
-    const attendanceDate = new Date(date);
+    // Parse the date string and create proper date boundaries
+    // Handle both 'YYYY-MM-DD' format and full ISO strings
+    let attendanceDate: Date;
+    if (date.includes('T')) {
+      attendanceDate = new Date(date);
+    } else {
+      const [year, month, day] = date.split('-').map(Number);
+      attendanceDate = new Date(year, month - 1, day);
+    }
     const startOfDay = new Date(
       attendanceDate.getFullYear(),
       attendanceDate.getMonth(),
       attendanceDate.getDate(),
+      0,
+      0,
+      0,
+      0,
     );
     const endOfDay = new Date(
       attendanceDate.getFullYear(),
@@ -2312,7 +2624,7 @@ export class TeacherService {
     });
     if (!classArm) throw new NotFoundException('Class arm not found');
 
-    // Get all students in the class
+    // Get all students in the class with their classArmStudent records
     const students = await this.prisma.student.findMany({
       where: {
         classArmStudents: {
@@ -2323,7 +2635,12 @@ export class TeacherService {
         },
         deletedAt: null,
       },
-      include: { user: true },
+      include: {
+        user: true,
+        classArmStudents: {
+          where: { classArmId, isActive: true },
+        },
+      },
     });
 
     // Get attendance records for this date
@@ -2342,9 +2659,12 @@ export class TeacherService {
 
     // Create attendance data for all students
     const attendanceData = students.map((student) => {
-      const attendanceRecord = attendanceRecords.find(
-        (record) => record.classArmStudentId === student.id,
-      );
+      const classArmStudent = student.classArmStudents[0];
+      const attendanceRecord = classArmStudent
+        ? attendanceRecords.find(
+            (record) => record.classArmStudentId === classArmStudent.id,
+          )
+        : undefined;
       return {
         studentId: student.id,
         studentName: `${student.user.firstName} ${student.user.lastName}`,
@@ -2376,5 +2696,49 @@ export class TeacherService {
       excusedCount,
       attendancePercentage,
     };
+  }
+
+  // Classroom Broadsheet methods
+  async getClassroomBroadsheet(userId: string, classArmId: string) {
+    const { schoolId } = await this.verifyClassTeacher(userId, classArmId);
+    return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+  }
+
+  async downloadClassroomBroadsheet(userId: string, classArmId: string, termId?: string, isCumulative?: boolean): Promise<Buffer> {
+    const { schoolId } = await this.verifyClassTeacher(userId, classArmId);
+    const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data, termId, isCumulative);
+  }
+
+  private async verifyClassTeacher(
+    userId: string,
+    classArmId: string,
+  ): Promise<{ schoolId: string; teacherId: string }> {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+      include: { user: { select: { schoolId: true } } },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    const classArm = await this.prisma.classArm.findFirst({
+      where: {
+        id: classArmId,
+        deletedAt: null,
+        academicSession: { isCurrent: true },
+      },
+    });
+
+    if (!classArm) {
+      throw new NotFoundException('Class not found in current session');
+    }
+
+    if (classArm.classTeacherId !== teacher.id) {
+      throw new ForbiddenException('You are not the class teacher for this classroom');
+    }
+
+    return { schoolId: teacher.user.schoolId, teacherId: teacher.id };
   }
 }

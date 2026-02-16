@@ -61,6 +61,7 @@ import { SingleStudentDetailsResult } from './results/single-student-details.res
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
 import { DashboardSummaryResult } from './results/dashboard-summary.result';
+import { AdminTopClassChampionsResult } from './results/admin-top-class-champions.result';
 
 @Controller('bff/admin')
 @ApiTags('BFF - Admin')
@@ -105,6 +106,13 @@ export class BffAdminController {
   async getClassroomsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getClassroomsViewData(userId);
     return new AdminClassroomsViewResult(data);
+  }
+
+  @Get('top-class-champions')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getTopClassChampions(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getTopClassChampions(userId);
+    return new AdminTopClassChampionsResult(data);
   }
 
   @Get('teachers-view')
@@ -198,6 +206,36 @@ export class BffAdminController {
     const buffer = await this.bffAdminService.generateBroadsheet(userId, subjectId, classArmId);
     res.set({
       'Content-Disposition': 'attachment; filename="broadsheet.xlsx"',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    res.send(buffer);
+  }
+
+  @Get('classroom/:classArmId/broadsheet')
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('classArmId') classArmId: string,
+  ) {
+    return this.bffAdminService.getClassroomBroadsheet(userId, classArmId);
+  }
+
+  @Get('classroom/:classArmId/broadsheet/download')
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async downloadClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('classArmId') classArmId: string,
+    @Res() res: Response,
+    @Query('termId') termId?: string,
+    @Query('cumulative') cumulative?: string,
+  ) {
+    const isCumulative = cumulative === 'true';
+    const buffer = await this.bffAdminService.downloadClassroomBroadsheet(userId, classArmId, termId, isCumulative);
+    res.set({
+      'Content-Disposition': 'attachment; filename="classroom-broadsheet.xlsx"',
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     res.send(buffer);

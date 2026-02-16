@@ -402,6 +402,7 @@ export class BffAdminStudentService {
             classArm: {
               include: {
                 level: true,
+                department: true,
                 academicSession: true,
               },
             },
@@ -481,6 +482,7 @@ export class BffAdminStudentService {
       dateAdmitted: student.admissionDate?.toISOString() || null,
       className: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
       classLevel: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
+      departmentName: student.classArmStudents?.[0]?.classArm?.department?.name || null,
       averageGrade: 0, // This would need to be calculated from actual grades
       isPresent: Math.random() > 0.1, // Simulated attendance
       attendanceRate: Math.floor(Math.random() * 40) + 60, // 60-100% attendance rate
@@ -536,6 +538,7 @@ export class BffAdminStudentService {
             classArm: {
               include: {
                 level: true,
+                department: true,
                 academicSession: true,
               },
             },

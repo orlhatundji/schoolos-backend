@@ -183,6 +183,7 @@ export class AssessmentsController {
   async processBulkUpload(
     @GetCurrentUserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body('termId') termId?: string,
   ) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -205,6 +206,7 @@ export class AssessmentsController {
       file.buffer,
       user.schoolId,
       userId,
+      termId,
     );
 
     const successCount = result.success.length;

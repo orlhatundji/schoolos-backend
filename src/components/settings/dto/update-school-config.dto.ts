@@ -151,6 +151,11 @@ export class UpdateSchoolConfigDto {
   @IsString()
   colorScheme?: string;
 
+  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'] })
+  @IsOptional()
+  @IsString()
+  resultTemplateId?: string;
+
   @ApiProperty({ description: 'School address', type: UpdateSchoolAddressDto, required: false })
   @IsOptional()
   @IsObject()

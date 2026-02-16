@@ -523,6 +523,7 @@ export class StudentService extends BaseService {
         motto: school?.motto || undefined,
         logoUrl: school?.logoUrl || undefined,
         address: schoolAddress,
+        resultTemplateId: school?.resultTemplateId || 'classic',
       },
       student: {
         id: student.id,

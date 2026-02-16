@@ -85,6 +85,16 @@ export class TermsService extends BaseService {
     return this.termsRepository.delete({ id });
   }
 
+  async lockTerm(id: string): Promise<Term> {
+    await this.getTermById(id);
+    return this.termsRepository.update({ id }, { isLocked: true });
+  }
+
+  async unlockTerm(id: string): Promise<Term> {
+    await this.getTermById(id);
+    return this.termsRepository.update({ id }, { isLocked: false });
+  }
+
   async setCurrentTerm(id: string): Promise<Term> {
     // First, get the term to find its academic session
     const term = await this.getTermById(id);

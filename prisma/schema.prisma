@@ -232,7 +232,7 @@ model Level {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?
-  code              String             @unique
+  code              String
   classArms         ClassArm[]
   progressionsFrom  LevelProgression[] @relation("ProgressionFromLevel")
   progressionsTo    LevelProgression[] @relation("ProgressionToLevel")
@@ -241,6 +241,7 @@ model Level {
   promotionsFrom    StudentPromotion[] @relation("PromotionFromLevel")
   promotionsTo      StudentPromotion[] @relation("PromotionToLevel")
 
+  @@unique([code, schoolId])
   @@map("levels")
 }
 
@@ -258,13 +259,14 @@ model Department {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   deletedAt DateTime?
-  code      String     @unique
+  code      String
   classArms ClassArm[]
   school    School     @relation(fields: [schoolId], references: [id])
   hod       Hod?
   subjects  Subject[]
   teachers  Teacher[]
 
+  @@unique([code, schoolId])
   @@index([schoolId])
   @@map("departments")
 }
@@ -289,7 +291,7 @@ model ClassArm {
   captainId               String?                  @unique
   classTeacherId          String?
   location                String?
-  slug                    String                   @unique
+  slug                    String
   classArmStudents        ClassArmStudent[]
   classArmSubjects        ClassArmSubject[]
   classArmTeachers        ClassArmTeacher[]
@@ -303,6 +305,7 @@ model ClassArm {
   promotionsFrom          StudentPromotion[]       @relation("PromotionFromClassArm")
   promotionsTo            StudentPromotion[]       @relation("PromotionToClassArm")
 
+  @@unique([slug, schoolId])
   @@unique([name, levelId, academicSessionId, schoolId], name: "unique_class_arm_per_level_session")
   @@map("class_arms")
 }

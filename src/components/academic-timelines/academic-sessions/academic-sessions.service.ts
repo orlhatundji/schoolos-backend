@@ -53,6 +53,14 @@ export class AcademicSessionsService extends BaseService {
 
     // Use a transaction to ensure all operations succeed or fail together
     const result = await this.prisma.$transaction(async (tx) => {
+      // If marking as current, unset isCurrent on all other sessions for this school
+      if (dataWithSchoolId.isCurrent) {
+        await tx.academicSession.updateMany({
+          where: { schoolId: user.schoolId, isCurrent: true },
+          data: { isCurrent: false },
+        });
+      }
+
       // Create the academic session
       const newSession = await tx.academicSession.create({
         data: dataWithSchoolId,

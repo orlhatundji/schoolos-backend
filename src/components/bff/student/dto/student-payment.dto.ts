@@ -122,6 +122,23 @@ export class PaymentVerificationDto {
   reference: string;
 }
 
+export class FeeBreakdownDto {
+  @ApiProperty()
+  feeAmount: number;
+
+  @ApiProperty()
+  platformFee: number;
+
+  @ApiProperty()
+  paystackFee: number;
+
+  @ApiProperty()
+  studentTotal: number;
+
+  @ApiProperty()
+  schoolReceives: number;
+}
+
 export class PaystackPaymentResponseDto {
   @ApiProperty()
   success: boolean;
@@ -134,5 +151,7 @@ export class PaystackPaymentResponseDto {
     authorization_url: string;
     access_code: string;
     reference: string;
+    feeBreakdown: FeeBreakdownDto;
+    bankAccountMissing: boolean;
   };
 }

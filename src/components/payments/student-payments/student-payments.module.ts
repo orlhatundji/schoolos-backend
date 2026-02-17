@@ -5,10 +5,11 @@ import { StudentPaymentsRepository } from './student-payments.repository';
 import { PrismaModule } from '../../../prisma/prisma.module';
 import { AuthModule } from '../../auth/auth.module';
 import { RolesManagerModule } from '../../roles-manager/roles-manager.module';
+import { SharedServicesModule } from '../../../shared/shared-services.module';
 import { Encryptor } from '../../../utils/encryptor';
 
 @Module({
-  imports: [PrismaModule, AuthModule, RolesManagerModule],
+  imports: [PrismaModule, AuthModule, RolesManagerModule, SharedServicesModule],
   controllers: [StudentPaymentsController],
   providers: [StudentPaymentsService, StudentPaymentsRepository, Encryptor],
   exports: [StudentPaymentsService],

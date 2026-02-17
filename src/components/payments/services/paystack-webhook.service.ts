@@ -85,9 +85,18 @@ export class PaystackWebhookService {
       });
 
       if (studentPayment) {
-        // Handle student payment
-        const amountPaid = this.paystackService.convertFromKobo(amount);
-        const newPaidAmount = Number(studentPayment.paidAmount) + amountPaid;
+        // Handle student payment — use original fee amount from PlatformTransaction if available
+        const platformTx = await this.prisma.platformTransaction.findUnique({
+          where: { paymentReference: reference },
+        });
+
+        // If we have a PlatformTransaction, use the recorded feeAmount so the
+        // StudentPayment reflects the actual school fee (not the inflated total)
+        const amountToCredit = platformTx
+          ? Number(platformTx.feeAmount)
+          : this.paystackService.convertFromKobo(amount);
+
+        const newPaidAmount = Number(studentPayment.paidAmount) + amountToCredit;
         const totalAmount = Number(studentPayment.amount);
         const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
 
@@ -97,15 +106,27 @@ export class PaystackWebhookService {
             paidAmount: newPaidAmount,
             status: newStatus,
             paidAt: new Date(),
-            notes: `Payment completed via webhook. Reference: ${reference}. Amount: ${amountPaid}`,
+            notes: `Payment completed via webhook. Reference: ${reference}. Amount: ${amountToCredit}`,
           },
         });
 
+        // Update PlatformTransaction to SETTLED
+        if (platformTx) {
+          await this.prisma.platformTransaction.update({
+            where: { id: platformTx.id },
+            data: {
+              status: 'SETTLED',
+              settledAt: new Date(),
+            },
+          });
+        }
+
         await this.logPaymentActivity(studentPayment.student.userId, 'PAYMENT_COMPLETED', {
           paymentId: studentPayment.id,
-          amount: amountPaid,
+          amount: amountToCredit,
           reference,
           status: newStatus,
+          platformCommission: platformTx ? Number(platformTx.platformCommission) : 0,
         });
 
         return { success: true, message: 'Student payment processed successfully' };
@@ -180,6 +201,17 @@ export class PaystackWebhookService {
             notes: `Payment failed via webhook. Reference: ${reference}. Reason: ${gateway_response}`,
           },
         });
+
+        // Update PlatformTransaction to FAILED
+        const platformTx = await this.prisma.platformTransaction.findUnique({
+          where: { paymentReference: reference },
+        });
+        if (platformTx) {
+          await this.prisma.platformTransaction.update({
+            where: { id: platformTx.id },
+            data: { status: 'FAILED' },
+          });
+        }
 
         await this.logPaymentActivity(studentPayment.student.userId, 'PAYMENT_FAILED', {
           paymentId: studentPayment.id,

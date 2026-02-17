@@ -70,4 +70,4 @@ test-prefects.js
 test-seed-state.js
 verify-refs.js
 seed-minimal.ts
-.md
+*.md

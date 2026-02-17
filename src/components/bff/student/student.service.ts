@@ -3,6 +3,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaystackService } from '../../../shared/services/paystack.service';
+import { FeeCalculationService } from '../../../shared/services/fee-calculation.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import {
   StudentAttendanceData,
@@ -20,6 +21,7 @@ export class StudentService extends BaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paystackService: PaystackService,
+    private readonly feeCalculationService: FeeCalculationService,
     private readonly templateService: AssessmentStructureTemplateService,
   ) {
     super(StudentService.name);
@@ -1156,9 +1158,21 @@ export class StudentService extends BaseService {
     }));
   }
 
-  async initiatePayment(userId: string, paymentId: string, amount?: number): Promise<{ authorization_url: string; access_code: string; reference: string }> {
+  async initiatePayment(userId: string, paymentId: string, amount?: number): Promise<{
+    authorization_url: string;
+    access_code: string;
+    reference: string;
+    feeBreakdown: {
+      feeAmount: number;
+      platformFee: number;
+      paystackFee: number;
+      studentTotal: number;
+      schoolReceives: number;
+    };
+    bankAccountMissing: boolean;
+  }> {
     const student = await this.getStudentByUserId(userId);
-    
+
     // Get the payment record
     const payment = await this.prisma.studentPayment.findFirst({
       where: {
@@ -1175,19 +1189,29 @@ export class StudentService extends BaseService {
       throw new NotFoundException('Payment not found or not available for payment');
     }
 
-    // Calculate payment amount
-    const paymentAmount = amount || (Number(payment.amount) - Number(payment.paidAmount));
-    
-    if (paymentAmount <= 0) {
+    // Calculate payment amount (the school fee portion)
+    const feeAmount = amount || (Number(payment.amount) - Number(payment.paidAmount));
+
+    if (feeAmount <= 0) {
       throw new BadRequestException('Payment amount must be greater than zero');
     }
+
+    // Fetch school's bank account + subaccount code
+    const bankAccount = await this.prisma.schoolBankAccount.findUnique({
+      where: { schoolId: student.user.schoolId },
+    });
+
+    const bankAccountMissing = !bankAccount?.paystackSubaccountCode;
+
+    // Calculate fee breakdown
+    const breakdown = this.feeCalculationService.calculateStudentTotal(feeAmount);
 
     // Generate reference
     const reference = this.paystackService.generateReference('STU_PAY');
 
-    // Initialize payment with Paystack
-    const paystackResponse = await this.paystackService.initializePayment({
-      amount: this.paystackService.convertToKobo(paymentAmount),
+    // Build Paystack request
+    const paystackRequest: any = {
+      amount: this.paystackService.convertToKobo(breakdown.studentTotal),
       email: student.user.email || `${student.studentNo}@school.com`,
       reference,
       metadata: {
@@ -1195,8 +1219,21 @@ export class StudentService extends BaseService {
         paymentId: payment.id,
         studentNo: student.studentNo,
         paymentStructureId: payment.paymentStructureId,
+        feeAmount,
+        platformFee: breakdown.platformFee,
+        paystackFee: breakdown.paystackFee,
+        studentTotal: breakdown.studentTotal,
       },
-    });
+    };
+
+    // If school has a subaccount, route payment to them
+    if (!bankAccountMissing) {
+      paystackRequest.subaccount = bankAccount.paystackSubaccountCode;
+      paystackRequest.transaction_charge = this.paystackService.convertToKobo(breakdown.platformFee);
+    }
+
+    // Initialize payment with Paystack
+    const paystackResponse = await this.paystackService.initializePayment(paystackRequest);
 
     // Store payment reference in database for verification
     await this.prisma.studentPayment.update({
@@ -1206,10 +1243,32 @@ export class StudentService extends BaseService {
       },
     });
 
+    // Create PlatformTransaction record
+    await this.prisma.platformTransaction.create({
+      data: {
+        schoolId: student.user.schoolId,
+        studentPaymentId: payment.id,
+        paymentReference: reference,
+        totalCharged: breakdown.studentTotal,
+        feeAmount: feeAmount,
+        platformCommission: breakdown.platformFee,
+        paystackFee: breakdown.paystackFee,
+        status: 'PENDING',
+      },
+    });
+
     return {
       authorization_url: paystackResponse.data.authorization_url,
       access_code: paystackResponse.data.access_code,
       reference: paystackResponse.data.reference,
+      feeBreakdown: {
+        feeAmount,
+        platformFee: breakdown.platformFee,
+        paystackFee: breakdown.paystackFee,
+        studentTotal: breakdown.studentTotal,
+        schoolReceives: breakdown.schoolReceives,
+      },
+      bankAccountMissing,
     };
   }
 

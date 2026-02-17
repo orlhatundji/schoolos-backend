@@ -44,6 +44,15 @@ export class CreateAcademicSessionDto {
   endDate: Date;
 
   @ApiProperty({
+    example: true,
+    description: 'Whether this is the current academic session.',
+    required: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isCurrent?: boolean;
+
+  @ApiProperty({
     description: 'Array of terms to create for this academic session',
     type: [CreateTermForSessionDto],
     example: [

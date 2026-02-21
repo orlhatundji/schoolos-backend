@@ -114,6 +114,7 @@ export interface StudentDetailInfo {
   stateOfOrigin: string;
   guardianName: string;
   guardianPhone: string | null;
+  guardianEmail: string | null;
   telephone: string | null;
   className: string;
   classLevel: string;

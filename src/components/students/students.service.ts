@@ -6,6 +6,7 @@ import { CounterService } from '../../common/counter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { PasswordGenerator } from '../../utils/password/password.generator';
+import { MailQueueService } from '../../utils/mail-queue/mail-queue.service';
 import { SchoolsService } from '../schools';
 import { ClassArmStudentService } from './services/class-arm-student.service';
 import { UserTypes } from '../users/constants';
@@ -31,6 +32,7 @@ export class StudentsService extends BaseService {
     private readonly prisma: PrismaService,
     private readonly passwordGenerator: PasswordGenerator,
     private readonly classArmStudentService: ClassArmStudentService,
+    private readonly mailQueueService: MailQueueService,
   ) {
     super(StudentsService.name);
   }
@@ -143,6 +145,32 @@ export class StudentsService extends BaseService {
 
     // Create ClassArmStudent relationship
     await this.classArmStudentService.enrollStudent(student.id, classArmId, currentSession.id);
+
+    // Send welcome email with credentials (non-blocking)
+    try {
+      const recipientEmail = userCreateData.email;
+      await this.mailQueueService.add({
+        recipientAddress: recipientEmail,
+        recipientName: `${userData.firstName} ${userData.lastName}`,
+        subject: `Welcome to ${school.name} - Your Login Credentials`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Welcome to ${school.name}!</h2>
+            <p>Hi ${userData.firstName},</p>
+            <p>Your student account has been created. Here are your login credentials:</p>
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Student ID:</strong> ${studentNo}</p>
+              <p style="margin: 5px 0;"><strong>Email:</strong> ${recipientEmail}</p>
+              <p style="margin: 5px 0;"><strong>Password:</strong> ${defaultPassword}</p>
+            </div>
+            <p style="color: #e74c3c;"><strong>Important:</strong> Please change your password after your first login.</p>
+            <p>Best regards,<br/>The ${school.name} Team</p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to queue welcome email for student ${studentNo}:`, error);
+    }
 
     return student;
   }

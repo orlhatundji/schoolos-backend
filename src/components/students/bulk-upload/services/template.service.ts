@@ -30,6 +30,7 @@ export class TemplateService extends BaseService {
         'email',
         'phone',
         'classArmId',
+        'stateOfOrigin',
         'admissionNo',
         'admissionDate',
         'guardianFirstName',
@@ -45,12 +46,13 @@ export class TemplateService extends BaseService {
           'John',
           'Doe',
           'MALE',
-          '2012-05-15',
+          '15-05-2012',
           'john.doe@school.com',
           '+234-XXX-XXX-XXXX',
           classArms[0]?.id || 'class-arm-id-1',
+          'Lagos',
           'ADM001',
-          '2025-09-01',
+          '01-09-2025',
           'Jane',
           'Doe',
           'jane.doe@email.com',
@@ -61,12 +63,13 @@ export class TemplateService extends BaseService {
           'Alice',
           'Smith',
           'FEMALE',
-          '2011-08-22',
+          '22-08-2011',
           'alice.smith@school.com',
           '+234-XXX-XXX-XXXX',
           classArms[1]?.id || 'class-arm-id-2',
+          'Ogun',
           'ADM002',
-          '2025-09-01',
+          '01-09-2025',
           'Robert',
           'Smith',
           'robert.smith@email.com',
@@ -87,7 +90,7 @@ export class TemplateService extends BaseService {
       csvContent +=
         '# 2. Ensure all required fields (firstName, lastName, gender, classArmId) are filled\n';
       csvContent += '# 3. Gender must be either MALE or FEMALE\n';
-      csvContent += '# 4. Date format should be YYYY-MM-DD\n';
+      csvContent += '# 4. Date format should be DD-MM-YYYY\n';
       csvContent += '# 5. Email addresses should be valid\n';
       csvContent += '# 6. classArmId must be a valid UUID from your school\n';
       csvContent += '# 7. Remove this instruction section before uploading\n';
@@ -157,7 +160,7 @@ export class TemplateService extends BaseService {
           step: 3,
           title: 'Validate Data',
           description:
-            'Check that gender is MALE or FEMALE, dates are in YYYY-MM-DD format, and emails are valid.',
+            'Check that gender is MALE or FEMALE, dates are in DD-MM-YYYY format, and emails are valid.',
         },
         {
           step: 4,
@@ -181,11 +184,12 @@ export class TemplateService extends BaseService {
         },
       ],
       optionalFields: [
-        { field: 'dateOfBirth', description: 'Student date of birth', example: '2012-05-15' },
+        { field: 'dateOfBirth', description: 'Student date of birth', example: '15-05-2012' },
         { field: 'email', description: 'Student email address', example: 'john.doe@school.com' },
         { field: 'phone', description: 'Student phone number', example: '+234-XXX-XXX-XXXX' },
+        { field: 'stateOfOrigin', description: 'Student state of origin', example: 'Lagos' },
         { field: 'admissionNo', description: 'Custom admission number', example: 'ADM001' },
-        { field: 'admissionDate', description: 'Admission date', example: '2025-09-01' },
+        { field: 'admissionDate', description: 'Admission date', example: '01-09-2025' },
         { field: 'guardianFirstName', description: 'Guardian first name', example: 'Jane' },
         { field: 'guardianLastName', description: 'Guardian last name', example: 'Doe' },
         {
@@ -237,6 +241,7 @@ export class TemplateService extends BaseService {
         'dateOfBirth',
         'email',
         'phone',
+        'stateOfOrigin',
         'admissionNo',
         'admissionDate',
         'guardianFirstName',
@@ -253,11 +258,12 @@ export class TemplateService extends BaseService {
           'Doe',
           'MALE',
           classOptions[0] || 'Grade 1 A',
-          '2012-05-15',
+          '15-05-2012',
           'john.doe@school.com',
           '+234-XXX-XXX-XXXX',
+          'Lagos',
           'ADM001',
-          '2025-09-01',
+          '01-09-2025',
           'Jane',
           'Doe',
           'jane.doe@email.com',
@@ -269,11 +275,12 @@ export class TemplateService extends BaseService {
           'Smith',
           'FEMALE',
           classOptions[1] || 'Grade 1 B',
-          '2011-08-22',
+          '22-08-2011',
           'alice.smith@school.com',
           '+234-XXX-XXX-XXXX',
+          'Ogun',
           'ADM002',
-          '2025-09-01',
+          '01-09-2025',
           'Robert',
           'Smith',
           'robert.smith@email.com',
@@ -297,6 +304,7 @@ export class TemplateService extends BaseService {
         { wch: 12 }, // dateOfBirth
         { wch: 25 }, // email
         { wch: 18 }, // phone
+        { wch: 18 }, // stateOfOrigin
         { wch: 12 }, // admissionNo
         { wch: 12 }, // admissionDate
         { wch: 18 }, // guardianFirstName
@@ -306,6 +314,16 @@ export class TemplateService extends BaseService {
         { wch: 15 }, // guardianRelationship
       ];
       worksheet['!cols'] = colWidths;
+
+      // Set phone columns (G=phone, N=guardianPhone) to text format to preserve leading zeros
+      const phoneColLetters = ['G', 'N'];
+      for (const col of phoneColLetters) {
+        for (let row = 1; row <= 1000; row++) {
+          const cellRef = `${col}${row}`;
+          if (!worksheet[cellRef]) worksheet[cellRef] = { t: 's', v: '' };
+          worksheet[cellRef].z = '@';
+        }
+      }
 
       // Add data validation using direct comma-separated lists with XLSX workaround
       if (classOptions.length > 0) {
@@ -366,11 +384,12 @@ export class TemplateService extends BaseService {
         ['• className - Select from dropdown (available classes)'],
         [''],
         ['Optional Fields:'],
-        ['• dateOfBirth - Format: YYYY-MM-DD (e.g., 2012-05-15)'],
+        ['• dateOfBirth - Format: DD-MM-YYYY (e.g., 15-05-2012)'],
         ["• email - Student's email address"],
         ["• phone - Student's phone number"],
+        ["• stateOfOrigin - Student's state of origin (e.g., Lagos)"],
         ['• admissionNo - Custom admission number'],
-        ['• admissionDate - Format: YYYY-MM-DD (e.g., 2025-09-01)'],
+        ['• admissionDate - Format: DD-MM-YYYY (e.g., 01-09-2025)'],
         [''],
         ['Guardian Information (Optional):'],
         ["• guardianFirstName - Guardian's first name"],
@@ -385,7 +404,7 @@ export class TemplateService extends BaseService {
         ['Tips:'],
         ['• For Excel users: Use the dropdowns in the Students sheet for Gender and Class'],
         ['• For Google Sheets users: Copy class names from the "Class Options" sheet'],
-        ['• All dates should be in YYYY-MM-DD format'],
+        ['• All dates should be in DD-MM-YYYY format'],
         ['• Phone numbers can include country codes'],
         ['• Remove sample data before uploading your actual student data'],
         ['• Maximum file size: 10MB'],
@@ -451,6 +470,7 @@ export class TemplateService extends BaseService {
         'dateOfBirth',
         'email',
         'phone',
+        'stateOfOrigin',
         'admissionNo',
         'admissionDate',
         'guardianFirstName',
@@ -467,11 +487,12 @@ export class TemplateService extends BaseService {
           'Doe',
           'MALE',
           classOptions[0] || 'Grade 1 A',
-          '2012-05-15',
+          '15-05-2012',
           'john.doe@school.com',
           '+234-XXX-XXX-XXXX',
+          'Lagos',
           'ADM001',
-          '2025-09-01',
+          '01-09-2025',
           'Jane',
           'Doe',
           'jane.doe@email.com',
@@ -483,11 +504,12 @@ export class TemplateService extends BaseService {
           'Smith',
           'FEMALE',
           classOptions[1] || 'Grade 1 B',
-          '2011-08-22',
+          '22-08-2011',
           'alice.smith@school.com',
           '+234-XXX-XXX-XXXX',
+          'Ogun',
           'ADM002',
-          '2025-09-01',
+          '01-09-2025',
           'Robert',
           'Smith',
           'robert.smith@email.com',
@@ -511,7 +533,7 @@ export class TemplateService extends BaseService {
         '# 2. For className column, use one of these exact values:',
         ...classOptions.map((className) => `#    - ${className}`),
         '# 3. For gender column, use: MALE or FEMALE',
-        '# 4. Date format: YYYY-MM-DD (e.g., 2012-05-15)',
+        '# 4. Date format: DD-MM-YYYY (e.g., 15-05-2012)',
         '# 5. Remove these instruction lines before uploading',
         '# ',
         '# REQUIRED FIELDS: firstName, lastName, gender, className',
@@ -569,6 +591,7 @@ export class TemplateService extends BaseService {
         'dateOfBirth',
         'email',
         'phone',
+        'stateOfOrigin',
         'admissionDate',
         'guardianFirstName',
         'guardianLastName',
@@ -597,12 +620,13 @@ export class TemplateService extends BaseService {
         { width: 20 }, // className
         { width: 12 }, // dateOfBirth
         { width: 25 }, // email
-        { width: 18 }, // phone
+        { width: 18, style: { numFmt: '@' } }, // phone — text format to preserve leading zeros
+        { width: 18 }, // stateOfOrigin
         { width: 12 }, // admissionDate
         { width: 18 }, // guardianFirstName
         { width: 18 }, // guardianLastName
         { width: 25 }, // guardianEmail
-        { width: 18 }, // guardianPhone
+        { width: 18, style: { numFmt: '@' } }, // guardianPhone — text format
         { width: 15 }, // guardianRelationship
       ];
 
@@ -613,10 +637,11 @@ export class TemplateService extends BaseService {
           'Doe',
           'MALE',
           classOptions[0] || 'JSS1 A',
-          '2012-05-15',
+          '15-05-2012',
           'john.doe@school.com',
           '+234-XXX-XXX-XXXX',
-          '2025-09-01',
+          'Lagos',
+          '01-09-2025',
           'Jane',
           'Doe',
           'jane.doe@email.com',
@@ -628,10 +653,11 @@ export class TemplateService extends BaseService {
           'Smith',
           'FEMALE',
           classOptions[1] || 'JSS1 B',
-          '2011-08-22',
+          '22-08-2011',
           'alice.smith@school.com',
           '+234-XXX-XXX-XXXX',
-          '2025-09-01',
+          'Ogun',
+          '01-09-2025',
           'Robert',
           'Smith',
           'robert.smith@email.com',
@@ -647,7 +673,7 @@ export class TemplateService extends BaseService {
 
       // Add empty rows to ensure the column range exists for validation
       for (let i = 0; i < 50; i++) {
-        worksheet.addRow(['', '', '', '', '', '', '', '', '', '', '', '', '']);
+        worksheet.addRow(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
       }
 
       // Add data validation for dropdowns using ExcelJS
@@ -695,10 +721,11 @@ export class TemplateService extends BaseService {
         ['• className - Select from dropdown (available classes)'],
         [''],
         ['Optional Fields:'],
-        ['• dateOfBirth - Format: YYYY-MM-DD (e.g., 2012-05-15)'],
+        ['• dateOfBirth - Format: DD-MM-YYYY (e.g., 15-05-2012)'],
         ["• email - Student's email address"],
         ["• phone - Student's phone number"],
-        ['• admissionDate - Format: YYYY-MM-DD (e.g., 2025-09-01)'],
+        ["• stateOfOrigin - Student's state of origin (e.g., Lagos)"],
+        ['• admissionDate - Format: DD-MM-YYYY (e.g., 01-09-2025)'],
         [''],
         ['Auto-Generated Fields:'],
         ['• admissionNo - Automatically generated by the system'],
@@ -715,7 +742,7 @@ export class TemplateService extends BaseService {
         [''],
         ['Tips:'],
         ['• Use the dropdowns in the Students sheet for Gender and Class'],
-        ['• All dates should be in YYYY-MM-DD format'],
+        ['• All dates should be in DD-MM-YYYY format'],
         ['• Phone numbers can include country codes'],
         ['• Remove sample data before uploading your actual student data'],
         ['• Template includes 50+ empty rows with dropdowns ready to use'],

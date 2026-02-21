@@ -75,6 +75,15 @@ export class StudentRecordDto {
   phone?: string;
 
   @ApiProperty({
+    description: 'State of origin',
+    example: 'Lagos',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  stateOfOrigin?: string;
+
+  @ApiProperty({
     description: 'Custom admission number',
     example: 'ADM001',
     required: false,

@@ -1087,9 +1087,11 @@ export class TeacherService {
         stateOfOrigin: student.user.stateOfOrigin || undefined,
         guardianName: student.guardian
           ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-          : undefined,
-        guardianPhone: student.guardian?.user.phone || undefined,
-        guardianEmail: student.guardian?.user.email || undefined,
+          : (student.guardianFirstName || student.guardianLastName)
+            ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+            : undefined,
+        guardianPhone: student.guardian?.user.phone || student.guardianPhone || undefined,
+        guardianEmail: student.guardian?.user.email || student.guardianEmail || undefined,
         admissionDate: student.admissionDate.toISOString(),
         status: student.status,
         avatarUrl: student.user.avatarUrl || undefined,

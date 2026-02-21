@@ -12,6 +12,7 @@ import { CounterModule } from '../../common/counter';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { PasswordHasher } from '../../utils/hasher/hasher';
 import { ActivityLogService } from '../../common/services/activity-log.service';
+import { MailQueueModule } from '../../utils/mail-queue/mail-queue.module';
 import {
   BulkUploadController,
   BulkUploadService,
@@ -26,6 +27,7 @@ import {
     RolesManagerModule,
     CounterModule,
     SchoolsModule,
+    MailQueueModule,
     BullModule.registerQueue({
       name: 'student-import',
     }),

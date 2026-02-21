@@ -45,9 +45,10 @@ export class CreateTeacherDto {
   @IsString()
   phone: string;
 
-  @ApiProperty({ description: 'Password for the teacher account' })
+  @ApiPropertyOptional({ description: 'Password for the teacher account (auto-generated if not provided)' })
   @IsString()
-  password: string;
+  @IsOptional()
+  password?: string;
 
   @ApiProperty({ description: 'Gender of the teacher' })
   @IsEnum(Gender)

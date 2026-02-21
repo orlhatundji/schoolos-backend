@@ -170,12 +170,14 @@ export class BffAdminStudentService {
       // Simulate current presence (random for demo purposes)
       const isPresent = Math.random() > 0.1; // 90% chance of being present
 
-      // Get guardian info
+      // Get guardian info - fall back to inline fields on student
       const guardianName = student.guardian
         ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : 'N/A';
+        : (student.guardianFirstName || student.guardianLastName)
+          ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+          : 'N/A';
 
-      const guardianPhone = student.guardian?.user.phone || null;
+      const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
 
       return {
         id: student.id,
@@ -187,6 +189,7 @@ export class BffAdminStudentService {
         stateOfOrigin: student.user.stateOfOrigin || 'N/A',
         guardianName,
         guardianPhone,
+        guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
         telephone: student.user.phone,
         className:
           student.classArmStudents?.[0]?.classArm &&
@@ -308,12 +311,14 @@ export class BffAdminStudentService {
     // Simulate current presence (random for demo purposes)
     const isPresent = Math.random() > 0.1; // 90% chance of being present
 
-    // Get guardian info
+    // Get guardian info - fall back to inline fields on student
     const guardianName = student.guardian
       ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-      : 'N/A';
+      : (student.guardianFirstName || student.guardianLastName)
+        ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+        : 'N/A';
 
-    const guardianPhone = student.guardian?.user.phone || null;
+    const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
 
     return {
       id: student.id,
@@ -325,6 +330,7 @@ export class BffAdminStudentService {
       stateOfOrigin: student.user.stateOfOrigin || 'N/A',
       guardianName,
       guardianPhone,
+      guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
       telephone: student.user.phone,
       className: student.classArmStudents?.[0]?.classArm ? student.classArmStudents[0].classArm.name : 'N/A',
       classLevel: student.classArmStudents?.[0]?.classArm?.level ? student.classArmStudents[0].classArm.level.name : 'N/A',
@@ -620,12 +626,14 @@ export class BffAdminStudentService {
       // Simulate current presence
       const isPresent = Math.random() > 0.1; // 90% chance of being present
 
-      // Get guardian info
+      // Get guardian info - fall back to inline fields on student
       const guardianName = student.guardian
         ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : 'N/A';
+        : (student.guardianFirstName || student.guardianLastName)
+          ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+          : 'N/A';
 
-      const guardianPhone = student.guardian?.user.phone || null;
+      const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
 
       return {
         id: student.id,
@@ -637,6 +645,7 @@ export class BffAdminStudentService {
         stateOfOrigin: student.user.stateOfOrigin || 'N/A',
         guardianName,
         guardianPhone,
+        guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
         telephone: student.user.phone,
         className:
           student.classArmStudents?.[0]?.classArm &&

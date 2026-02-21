@@ -6,6 +6,7 @@ import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.
 import { CheckPolicies } from '../../roles-manager/policies/check-policies.decorator';
 import { PoliciesGuard } from '../../roles-manager/policies/policies.guard';
 import { CreatePaymentStructureDto } from './dto/create-payment-structure.dto';
+import { GeneratePaymentsDto } from './dto/generate-payments.dto';
 import { UpdatePaymentStructureDto } from './dto/update-payment-structure.dto';
 import { PaymentStructuresService } from './payment-structures.service';
 
@@ -90,7 +91,11 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 404, description: 'Payment structure not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  generateStudentPayments(@GetCurrentUserId() userId: string, @Param('id') id: string) {
-    return this.paymentStructuresService.generateStudentPayments(userId, id);
+  generateStudentPayments(
+    @GetCurrentUserId() userId: string,
+    @Param('id') id: string,
+    @Body() generatePaymentsDto: GeneratePaymentsDto,
+  ) {
+    return this.paymentStructuresService.generateStudentPayments(userId, id, generatePaymentsDto);
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaymentStructuresRepository } from './payment-structures.repository';
 import { CreatePaymentStructureDto } from './dto/create-payment-structure.dto';
+import { GeneratePaymentsDto } from './dto/generate-payments.dto';
 import { UpdatePaymentStructureDto } from './dto/update-payment-structure.dto';
 
 @Injectable()
@@ -32,7 +33,6 @@ export class PaymentStructuresService {
     const paymentStructure = await this.paymentStructuresRepository.create({
       ...createPaymentStructureDto,
       schoolId: user.schoolId,
-      ...(createPaymentStructureDto.dueDate && { dueDate: createPaymentStructureDto.dueDate }),
     });
 
     return paymentStructure;
@@ -107,10 +107,7 @@ export class PaymentStructuresService {
     }
 
     // Update the payment structure
-    const paymentStructure = await this.paymentStructuresRepository.update(id, {
-      ...updatePaymentStructureDto,
-      ...(updatePaymentStructureDto.dueDate && { dueDate: updatePaymentStructureDto.dueDate }),
-    });
+    const paymentStructure = await this.paymentStructuresRepository.update(id, updatePaymentStructureDto);
 
     return paymentStructure;
   }
@@ -155,7 +152,11 @@ export class PaymentStructuresService {
     return { message: 'Payment structure deleted successfully' };
   }
 
-  async generateStudentPayments(userId: string, paymentStructureId: string) {
+  async generateStudentPayments(
+    userId: string,
+    paymentStructureId: string,
+    generatePaymentsDto: GeneratePaymentsDto,
+  ) {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -176,15 +177,25 @@ export class PaymentStructuresService {
       throw new NotFoundException('Payment structure not found or access denied');
     }
 
-    // Find eligible students based on the payment structure scope
-    const eligibleStudents = await this.findEligibleStudents(paymentStructure);
+    // Validate scope fields from the request body
+    if (generatePaymentsDto.academicSessionId || generatePaymentsDto.termId ||
+        generatePaymentsDto.levelId || generatePaymentsDto.classArmIds?.length) {
+      await this.validateScopeFields(generatePaymentsDto, user.schoolId);
+    }
+
+    // Find eligible students based on the scope from the request
+    const eligibleStudents = await this.findEligibleStudents(
+      user.schoolId,
+      generatePaymentsDto.levelId,
+      generatePaymentsDto.classArmIds,
+    );
 
     // Generate student payments
     const studentPayments = await this.prisma.$transaction(async (tx) => {
       const payments = [];
 
       for (const student of eligibleStudents) {
-        // Check if payment already exists
+        // Check if payment already exists for this student + structure
         const existingPayment = await tx.studentPayment.findFirst({
           where: {
             studentId: student.id,
@@ -267,41 +278,52 @@ export class PaymentStructuresService {
       }
     }
 
-    // Validate class arm if provided
-    if (dto.classArmId) {
-      const classArm = await this.prisma.classArm.findFirst({
+    // Validate class arms if provided
+    if (dto.classArmIds?.length) {
+      const classArms = await this.prisma.classArm.findMany({
         where: {
-          id: dto.classArmId,
+          id: { in: dto.classArmIds },
           schoolId,
           deletedAt: null,
         },
       });
 
-      if (!classArm) {
-        throw new BadRequestException('Class arm not found or does not belong to this school');
+      if (classArms.length !== dto.classArmIds.length) {
+        throw new BadRequestException('One or more class arms not found or do not belong to this school');
       }
     }
   }
 
-  private async findEligibleStudents(paymentStructure: any) {
-    const whereClause: any = {
-      schoolId: paymentStructure.schoolId,
-      deletedAt: null,
+  private async findEligibleStudents(
+    schoolId: string,
+    levelId?: string,
+    classArmIds?: string[],
+  ) {
+    // Students belong to a school via user.schoolId
+    // Level/classArm filtering goes through active classArmStudents
+    const classArmStudentFilter: any = {
+      isActive: true,
     };
 
-    // Add scope filters
-    if (paymentStructure.levelId) {
-      whereClause.classArm = {
-        levelId: paymentStructure.levelId,
+    if (classArmIds?.length) {
+      classArmStudentFilter.classArmId = { in: classArmIds };
+    } else if (levelId) {
+      classArmStudentFilter.classArm = {
+        levelId: levelId,
       };
     }
 
-    if (paymentStructure.classArmId) {
-      whereClause.classArmId = paymentStructure.classArmId;
-    }
-
     return this.prisma.student.findMany({
-      where: whereClause,
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        user: {
+          schoolId,
+        },
+        classArmStudents: {
+          some: classArmStudentFilter,
+        },
+      },
       include: {
         classArmStudents: {
           where: { isActive: true },

@@ -18,6 +18,21 @@ export class DepartmentsService {
       throw new BadRequestException('User not associated with a school');
     }
 
+    // Check if code already exists for this school
+    const existingCode = await this.prisma.department.findFirst({
+      where: {
+        schoolId: user.schoolId,
+        code: createDepartmentDto.code,
+        deletedAt: null,
+      },
+    });
+
+    if (existingCode) {
+      throw new BadRequestException(
+        `A department with code "${createDepartmentDto.code}" already exists in your school.`
+      );
+    }
+
     // Validate HOD if provided
     if (createDepartmentDto.hodId) {
       const teacher = await this.prisma.teacher.findFirst({

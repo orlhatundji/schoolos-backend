@@ -5,6 +5,7 @@ import { SchoolConfigDto, UpdateSchoolConfigDto } from './dto';
 import { GetCurrentUserId } from '../../common/decorators';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
 import { StrategyEnum } from '../auth/strategies';
+import { PdfService } from '../../shared/services';
 
 @Controller('settings')
 @ApiTags('Settings')
@@ -54,5 +55,42 @@ export class SettingsController {
       message: 'School configuration updated successfully',
       data: result,
     };
+  }
+
+  @Get('result-templates')
+  @ApiOperation({ summary: 'Get available result templates' })
+  @ApiResponse({
+    status: 200,
+    description: 'Result templates retrieved successfully',
+  })
+  getResultTemplates() {
+    return {
+      success: true,
+      message: 'Result templates retrieved successfully',
+      data: PdfService.TEMPLATE_INFO,
+    };
+  }
+
+  @Get('grading-model')
+  @ApiOperation({ summary: 'Get school grading model' })
+  @ApiResponse({
+    status: 200,
+    description: 'Grading model retrieved successfully',
+  })
+  async getGradingModel(@GetCurrentUserId() userId: string) {
+    return this.settingsService.getGradingModel(userId);
+  }
+
+  @Put('grading-model')
+  @ApiOperation({ summary: 'Create or update school grading model' })
+  @ApiResponse({
+    status: 200,
+    description: 'Grading model updated successfully',
+  })
+  async upsertGradingModel(
+    @GetCurrentUserId() userId: string,
+    @Body() body: { model: Record<string, [number, number]> },
+  ) {
+    return this.settingsService.upsertGradingModel(userId, body.model);
   }
 }

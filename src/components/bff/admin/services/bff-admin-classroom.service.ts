@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 
 import { PrismaService } from '../../../../prisma';
-import { AdminClassroomsViewData, ClassroomDetailsData } from '../types';
+import { AdminClassroomsViewData, ClassroomDetailsData, TopClassChampionsData } from '../types';
 import { CreateClassroomDto } from '../dto/create-classroom.dto';
 
 @Injectable()
@@ -226,21 +226,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data to get their name
           },
         },
-        subjectTermStudents: {
-          take: 50, // Limit to recent results
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -270,21 +260,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data
           },
         },
-        subjectTermStudents: {
-          take: 50,
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -312,31 +292,30 @@ export class BffAdminClassroomService {
     // Calculate top performers from assessment results
     const performanceMap = new Map<
       string,
-      { totalScore: number; count: number; student: any; latestSubject: string }
+      { totalScore: number; totalMaxScore: number; student: any; latestSubject: string }
     >();
 
     allStudents.forEach((student) => {
-      student.subjectTermStudents.forEach((subjectTermStudent) => {
-        const studentId = student.id;
-        const existing = performanceMap.get(studentId) || {
-          totalScore: 0,
-          count: 0,
+      if (student.assessments.length > 0) {
+        const totalScore = student.assessments.reduce((sum, a) => sum + a.score, 0);
+        const totalMaxScore = student.assessments.reduce((sum, a) => sum + (a.maxScore || 0), 0);
+        const firstSubject = student.assessments[0]?.classArmSubject?.subject?.name || 'N/A';
+        performanceMap.set(student.id, {
+          totalScore,
+          totalMaxScore,
           student,
-          latestSubject: subjectTermStudent.subjectTerm.subject.name,
-        };
-
-        existing.totalScore += subjectTermStudent.totalScore;
-        existing.count += 1;
-        performanceMap.set(studentId, existing);
-      });
+          latestSubject: firstSubject,
+        });
+      }
     });
 
     const topPerformers = Array.from(performanceMap.entries())
       .map(([studentId, data]) => ({
         id: studentId,
         name: `${data.student.user.firstName} ${data.student.user.lastName}`,
-        score: data.count > 0 ? data.totalScore / data.count : 0,
+        score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
         subject: data.latestSubject,
+        avatarUrl: data.student.user.avatarUrl || null,
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
@@ -363,14 +342,17 @@ export class BffAdminClassroomService {
         name: `${student.user.firstName} ${student.user.lastName}`,
         gender: student.user.gender,
         age,
-        admissionNumber: student.admissionNo || 'N/A',
-        guardianPhone: student.user.phone,
+        admissionNumber: student.studentNo || student.admissionNo || 'N/A',
+        guardianPhone: student.guardianPhone || student.guardian?.user?.phone || student.user.phone,
         guardianName,
+        guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
         stateOfOrigin,
+        email: student.user.email || null,
+        status: student.status,
+        admissionDate: student.admissionDate?.toISOString() || null,
+        avatarUrl: student.user.avatarUrl || null,
       };
     });
-
-    // Create pagination info
 
     // Return flattened students array
     const students = studentsData;
@@ -403,13 +385,15 @@ export class BffAdminClassroomService {
             name: `${classTeacher.user.firstName} ${classTeacher.user.lastName}`,
             phone: classTeacher.user.phone,
             email: classTeacher.user.email,
+            avatarUrl: classTeacher.user.avatarUrl || null,
           }
         : null,
       classCaptain: classCaptain
         ? {
             id: classCaptain.id,
             name: `${classCaptain.user.firstName} ${classCaptain.user.lastName}`,
-            admissionNumber: classCaptain.admissionNo,
+            admissionNumber: classCaptain.studentNo || classCaptain.admissionNo,
+            avatarUrl: classCaptain.user.avatarUrl || null,
           }
         : null,
       students,
@@ -673,6 +657,7 @@ export class BffAdminClassroomService {
             name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
             phone: classroom.classTeacher.user.phone || '',
             email: classroom.classTeacher.user.email || '',
+            avatarUrl: classroom.classTeacher.user.avatarUrl || null,
           }
         : null,
       classCaptain: classroom.captain
@@ -680,6 +665,7 @@ export class BffAdminClassroomService {
             id: classroom.captain.id,
             name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
             admissionNumber: classroom.captain.studentNo || '',
+            avatarUrl: classroom.captain.user.avatarUrl || null,
           }
         : null,
       students: students.map((student) => ({
@@ -793,21 +779,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data to get their name
           },
         },
-        subjectTermStudents: {
-          take: 50, // Limit to recent results
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -837,21 +813,11 @@ export class BffAdminClassroomService {
             user: true, // Include guardian's user data
           },
         },
-        subjectTermStudents: {
-          take: 50,
-          orderBy: {
-            createdAt: 'desc',
-          },
+        assessments: {
+          where: { deletedAt: null },
           include: {
-            subjectTerm: {
-              include: {
-                subject: true,
-              },
-            },
-            assessments: {
-              orderBy: {
-                createdAt: 'desc',
-              },
+            classArmSubject: {
+              include: { subject: true },
             },
           },
         },
@@ -864,20 +830,18 @@ export class BffAdminClassroomService {
 
     // Calculate top performers (only include students with assessment data)
     const topPerformers = allStudents
-      .filter((student) => student.subjectTermStudents.length > 0) // Only include students with assessment data
+      .filter((student) => student.assessments.length > 0)
       .map((student) => {
-        const totalScore = student.subjectTermStudents.reduce(
-          (sum, sts) => sum + sts.totalScore,
-          0,
-        );
-        const subjectCount = student.subjectTermStudents.length;
-        const averageScore = subjectCount > 0 ? totalScore / subjectCount : 0;
+        const totalScore = student.assessments.reduce((sum, a) => sum + a.score, 0);
+        const totalMaxScore = student.assessments.reduce((sum, a) => sum + (a.maxScore || 0), 0);
+        const totalPercentage = totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0;
 
         return {
           id: student.id,
           name: `${student.user.firstName} ${student.user.lastName}`,
-          score: Math.round(averageScore),
-          subject: student.subjectTermStudents[0]?.subjectTerm?.subject?.name || 'N/A',
+          score: Math.round(totalPercentage),
+          subject: student.assessments[0]?.classArmSubject?.subject?.name || 'N/A',
+          avatarUrl: student.user.avatarUrl || null,
         };
       })
       .sort((a, b) => b.score - a.score)
@@ -911,6 +875,7 @@ export class BffAdminClassroomService {
             name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
             phone: classroom.classTeacher.user.phone,
             email: classroom.classTeacher.user.email,
+            avatarUrl: classroom.classTeacher.user.avatarUrl || null,
           }
         : null,
       classCaptain: classroom.captain
@@ -918,6 +883,7 @@ export class BffAdminClassroomService {
             id: classroom.captain.id,
             name: `${classroom.captain.user.firstName} ${classroom.captain.user.lastName}`,
             admissionNumber: classroom.captain.studentNo,
+            avatarUrl: classroom.captain.user.avatarUrl || null,
           }
         : null,
       students: paginatedStudents.map((student) => ({
@@ -935,6 +901,108 @@ export class BffAdminClassroomService {
         stateOfOrigin: student.user.stateOfOrigin || 'Not provided',
       })),
       topPerformers: topPerformers,
+    };
+  }
+
+  async getTopClassChampions(userId: string): Promise<TopClassChampionsData> {
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new Error('User not found or not associated with a school');
+    }
+
+    const schoolId = user.schoolId;
+
+    // Get current academic session
+    const currentSession = await this.prisma.academicSession.findFirst({
+      where: { schoolId, isCurrent: true },
+    });
+
+    if (!currentSession) {
+      return {
+        champions: [],
+        academicSession: 'No active session',
+        term: 'No active term',
+      };
+    }
+
+    // Get current term
+    const currentTerm = await this.prisma.term.findFirst({
+      where: { academicSessionId: currentSession.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Get all class arms with students, assessments, class teacher, and level
+    const classArms = await this.prisma.classArm.findMany({
+      where: {
+        schoolId,
+        academicSessionId: currentSession.id,
+        deletedAt: null,
+      },
+      include: {
+        level: true,
+        classTeacher: {
+          include: {
+            user: true,
+          },
+        },
+        classArmStudents: {
+          where: { isActive: true },
+          include: {
+            student: {
+              include: {
+                user: true,
+                assessments: {
+                  where: { deletedAt: null },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // For each class arm, find the top-performing student
+    const champions = classArms
+      .map((classArm) => {
+        const studentsWithScores = classArm.classArmStudents
+          .filter((cas) => cas.student.assessments.length > 0)
+          .map((cas) => {
+            const totalScore = cas.student.assessments.reduce((sum, a) => sum + a.score, 0);
+            const totalMaxScore = cas.student.assessments.reduce(
+              (sum, a) => sum + (a.maxScore || 0),
+              0,
+            );
+            const totalPercentage =
+              totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0;
+
+            return {
+              id: cas.student.id,
+              name: `${cas.student.user.firstName} ${cas.student.user.lastName}`,
+              score: Math.round(totalPercentage),
+              className: classArm.name,
+              classLevel: classArm.level.name,
+              teacherName: classArm.classTeacher
+                ? `${classArm.classTeacher.user.firstName} ${classArm.classTeacher.user.lastName}`
+                : 'No teacher assigned',
+              avatarUrl: cas.student.user.avatarUrl || null,
+            };
+          })
+          .sort((a, b) => b.score - a.score);
+
+        return studentsWithScores[0] || null;
+      })
+      .filter((champion): champion is NonNullable<typeof champion> => champion !== null)
+      .sort((a, b) => b.score - a.score);
+
+    return {
+      champions,
+      academicSession: currentSession.academicYear,
+      term: currentTerm?.name || 'No active term',
     };
   }
 }

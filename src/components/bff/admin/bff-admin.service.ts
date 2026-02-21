@@ -16,9 +16,11 @@ import { BffAdminLevelService } from './services/bff-admin-level.service';
 import { BffAdminStudentService } from './services/bff-admin-student.service';
 import { BffAdminSubjectService } from './services/bff-admin-subject.service';
 import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
+import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import {
   AdminClassroomsViewData,
   AdminsViewData,
+  ClassroomBroadsheetData,
   ClassroomDetailsData,
   DashboardSummaryData,
   DepartmentsViewData,
@@ -29,6 +31,7 @@ import {
   StudentsViewData,
   SubjectsViewData,
   TeachersViewData,
+  TopClassChampionsData,
 } from './types';
 
 @Injectable()
@@ -43,6 +46,7 @@ export class BffAdminService {
     private readonly departmentService: BffAdminDepartmentService,
     private readonly levelService: BffAdminLevelService,
     private readonly adminService: BffAdminAdminService,
+    private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
   ) {}
 
   async getClassroomsViewData(userId: string): Promise<AdminClassroomsViewData> {
@@ -65,6 +69,10 @@ export class BffAdminService {
     limit: number = 20,
   ): Promise<ClassroomDetailsData> {
     return this.classroomService.getClassroomDetailsDataBySlug(userId, slug, page, limit);
+  }
+
+  async getTopClassChampions(userId: string): Promise<TopClassChampionsData> {
+    return this.classroomService.getTopClassChampions(userId);
   }
 
   async getStudentDetailsData(
@@ -107,6 +115,30 @@ export class BffAdminService {
 
   async deleteSubject(userId: string, subjectId: string) {
     return this.subjectService.deleteSubject(userId, subjectId);
+  }
+
+  async getSubjectDetails(userId: string, subjectId: string) {
+    return this.subjectService.getSubjectDetails(userId, subjectId);
+  }
+
+  async getClassAssessments(userId: string, subjectId: string, classArmId: string) {
+    return this.subjectService.getClassAssessments(userId, subjectId, classArmId);
+  }
+
+  async generateBroadsheet(userId: string, subjectId: string, classArmId: string) {
+    return this.subjectService.generateBroadsheet(userId, subjectId, classArmId);
+  }
+
+  // Classroom Broadsheet methods
+  async getClassroomBroadsheet(userId: string, classArmId: string): Promise<ClassroomBroadsheetData> {
+    const schoolId = await this.getUserSchoolId(userId);
+    return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+  }
+
+  async downloadClassroomBroadsheet(userId: string, classArmId: string, termId?: string, isCumulative?: boolean): Promise<Buffer> {
+    const schoolId = await this.getUserSchoolId(userId);
+    const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
+    return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data, termId, isCumulative);
   }
 
   // Department methods
@@ -695,9 +727,11 @@ export class BffAdminService {
           where: {
             schoolId,
             deletedAt: null,
-            classArmSubjectTeachers: {
+            classArmSubjects: {
               some: {
-                deletedAt: null,
+                teachers: {
+                  some: { deletedAt: null },
+                },
                 classArm: {
                   academicSessionId: sessionId,
                   deletedAt: null,
@@ -1084,48 +1118,44 @@ export class BffAdminService {
       highestAssessmentScore,
       lowestAssessmentScore,
     ] = await Promise.all([
-      this.prisma.subjectTermStudentAssessment.count({
+      this.prisma.classArmStudentAssessment.count({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
       }),
       this.prisma.subject.count({
         where: {
           schoolId,
-          classArmSubjectTeachers: { some: {} },
+          classArmSubjects: { some: { teachers: { some: { deletedAt: null } } } },
         },
       }),
-      this.prisma.subjectTermStudentAssessment.aggregate({
+      this.prisma.classArmStudentAssessment.aggregate({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
         _avg: { score: true },
       }),
-      this.prisma.subjectTermStudentAssessment.findFirst({
+      this.prisma.classArmStudentAssessment.findFirst({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
         orderBy: { score: 'desc' },
       }),
-      this.prisma.subjectTermStudentAssessment.findFirst({
+      this.prisma.classArmStudentAssessment.findFirst({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
         orderBy: { score: 'asc' },
       }),
@@ -1233,7 +1263,7 @@ export class BffAdminService {
         where: { schoolId, academicSessionId: sessionId },
       }),
       this.prisma.subject.count({
-        where: { schoolId, classArmSubjectTeachers: { some: {} } },
+        where: { schoolId, classArmSubjects: { some: { teachers: { some: { deletedAt: null } } } } },
       }),
       this.prisma.department.count({
         where: { schoolId, deletedAt: null },
@@ -1241,13 +1271,12 @@ export class BffAdminService {
       this.prisma.level.count({
         where: { schoolId, deletedAt: null },
       }),
-      this.prisma.subjectTermStudentAssessment.count({
+      this.prisma.classArmStudentAssessment.count({
         where: {
-          subjectTermStudent: {
-            subjectTerm: {
-              academicSession: { schoolId },
-            },
+          classArmSubject: {
+            subject: { schoolId },
           },
+          deletedAt: null,
         },
       }),
       this.prisma.studentAttendance.count({
@@ -1336,5 +1365,16 @@ export class BffAdminService {
       page,
       limit,
     );
+  }
+
+  private async getUserSchoolId(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    if (!user?.schoolId) {
+      throw new Error('User not associated with a school');
+    }
+    return user.schoolId;
   }
 }

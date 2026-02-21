@@ -27,12 +27,31 @@ const getConfiguration = () => ({
     mailjetSecretKey: process.env.MAILJET_SECRET_KEY,
     defaultEmail: process.env.DEFAULT_SOURCE_EMAIL,
   },
+  platformAdmin: {
+    email: process.env.PLATFORM_ADMIN_EMAIL || 'orlhatundji@gmail.com',
+    password: process.env.PLATFORM_ADMIN_PASSWORD || 'Password@123',
+    firstName: process.env.PLATFORM_ADMIN_FIRST_NAME || 'Platform',
+    lastName: process.env.PLATFORM_ADMIN_LAST_NAME || 'Admin',
+  },
   frontendBaseUrl: process.env.FRONTEND_BASE_URL,
+  adminAppBaseUrl: process.env.ADMIN_APP_BASE_URL,
+  teacherAppBaseUrl: process.env.TEACHER_APP_BASE_URL,
+  studentAppBaseUrl: process.env.STUDENT_APP_BASE_URL,
+  platformAppBaseUrl: process.env.PLATFORM_APP_BASE_URL,
+  websiteBaseUrl: process.env.WEBSITE_BASE_URL,
   otpGeneratorKey: process.env.OTP_GENERATOR_KEY,
   paystack: {
     secretKey: process.env.PAYSTACK_SECRET_KEY,
     publicKey: process.env.PAYSTACK_PUBLIC_KEY,
     webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET,
+  },
+  aws: {
+    region: process.env.AWS_REGION,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    s3Bucket: process.env.AWS_S3_BUCKET,
+    s3Endpoint: process.env.AWS_S3_ENDPOINT,
+    s3Folder: process.env.AWS_S3_FOLDER,
   },
 });
 

@@ -35,9 +35,8 @@ export interface SchoolDetails {
   description?: string;
 }
 
-export interface CreateSchoolSignupDto {
+export interface CreateSchoolSignupData {
   schoolName: string;
-  schoolCode: string;
   contactPerson: ContactPerson;
   address: SchoolAddress;
   schoolDetails: SchoolDetails;

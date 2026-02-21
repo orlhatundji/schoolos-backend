@@ -59,7 +59,7 @@ async function main() {
   const existingSystemAdmin = await prisma.systemAdmin.findFirst({
     where: {
       user: {
-        email: 'orlhatund@gmail.com',
+        email: 'orlhatundji@gmail.com',
       },
     },
   });
@@ -67,7 +67,7 @@ async function main() {
   if (existingSystemAdmin) {
     console.log('System admin already exists:', {
       id: existingSystemAdmin.id,
-      email: 'orlhatund@gmail.com',
+      email: 'orlhatundji@gmail.com',
       password: samplePassword,
       role: existingSystemAdmin.role,
     });
@@ -98,7 +98,7 @@ async function main() {
     const systemAdminUser = await prisma.user.create({
       data: {
         type: UserTypes.SYSTEM_ADMIN,
-        email: 'orlhatund@gmail.com',
+        email: 'orlhatundji@gmail.com',
         phone: '+1234567890',
         password: hashedPassword,
         firstName: 'Platform',
@@ -233,9 +233,14 @@ async function main() {
       },
     });
 
+    // Generate adminNo for super admin
+    const currentYear = new Date().getFullYear().toString().slice(-2);
+    const adminNo = `${school.code}/SA/${currentYear}/0001`;
+
     const superAdmin = await prisma.admin.create({
       data: {
         userId: adminUser.id,
+        adminNo,
         isSuper: true,
       },
     });
@@ -421,7 +426,7 @@ async function main() {
   console.log('Creating subjects and curricula...');
   // Subjects + Curriculum
   const subjects = [];
-  const subjectTerms = [];
+  const classArmSubjects = [];
 
   // Define predictable subject names for easier testing
   const subjectNames = {
@@ -456,24 +461,21 @@ async function main() {
   }
 
   for (const subject of subjects) {
-    for (const term of terms) {
-      const subjectTerm = await prisma.subjectTerm.create({
-        data: {
-          subject: { connect: { id: subject.id } },
-          academicSession: { connect: { id: term.academicSessionId } },
-          term: { connect: { id: term.id } },
-          curriculum: {
-            create: {
-              items: {
-                create: Array.from({ length: 2 }).map(() => ({
-                  title: faker.word.words({ count: { min: 2, max: 5 } }),
-                })),
-              },
-            },
+    for (const classArm of classArms) {
+      const classArmSubject = await prisma.classArmSubject.upsert({
+        where: {
+          classArmId_subjectId: {
+            classArmId: classArm.id,
+            subjectId: subject.id,
           },
         },
+        create: {
+          classArmId: classArm.id,
+          subjectId: subject.id,
+        },
+        update: {},
       });
-      subjectTerms.push(subjectTerm);
+      classArmSubjects.push({ ...classArmSubject, classArmId: classArm.id, subjectId: subject.id });
     }
   }
 
@@ -695,10 +697,24 @@ async function main() {
   // Subject → Teacher → ClassArm assignments
   for (const subject of subjects) {
     for (const classArm of classArms) {
+      // Find or create the ClassArmSubject first
+      const classArmSubject = await prisma.classArmSubject.upsert({
+        where: {
+          classArmId_subjectId: {
+            classArmId: classArm.id,
+            subjectId: subject.id,
+          },
+        },
+        update: {},
+        create: {
+          classArmId: classArm.id,
+          subjectId: subject.id,
+        },
+      });
+
       await prisma.classArmSubjectTeacher.create({
         data: {
-          subjectId: subject.id,
-          classArmId: classArm.id,
+          classArmSubjectId: classArmSubject.id,
           teacherId: faker.helpers.arrayElement(teachers).id,
         },
       });
@@ -739,58 +755,60 @@ async function main() {
   // Subject assessments - Create comprehensive data for all students and subjects
   const currentSession = sessions.find((s) => s.isCurrent);
   const currentSessionTerms = terms.filter((t) => t.academicSessionId === currentSession?.id);
-  const currentSubjectTerms = subjectTerms.filter((st) =>
-    currentSessionTerms.some((term) => term.id === st.termId),
-  );
 
-  // Create assessments for ALL students and ALL subjects in current session
+  // Create assessments for ALL students and ALL classArmSubjects
   const studentsForAssessments = students; // All students
-  const subjectsForAssessments = currentSubjectTerms; // All subjects in current session
+  const classArmSubjectsForAssessments = classArmSubjects; // All classArmSubjects
 
   for (const student of studentsForAssessments) {
-    for (const subjectTerm of subjectsForAssessments) {
-      const subjectTermStudent = await prisma.subjectTermStudent.create({
-        data: {
-          student: { connect: { id: student.id } },
-          subjectTerm: { connect: { id: subjectTerm.id } },
-          totalScore: 0,
-        },
-      });
+    // Find the class arm this student belongs to
+    const studentClassArmStudent = await prisma.classArmStudent.findFirst({
+      where: { studentId: student.id, isActive: true },
+    });
+    if (!studentClassArmStudent) continue;
 
-      // Use default assessment structure: CA1, CA2, Exam
-      const assessmentStructure = getAssessmentStructureForSeeding();
-      const assessments = assessmentStructure.map((assessment) => ({
-        name: assessment.name,
-        score: faker.number.int(assessment.scoreRange),
-        isExam: assessment.isExam,
-      }));
+    const studentClassArmId = studentClassArmStudent.classArmId;
 
-      const created = await Promise.all(
-        assessments.map((a) =>
-          prisma.subjectTermStudentAssessment.create({
-            data: {
-              name: a.name,
-              score: a.score,
-              isExam: a.isExam,
-              subjectTermStudent: { connect: { id: subjectTermStudent.id } },
-            },
-          }),
-        ),
-      );
+    // Filter classArmSubjects to only those matching this student's class arm
+    const relevantClassArmSubjects = classArmSubjectsForAssessments.filter(
+      (cas) => cas.classArmId === studentClassArmId,
+    );
 
-      const totalScore = created.reduce((sum, a) => sum + a.score, 0);
-      await prisma.subjectTermStudent.update({
-        where: { id: subjectTermStudent.id },
-        data: { totalScore },
-      });
+    for (const classArmSubject of relevantClassArmSubjects) {
+      for (const term of currentSessionTerms) {
+        // Use default assessment structure: CA1, CA2, Exam
+        const assessmentStructure = getAssessmentStructureForSeeding();
+        const assessments = assessmentStructure.map((assessment) => ({
+          name: assessment.name,
+          score: faker.number.int(assessment.scoreRange),
+          isExam: assessment.isExam,
+          maxScore: assessment.isExam ? 60 : 20,
+        }));
+
+        await Promise.all(
+          assessments.map((a) =>
+            prisma.classArmStudentAssessment.create({
+              data: {
+                classArmSubjectId: classArmSubject.id,
+                studentId: student.id,
+                termId: term.id,
+                name: a.name,
+                score: a.score,
+                isExam: a.isExam,
+                maxScore: a.maxScore,
+              },
+            }),
+          ),
+        );
+      }
     }
   }
 
   console.log(
-    `✅ Created comprehensive assessments for ${studentsForAssessments.length} students and ${subjectsForAssessments.length} subjects`,
+    `✅ Created comprehensive assessments for ${studentsForAssessments.length} students across ${classArmSubjectsForAssessments.length} class-arm-subject combinations`,
   );
   console.log(
-    `📊 Total assessment records created: ${studentsForAssessments.length * subjectsForAssessments.length * 3} (3 assessments per student-subject combination: Test 1, Test 2, Exam)`,
+    `📊 Total assessment records created: ${studentsForAssessments.length * 12 * currentSessionTerms.length * 3} (3 assessments per student-subject-term combination: Test 1, Test 2, Exam)`,
   );
 
   console.log('Creating default assessment structure...');
@@ -810,24 +828,28 @@ async function main() {
     return;
   }
 
-  const assessmentStructures = [];
-  for (const structureData of defaultAssessmentStructures) {
-    const assessmentStructure = await prisma.assessmentStructure.create({
-      data: {
-        name: structureData.name,
-        description: structureData.description,
-        maxScore: structureData.maxScore,
-        isExam: structureData.isExam,
-        order: structureData.order,
-        schoolId: school.id,
-        academicSessionId: currentAcademicSession.id,
-        isActive: true,
-      },
-    });
-    assessmentStructures.push(assessmentStructure);
-  }
+  const { randomUUID } = await import('crypto');
+  const assessmentsWithIds = defaultAssessmentStructures.map((s) => ({
+    id: randomUUID(),
+    name: s.name,
+    description: s.description,
+    maxScore: s.maxScore,
+    isExam: s.isExam,
+    order: s.order,
+  }));
 
-  console.log(`✅ Created ${assessmentStructures.length} default assessment structures`);
+  await prisma.assessmentStructureTemplate.create({
+    data: {
+      schoolId: school.id,
+      academicSessionId: currentAcademicSession.id,
+      name: 'Standard Assessment Structure',
+      description: 'Default assessment structure for all subjects',
+      assessments: assessmentsWithIds as any,
+      isActive: true,
+    },
+  });
+
+  console.log(`✅ Created assessment structure template with ${assessmentsWithIds.length} assessment types`);
 
   console.log('Creating payment structures...');
   // Payment Structures

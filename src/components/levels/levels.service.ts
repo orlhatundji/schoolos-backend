@@ -19,6 +19,21 @@ export class LevelsService {
       throw new Error('User not associated with a school');
     }
 
+    // Check if code already exists for this school
+    const existingCode = await this.prisma.level.findFirst({
+      where: {
+        schoolId: user.schoolId,
+        code: createLevelDto.code,
+        deletedAt: null,
+      },
+    });
+
+    if (existingCode) {
+      throw new BadRequestException(
+        `A level with code "${createLevelDto.code}" already exists in your school.`
+      );
+    }
+
     // Check if order already exists for this school
     const existingLevel = await this.prisma.level.findFirst({
       where: {

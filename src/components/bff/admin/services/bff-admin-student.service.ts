@@ -123,10 +123,8 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
-          include: {
-            assessments: true,
-          },
+        assessments: {
+          where: { deletedAt: null },
         },
       },
       orderBy: [
@@ -154,9 +152,7 @@ export class BffAdminStudentService {
         : 0;
 
       // Calculate average grade from assessments
-      const allScores = student.subjectTermStudents.flatMap((sts) =>
-        sts.assessments.map((assessment) => assessment.score),
-      );
+      const allScores = student.assessments.map((a) => a.score);
       const averageGrade =
         allScores.length > 0
           ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
@@ -174,12 +170,14 @@ export class BffAdminStudentService {
       // Simulate current presence (random for demo purposes)
       const isPresent = Math.random() > 0.1; // 90% chance of being present
 
-      // Get guardian info
+      // Get guardian info - fall back to inline fields on student
       const guardianName = student.guardian
         ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : 'N/A';
+        : (student.guardianFirstName || student.guardianLastName)
+          ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+          : 'N/A';
 
-      const guardianPhone = student.guardian?.user.phone || null;
+      const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
 
       return {
         id: student.id,
@@ -191,6 +189,7 @@ export class BffAdminStudentService {
         stateOfOrigin: student.user.stateOfOrigin || 'N/A',
         guardianName,
         guardianPhone,
+        guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
         telephone: student.user.phone,
         className:
           student.classArmStudents?.[0]?.classArm &&
@@ -275,10 +274,8 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
-          include: {
-            assessments: true,
-          },
+        assessments: {
+          where: { deletedAt: null },
         },
       },
     });
@@ -296,9 +293,7 @@ export class BffAdminStudentService {
       : 0;
 
     // Calculate average grade from assessments
-    const allScores = student.subjectTermStudents.flatMap((sts) =>
-      sts.assessments.map((assessment) => assessment.score),
-    );
+    const allScores = student.assessments.map((a) => a.score);
     const averageGrade =
       allScores.length > 0
         ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
@@ -316,12 +311,14 @@ export class BffAdminStudentService {
     // Simulate current presence (random for demo purposes)
     const isPresent = Math.random() > 0.1; // 90% chance of being present
 
-    // Get guardian info
+    // Get guardian info - fall back to inline fields on student
     const guardianName = student.guardian
       ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-      : 'N/A';
+      : (student.guardianFirstName || student.guardianLastName)
+        ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+        : 'N/A';
 
-    const guardianPhone = student.guardian?.user.phone || null;
+    const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
 
     return {
       id: student.id,
@@ -333,6 +330,7 @@ export class BffAdminStudentService {
       stateOfOrigin: student.user.stateOfOrigin || 'N/A',
       guardianName,
       guardianPhone,
+      guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
       telephone: student.user.phone,
       className: student.classArmStudents?.[0]?.classArm ? student.classArmStudents[0].classArm.name : 'N/A',
       classLevel: student.classArmStudents?.[0]?.classArm?.level ? student.classArmStudents[0].classArm.level.name : 'N/A',
@@ -410,6 +408,7 @@ export class BffAdminStudentService {
             classArm: {
               include: {
                 level: true,
+                department: true,
                 academicSession: true,
               },
             },
@@ -421,14 +420,14 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
+        assessments: {
           where: {
-            subjectTerm: {
-              academicSessionId: targetSession.id,
+            deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+              },
             },
-          },
-          include: {
-            assessments: true,
           },
         },
       },
@@ -475,17 +474,27 @@ export class BffAdminStudentService {
           )
         : 0,
       stateOfOrigin: student.user.stateOfOrigin || 'Unknown',
-      guardianName: student.guardian?.user
-        ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : 'N/A',
-      guardianPhone: student.guardian?.user?.phone || 'N/A',
+      // Use new guardian fields on student, fallback to old guardian relation
+      guardianName:
+        student.guardianFirstName && student.guardianLastName
+          ? `${student.guardianFirstName} ${student.guardianLastName}`
+          : student.guardian?.user
+            ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+            : 'N/A',
+      guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
+      guardianPhone: student.guardianPhone || student.guardian?.user?.phone || 'N/A',
       telephone: student.user.phone || 'N/A',
+      email: student.user.email || null,
+      dateAdmitted: student.admissionDate?.toISOString() || null,
       className: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
       classLevel: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
+      departmentName: student.classArmStudents?.[0]?.classArm?.department?.name || null,
       averageGrade: 0, // This would need to be calculated from actual grades
       isPresent: Math.random() > 0.1, // Simulated attendance
       attendanceRate: Math.floor(Math.random() * 40) + 60, // 60-100% attendance rate
       avatarUrl: student.user.avatarUrl || null,
+      address: student.address || null,
+      medicalInformation: student.medicalInformation || null,
     }));
 
     return {
@@ -535,6 +544,7 @@ export class BffAdminStudentService {
             classArm: {
               include: {
                 level: true,
+                department: true,
                 academicSession: true,
               },
             },
@@ -546,14 +556,14 @@ export class BffAdminStudentService {
             },
           },
         },
-        subjectTermStudents: {
+        assessments: {
           where: {
-            subjectTerm: {
-              academicSessionId: targetSession.id,
+            deletedAt: null,
+            classArmSubject: {
+              classArm: {
+                academicSessionId: targetSession.id,
+              },
             },
-          },
-          include: {
-            assessments: true,
           },
         },
       },
@@ -598,9 +608,7 @@ export class BffAdminStudentService {
         : 0;
 
       // Calculate average grade from assessments
-      const allScores = student.subjectTermStudents.flatMap((sts) =>
-        sts.assessments.map((assessment) => assessment.score),
-      );
+      const allScores = student.assessments.map((a) => a.score);
       const averageGrade =
         allScores.length > 0
           ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
@@ -618,12 +626,14 @@ export class BffAdminStudentService {
       // Simulate current presence
       const isPresent = Math.random() > 0.1; // 90% chance of being present
 
-      // Get guardian info
+      // Get guardian info - fall back to inline fields on student
       const guardianName = student.guardian
         ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : 'N/A';
+        : (student.guardianFirstName || student.guardianLastName)
+          ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
+          : 'N/A';
 
-      const guardianPhone = student.guardian?.user.phone || null;
+      const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
 
       return {
         id: student.id,
@@ -635,6 +645,7 @@ export class BffAdminStudentService {
         stateOfOrigin: student.user.stateOfOrigin || 'N/A',
         guardianName,
         guardianPhone,
+        guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
         telephone: student.user.phone,
         className:
           student.classArmStudents?.[0]?.classArm &&

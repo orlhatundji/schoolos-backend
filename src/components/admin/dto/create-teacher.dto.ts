@@ -7,8 +7,21 @@ import {
   IsDateString,
   IsUUID,
   IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { Gender, TeacherStatus, EmploymentType } from '@prisma/client';
+
+export class SubjectAssignmentDto {
+  @ApiProperty({ description: 'Subject ID' })
+  @IsUUID()
+  subjectId: string;
+
+  @ApiProperty({ description: 'Class arm IDs for this subject assignment' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  classArmIds: string[];
+}
 
 export class CreateTeacherDto {
   @ApiProperty({ description: 'First name of the teacher' })
@@ -32,9 +45,10 @@ export class CreateTeacherDto {
   @IsString()
   phone: string;
 
-  @ApiProperty({ description: 'Password for the teacher account' })
+  @ApiPropertyOptional({ description: 'Password for the teacher account (auto-generated if not provided)' })
   @IsString()
-  password: string;
+  @IsOptional()
+  password?: string;
 
   @ApiProperty({ description: 'Gender of the teacher' })
   @IsEnum(Gender)
@@ -85,11 +99,18 @@ export class CreateTeacherDto {
   @IsOptional()
   joinDate?: string;
 
-  @ApiPropertyOptional({ description: 'Subject IDs to assign to teacher' })
+  @ApiPropertyOptional({ description: 'Subject IDs to assign to teacher (assigns to all class arms - legacy)' })
   @IsArray()
   @IsUUID('4', { each: true })
   @IsOptional()
   subjectIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Subject assignments with specific class arms' })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SubjectAssignmentDto)
+  @IsOptional()
+  subjectAssignments?: SubjectAssignmentDto[];
 
   @ApiPropertyOptional({ description: 'Class arm ID to assign as class teacher' })
   @IsUUID()

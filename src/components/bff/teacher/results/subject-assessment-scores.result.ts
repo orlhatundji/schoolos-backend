@@ -16,7 +16,14 @@ export class SubjectAssessmentScoresResult {
     currentTerm: {
       id: string;
       name: string;
+      isLocked: boolean;
     };
+    availableTerms: {
+      id: string;
+      name: string;
+      isCurrent: boolean;
+      isLocked: boolean;
+    }[];
     students: {
       id: string;
       studentNo: string;

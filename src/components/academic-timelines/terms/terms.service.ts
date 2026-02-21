@@ -49,21 +49,15 @@ export class TermsService extends BaseService {
   }
 
   async deleteTerm(id: string): Promise<Term> {
-    // Check if term has associated subject terms with student enrollments
-    const subjectTerms = await this.prisma.subjectTerm.findMany({
-      where: { termId: id },
-      include: {
-        subjectTermStudents: true,
-      },
+    // Check if term has associated assessments
+    const assessmentCount = await this.prisma.classArmStudentAssessment.count({
+      where: { termId: id, deletedAt: null },
     });
 
-    // Check if any subject terms have student enrollments
-    for (const subjectTerm of subjectTerms) {
-      if (subjectTerm.subjectTermStudents.length > 0) {
-        throw new BadRequestException(
-          'Cannot delete term. It has associated student enrollments. Please remove all student enrollments first.',
-        );
-      }
+    if (assessmentCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete term. It has associated assessments. Please remove all assessments first.',
+      );
     }
 
     // Check if term has student attendance records
@@ -89,6 +83,16 @@ export class TermsService extends BaseService {
     }
 
     return this.termsRepository.delete({ id });
+  }
+
+  async lockTerm(id: string): Promise<Term> {
+    await this.getTermById(id);
+    return this.termsRepository.update({ id }, { isLocked: true });
+  }
+
+  async unlockTerm(id: string): Promise<Term> {
+    await this.getTermById(id);
+    return this.termsRepository.update({ id }, { isLocked: false });
   }
 
   async setCurrentTerm(id: string): Promise<Term> {

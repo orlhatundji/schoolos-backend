@@ -2,14 +2,17 @@ import { ValidationPipe } from '@nestjs/common';
 import { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 
 import { AppModule } from './app.module';
 import { StrategyEnum } from './components/auth/strategies';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true,
   });
+
+  app.useBodyParser('json', { limit: '1mb' });
   const corsOptions: CorsOptions = {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
@@ -17,16 +20,30 @@ async function bootstrap() {
     preflightContinue: false,
     optionsSuccessStatus: 204,
   };
+  console.log('\n\nEnvironment\n\n');
+  console.log(process.env.NODE_ENV);
 
   if (process.env.NODE_ENV === 'production') {
-    // Allow all subdomains of schos.ng in production
-    corsOptions.origin = (origin, callback) => {
-      if (!origin || origin.endsWith('.schos.ng') || origin === 'https://schos.ng') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    };
+    corsOptions.origin = [
+      'https://api.schos.ng',
+      'https://admin.schos.ng',
+      'https://teacher.schos.ng',
+      'https://student.schos.ng',
+      'https://www.schos.ng',
+      'https://platform.schos.ng',
+    ];
+  } else if (process.env.NODE_ENV === 'staging') {
+    console.log('\n\nStaging environment\n\n');
+    console.log(process.env.NODE_ENV);
+    corsOptions.origin = [
+      '*',
+      'https://devapi.schos.ng',
+      'https://schos-admin.netlify.app',
+      'https://schos-teacher.netlify.app',
+      'https://schos-student.netlify.app',
+      'https://schos-website.netlify.app',
+      'https://schos-platform.netlify.app',
+    ];
   } else {
     // Allow localhost in development
     corsOptions.origin = [

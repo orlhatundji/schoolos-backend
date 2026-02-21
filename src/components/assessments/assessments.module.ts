@@ -2,13 +2,13 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AssessmentService } from './assessments.service';
 import { AssessmentsController } from './assessments.controller';
-import { AssessmentRepository } from './assessments.repository';
 import { ExcelBulkUploadService } from './services/excel-bulk-upload.service';
 import { Encryptor } from '../../utils/encryptor';
+import { AssessmentStructuresModule } from '../assessment-structures/assessment-structures.module';
 
 @Module({
-  imports: [PrismaModule],
-  providers: [AssessmentService, AssessmentRepository, ExcelBulkUploadService, Encryptor],
+  imports: [PrismaModule, AssessmentStructuresModule],
+  providers: [AssessmentService, ExcelBulkUploadService, Encryptor],
   controllers: [AssessmentsController],
   exports: [AssessmentService],
 })

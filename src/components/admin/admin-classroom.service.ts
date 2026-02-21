@@ -95,8 +95,11 @@ export class AdminClassroomService {
             deletedAt: null,
           },
         },
-        classArmSubjectTeachers: {
+        classArmSubjects: {
           where: { deletedAt: null },
+          include: {
+            teachers: { where: { deletedAt: null } },
+          },
         },
         classArmTeachers: {
           where: { deletedAt: null },
@@ -116,7 +119,7 @@ export class AdminClassroomService {
     }
 
     // Check if classroom has any teacher assignments
-    const hasSubjectTeachers = classroom.classArmSubjectTeachers.length > 0;
+    const hasSubjectTeachers = classroom.classArmSubjects.some((cas) => cas.teachers.length > 0);
     const hasClassTeachers = classroom.classArmTeachers.length > 0;
 
     if (hasSubjectTeachers || hasClassTeachers) {
@@ -129,10 +132,9 @@ export class AdminClassroomService {
       );
     }
 
-    // Soft delete the classroom
-    await this.prisma.classArm.update({
+    // Hard delete the classroom — safe because we've verified no students or teachers are assigned
+    await this.prisma.classArm.delete({
       where: { id: classroomId },
-      data: { deletedAt: new Date() },
     });
 
     return { message: 'Classroom deleted successfully' };

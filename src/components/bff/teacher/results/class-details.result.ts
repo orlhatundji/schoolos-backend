@@ -24,6 +24,11 @@ export class ClassDetailsResult {
       attendanceRate: number;
       averageScore: number;
     };
+    topPerformers: {
+      id: string;
+      name: string;
+      score: number;
+    }[];
     recentActivities: {
       id: string;
       type: string;

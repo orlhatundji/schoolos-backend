@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize, IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsBoolean } from 'class-validator';
+import { IsArray, ValidateNested, ArrayMinSize, ArrayMaxSize, IsString, IsNotEmpty, IsNumber, IsOptional, Min, Max, IsBoolean, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -24,15 +24,18 @@ export class UpsertStudentAssessmentScoreItemDto {
   studentId?: string;
 
   @ApiProperty({
-    description: 'Score for the assessment',
+    description: 'Score for the assessment. Set to null to delete an existing score.',
     example: 85,
     minimum: 0,
     maximum: 100,
+    nullable: true,
   })
+  @IsOptional()
+  @ValidateIf((o) => o.score !== null)
   @IsNumber()
   @Min(0)
   @Max(100)
-  score: number;
+  score: number | null;
 
   @ApiProperty({
     description: 'Whether this is an exam (optional - will be auto-determined from assessment structure if not provided)',
@@ -42,6 +45,16 @@ export class UpsertStudentAssessmentScoreItemDto {
   @IsOptional()
   @IsBoolean()
   isExam?: boolean;
+
+  @ApiProperty({
+    description: 'Assessment name for this score (overrides top-level assessmentName if provided)',
+    example: 'CA 1',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  assessmentName?: string;
 }
 
 export class UpsertStudentAssessmentScoreDto {
@@ -56,7 +69,7 @@ export class UpsertStudentAssessmentScoreDto {
   subjectName?: string;
 
   @ApiProperty({
-    description: 'Term name (required for new scores)',
+    description: 'Term name (required for new scores when termId not provided)',
     example: 'First Term',
     required: false,
   })
@@ -64,6 +77,16 @@ export class UpsertStudentAssessmentScoreDto {
   @IsString()
   @IsNotEmpty()
   termName?: string;
+
+  @ApiProperty({
+    description: 'Term ID (optional - when provided, used for exact lookup to avoid wrong session/duplicates)',
+    example: 'term-uuid',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  termId?: string;
 
   @ApiProperty({
     description: 'Assessment name (required for new scores)',

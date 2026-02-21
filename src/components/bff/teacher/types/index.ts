@@ -37,6 +37,8 @@ export interface TeacherProfile {
   qualification: string;
   joinDate: string;
   avatar?: string;
+  subjects: string[];
+  classesAssigned: string[];
 }
 
 // Class information
@@ -61,11 +63,13 @@ export interface ClassDetails {
     id: string;
     name: string;
     email: string;
+    avatarUrl: string | null;
   };
   captain?: {
     id: string;
     name: string;
     studentNo: string;
+    avatarUrl: string | null;
   };
   stats: {
     totalStudents: number;
@@ -75,6 +79,12 @@ export interface ClassDetails {
     attendanceRate: number;
     averageScore: number;
   };
+  topPerformers: {
+    id: string;
+    name: string;
+    score: number;
+    avatarUrl: string | null;
+  }[];
   recentActivities: {
     id: string;
     type: string;
@@ -106,6 +116,9 @@ export interface ClassStudentInfo {
 export interface SubjectAssessmentScores {
   subjectId: string;
   subjectName: string;
+  classArmId: string;
+  classArmName: string;
+  levelName: string;
   teacher: {
     id: string;
     name: string;
@@ -118,12 +131,20 @@ export interface SubjectAssessmentScores {
   currentTerm: {
     id: string;
     name: string;
+    isLocked: boolean;
   };
+  availableTerms: {
+    id: string;
+    name: string;
+    isCurrent: boolean;
+    isLocked: boolean;
+  }[];
   students: {
     id: string;
     studentNo: string;
     fullName: string;
     gender: string;
+    avatarUrl: string | null;
     assessments: {
       id: string;
       name: string;
@@ -144,6 +165,7 @@ export interface SubjectAssessmentScores {
     lowestScore: number;
     passRate: number;
   };
+  gradingModel?: Record<string, [number, number]> | null;
 }
 
 // Subject information

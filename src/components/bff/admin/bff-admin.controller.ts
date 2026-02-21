@@ -2,12 +2,17 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Param,
   Query,
   Body,
+  Res,
+  Header,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiTags, ApiQuery, ApiParam } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../../common/decorators';
@@ -20,6 +25,7 @@ import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { CreateSubjectDto } from './dto/create-subject.dto';
+import { UpdateSubjectDto } from './dto/update-subject.dto';
 import {
   AdminsViewSwagger,
   ClassroomDetailsLimitQuery,
@@ -55,6 +61,7 @@ import { SingleStudentDetailsResult } from './results/single-student-details.res
 import { SingleTeacherDetailsResult } from './results/single-teacher-details.result';
 import { StudentDetailsResult } from './results/student-details.result';
 import { DashboardSummaryResult } from './results/dashboard-summary.result';
+import { AdminTopClassChampionsResult } from './results/admin-top-class-champions.result';
 
 @Controller('bff/admin')
 @ApiTags('BFF - Admin')
@@ -99,6 +106,13 @@ export class BffAdminController {
   async getClassroomsView(@GetCurrentUserId() userId: string) {
     const data = await this.bffAdminService.getClassroomsViewData(userId);
     return new AdminClassroomsViewResult(data);
+  }
+
+  @Get('top-class-champions')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getTopClassChampions(@GetCurrentUserId() userId: string) {
+    const data = await this.bffAdminService.getTopClassChampions(userId);
+    return new AdminTopClassChampionsResult(data);
   }
 
   @Get('teachers-view')
@@ -154,6 +168,112 @@ export class BffAdminController {
   ) {
     const data = await this.bffAdminService.createSubject(userId, createSubjectDto);
     return data;
+  }
+
+  @Get('subject/:subjectId/details')
+  @ApiParam({ name: 'subjectId', description: 'Subject UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getSubjectDetails(
+    @GetCurrentUserId() userId: string,
+    @Param('subjectId') subjectId: string,
+  ) {
+    return this.bffAdminService.getSubjectDetails(userId, subjectId);
+  }
+
+  @Get('subject/:subjectId/class/:classArmId/assessments')
+  @ApiParam({ name: 'subjectId', description: 'Subject UUID' })
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getSubjectClassAssessments(
+    @GetCurrentUserId() userId: string,
+    @Param('subjectId') subjectId: string,
+    @Param('classArmId') classArmId: string,
+  ) {
+    return this.bffAdminService.getClassAssessments(userId, subjectId, classArmId);
+  }
+
+  @Get('subject/:subjectId/class/:classArmId/broadsheet')
+  @ApiParam({ name: 'subjectId', description: 'Subject UUID' })
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async downloadBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('subjectId') subjectId: string,
+    @Param('classArmId') classArmId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.bffAdminService.generateBroadsheet(userId, subjectId, classArmId);
+    res.set({
+      'Content-Disposition': 'attachment; filename="broadsheet.xlsx"',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    res.send(buffer);
+  }
+
+  @Get('classroom/:classArmId/broadsheet')
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  async getClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('classArmId') classArmId: string,
+  ) {
+    return this.bffAdminService.getClassroomBroadsheet(userId, classArmId);
+  }
+
+  @Get('classroom/:classArmId/broadsheet/download')
+  @ApiParam({ name: 'classArmId', description: 'Class Arm UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async downloadClassroomBroadsheet(
+    @GetCurrentUserId() userId: string,
+    @Param('classArmId') classArmId: string,
+    @Res() res: Response,
+    @Query('termId') termId?: string,
+    @Query('cumulative') cumulative?: string,
+  ) {
+    const isCumulative = cumulative === 'true';
+    const buffer = await this.bffAdminService.downloadClassroomBroadsheet(userId, classArmId, termId, isCumulative);
+    res.set({
+      'Content-Disposition': 'attachment; filename="classroom-broadsheet.xlsx"',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    res.send(buffer);
+  }
+
+  @Patch('subjects/:subjectId')
+  @ApiParam({ name: 'subjectId', description: 'Subject UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'UPDATE_SUBJECT',
+    entityType: 'SUBJECT',
+    description: 'Admin updated a subject',
+    category: 'ADMINISTRATION',
+  })
+  async updateSubject(
+    @GetCurrentUserId() userId: string,
+    @Param('subjectId') subjectId: string,
+    @Body() updateSubjectDto: UpdateSubjectDto,
+  ) {
+    return this.bffAdminService.updateSubject(userId, subjectId, updateSubjectDto);
+  }
+
+  @Delete('subjects/:subjectId')
+  @ApiParam({ name: 'subjectId', description: 'Subject UUID' })
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'DELETE_SUBJECT',
+    entityType: 'SUBJECT',
+    description: 'Admin deleted a subject',
+    category: 'ADMINISTRATION',
+  })
+  async deleteSubject(
+    @GetCurrentUserId() userId: string,
+    @Param('subjectId') subjectId: string,
+  ) {
+    return this.bffAdminService.deleteSubject(userId, subjectId);
   }
 
   // Department endpoints

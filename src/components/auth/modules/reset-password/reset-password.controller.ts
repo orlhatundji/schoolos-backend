@@ -17,7 +17,7 @@ export class ResetPasswordController {
   @ApiResponse({
     status: HttpStatus.OK,
     type: ResetPasswordRequestResult,
-    description: ResetPasswordMessages.SUCCESS.SENT_RESET_PASSWORD_LINK,
+    description: 'Request password reset. Supports both email-based (for system admins) and userNo-based (for students, teachers, and school admins) requests.',
   })
   @ApiBadRequestResponse({
     description: ResetPasswordMessages.FAILURE.USER_NOT_FOUND,
@@ -31,7 +31,7 @@ export class ResetPasswordController {
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     type: UpdatePasswordResult,
-    description: ResetPasswordMessages.SUCCESS.PASSWORD_UPDATED,
+    description: 'Update password. Supports both email-based and userNo-based password updates.',
   })
   @ApiBadRequestResponse({
     description: ResetPasswordMessages.FAILURE.RESET_PASSWORD_NOT_CONFIRMED,

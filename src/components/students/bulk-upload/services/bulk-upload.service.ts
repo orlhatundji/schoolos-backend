@@ -292,6 +292,7 @@ export class BulkUploadService extends BaseService {
       dateOfBirth: row.dateOfBirth || row['Date of Birth'] || row['date_of_birth'],
       email: row.email || row['Email'] || row['EMAIL'],
       phone: (row.phone || row['Phone'] || row['PHONE'])?.toString(),
+      stateOfOrigin: row.stateOfOrigin || row['State of Origin'] || row['state_of_origin'],
       admissionDate: row.admissionDate || row['Admission Date'] || row['admission_date'],
       guardianFirstName:
         row.guardianFirstName || row['Guardian First Name'] || row['guardian_first_name'],
@@ -336,12 +337,12 @@ export class BulkUploadService extends BaseService {
 
     // Validate date format if provided
     if (record.dateOfBirth && !this.isValidDate(record.dateOfBirth)) {
-      throw new Error(`Invalid date format: ${record.dateOfBirth}. Use YYYY-MM-DD format`);
+      throw new Error(`Invalid date format: ${record.dateOfBirth}. Use DD-MM-YYYY or YYYY-MM-DD format`);
     }
 
     if (record.admissionDate && !this.isValidDate(record.admissionDate)) {
       throw new Error(
-        `Invalid admission date format: ${record.admissionDate}. Use YYYY-MM-DD format`,
+        `Invalid admission date format: ${record.admissionDate}. Use DD-MM-YYYY or YYYY-MM-DD format`,
       );
     }
 
@@ -349,7 +350,7 @@ export class BulkUploadService extends BaseService {
   }
 
   private transformExcelRowToStudentRecord(row: any[], rowNumber: number): StudentRecordDto | null {
-    // New column order: firstName, lastName, gender, className, dateOfBirth, email, phone, admissionDate, guardianFirstName, guardianLastName, guardianEmail, guardianPhone, guardianRelationship
+    // Column order: firstName, lastName, gender, className, dateOfBirth, email, phone, stateOfOrigin, admissionDate, guardianFirstName, guardianLastName, guardianEmail, guardianPhone, guardianRelationship
     const record: StudentRecordDto = {
       firstName: row[0],
       lastName: row[1],
@@ -359,12 +360,13 @@ export class BulkUploadService extends BaseService {
       dateOfBirth: this.convertExcelDate(row[4]),
       email: row[5],
       phone: row[6]?.toString(),
-      admissionDate: this.convertExcelDate(row[7]), // Moved up one position (was row[8])
-      guardianFirstName: row[8], // Moved up one position (was row[9])
-      guardianLastName: row[9], // Moved up one position (was row[10])
-      guardianEmail: row[10], // Moved up one position (was row[11])
-      guardianPhone: row[11]?.toString(), // Moved up one position (was row[12])
-      guardianRelationship: row[12], // Moved up one position (was row[13])
+      stateOfOrigin: row[7]?.toString(),
+      admissionDate: this.convertExcelDate(row[8]),
+      guardianFirstName: row[9],
+      guardianLastName: row[10],
+      guardianEmail: row[11],
+      guardianPhone: row[12]?.toString(),
+      guardianRelationship: row[13],
     };
 
     // Validate required fields with detailed error messages
@@ -396,12 +398,12 @@ export class BulkUploadService extends BaseService {
 
     // Validate date format if provided
     if (record.dateOfBirth && !this.isValidDate(record.dateOfBirth)) {
-      throw new Error(`Invalid date format: ${record.dateOfBirth}. Use YYYY-MM-DD format`);
+      throw new Error(`Invalid date format: ${record.dateOfBirth}. Use DD-MM-YYYY or YYYY-MM-DD format`);
     }
 
     if (record.admissionDate && !this.isValidDate(record.admissionDate)) {
       throw new Error(
-        `Invalid admission date format: ${record.admissionDate}. Use YYYY-MM-DD format`,
+        `Invalid admission date format: ${record.admissionDate}. Use DD-MM-YYYY or YYYY-MM-DD format`,
       );
     }
 
@@ -498,22 +500,34 @@ export class BulkUploadService extends BaseService {
     // Remove all non-digit characters except + at the beginning
     const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
 
-    // More flexible phone validation:
+    // Flexible phone validation:
     // - Must start with + (optional) followed by digits
-    // - Must be between 7 and 15 digits total (international standard)
-    // - Can start with country code
-    const phoneRegex = /^[\+]?[1-9]\d{6,14}$/;
+    // - Must be between 7 and 15 digits total
+    // - Can start with 0 (local format, e.g., 08012345678)
+    const phoneRegex = /^[\+]?[0-9]\d{6,14}$/;
 
     return phoneRegex.test(cleanPhone);
   }
 
   private isValidDate(dateString: string): boolean {
     if (!dateString || typeof dateString !== 'string') return false;
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(dateString)) return false;
 
-    const date = new Date(dateString);
-    return date instanceof Date && !isNaN(date.getTime());
+    // Accept YYYY-MM-DD or DD-MM-YYYY
+    const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const dmyRegex = /^\d{2}-\d{2}-\d{4}$/;
+
+    if (isoRegex.test(dateString)) {
+      const date = new Date(dateString);
+      return !isNaN(date.getTime());
+    }
+
+    if (dmyRegex.test(dateString)) {
+      const [day, month, year] = dateString.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+    }
+
+    return false;
   }
 
   private convertExcelDate(value: any): string | undefined {
@@ -521,9 +535,16 @@ export class BulkUploadService extends BaseService {
 
     // If it's already a string in YYYY-MM-DD format, return as is
     if (typeof value === 'string') {
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (dateRegex.test(value)) {
+      const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (isoRegex.test(value)) {
         return value;
+      }
+
+      // If it's DD-MM-YYYY format, convert to YYYY-MM-DD
+      const dmyRegex = /^\d{2}-\d{2}-\d{4}$/;
+      if (dmyRegex.test(value)) {
+        const [day, month, year] = value.split('-');
+        return `${year}-${month}-${day}`;
       }
     }
 
@@ -618,7 +639,7 @@ export class BulkUploadService extends BaseService {
       summary += `      - Gender: Must be "MALE" or "FEMALE"\n`;
       summary += `      - Email: Must be valid email format (e.g., user@example.com)\n`;
       summary += `      - Phone: Must be valid phone number (7-15 digits, e.g., +2348188415181 or 2348188415181)\n`;
-      summary += `      - Dates: Must be in YYYY-MM-DD format (e.g., 2023-12-25)\n\n`;
+      summary += `      - Dates: Must be in DD-MM-YYYY format (e.g., 25-12-2023)\n\n`;
     }
 
     // Invalid values section

@@ -1,7 +1,7 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import * as ExcelJS from 'exceljs';
-import { Readable } from 'stream';
 
 export interface StudentAssessmentTemplate {
   studentId: string;
@@ -29,7 +29,10 @@ export interface BulkUploadResult {
 
 @Injectable()
 export class ExcelBulkUploadService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly templateService: AssessmentStructureTemplateService,
+  ) {}
 
   /**
    * Generate Excel template for bulk assessment score upload
@@ -43,21 +46,7 @@ export class ExcelBulkUploadService {
     classArmName: string,
     teacherId: string,
   ): Promise<Buffer> {
-    // Get assessment structures for the school
-    const assessmentStructures = await this.prisma.assessmentStructure.findMany({
-      where: {
-        schoolId,
-        isActive: true,
-        deletedAt: null,
-      },
-      orderBy: { order: 'asc' },
-    });
-
-    if (assessmentStructures.length === 0) {
-      throw new BadRequestException('No assessment structures found for this school');
-    }
-
-    // Get academic session first
+    // Get academic session first (needed to find the template)
     const academicSession = await this.prisma.academicSession.findFirst({
       where: {
         academicYear: sessionName,
@@ -74,6 +63,19 @@ export class ExcelBulkUploadService {
       });
       const sessionNames = availableSessions.map(s => s.academicYear).join(', ');
       throw new NotFoundException(`Academic session '${sessionName}' not found. Available sessions: ${sessionNames}`);
+    }
+
+    // Get assessment structures from the active template for this school/session
+    const template = await this.templateService.findActiveTemplateForSchoolSession(
+      schoolId,
+      academicSession.id,
+    );
+    const assessmentStructures = (template.assessments as any[]).sort(
+      (a: any, b: any) => a.order - b.order,
+    );
+
+    if (assessmentStructures.length === 0) {
+      throw new BadRequestException('No assessment structures found for this school');
     }
 
     // Check if subject exists (case-insensitive)
@@ -118,25 +120,6 @@ export class ExcelBulkUploadService {
       });
       const termNames = availableTerms.map(t => t.name).join(', ');
       throw new NotFoundException(`Term '${termName}' not found for session '${sessionName}'. Available terms: ${termNames}`);
-    }
-
-    // Get subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
-      where: {
-        subjectId: subject.id,
-        termId: term.id,
-        academicSessionId: academicSession.id,
-        deletedAt: null,
-      },
-      include: {
-        subject: true,
-        term: true,
-        academicSession: true,
-      },
-    });
-
-    if (!subjectTerm) {
-      throw new NotFoundException(`Subject term not found. Subject '${subjectName}' may not be offered in term '${termName}' for session '${sessionName}'`);
     }
 
     // Check if level exists (case-insensitive)
@@ -211,13 +194,19 @@ export class ExcelBulkUploadService {
       throw new NotFoundException('Teacher not found');
     }
 
+    // Find or create ClassArmSubject for this class arm and subject
+    const classArmSubject = await this.prisma.classArmSubject.upsert({
+      where: { classArmId_subjectId: { classArmId: classArm.id, subjectId: subject.id } },
+      create: { classArmId: classArm.id, subjectId: subject.id },
+      update: {},
+    });
+
     // Verify teacher has access to this class and subject
     // First check if there's a specific ClassArmSubjectTeacher record
     let teacherAccess = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
         teacherId: teacher.id,
-        classArmId: classArm.id,
-        subjectId: subject.id,
+        classArmSubjectId: classArmSubject.id,
         deletedAt: null,
       },
     });
@@ -272,10 +261,11 @@ export class ExcelBulkUploadService {
       throw new NotFoundException(`No students found in ${levelName}${classArmName}`);
     }
 
-    // Get existing subject term student records and their assessments
-    const existingSubjectTermStudents = await this.prisma.subjectTermStudent.findMany({
+    // Get existing assessments for students in this class arm subject and term
+    const existingAssessments = await this.prisma.classArmStudentAssessment.findMany({
       where: {
-        subjectTermId: subjectTerm.id,
+        classArmSubjectId: classArmSubject.id,
+        termId: term.id,
         student: {
           classArmStudents: {
             some: {
@@ -288,19 +278,14 @@ export class ExcelBulkUploadService {
         },
         deletedAt: null,
       },
-      include: {
-        assessments: {
-          where: {
-            deletedAt: null,
-          },
-        },
-      },
     });
 
     // Create a map of existing assessments by student ID
     const assessmentsByStudentId = new Map();
-    existingSubjectTermStudents.forEach((sts) => {
-      assessmentsByStudentId.set(sts.studentId, sts.assessments);
+    existingAssessments.forEach((assessment) => {
+      const existing = assessmentsByStudentId.get(assessment.studentId) || [];
+      existing.push(assessment);
+      assessmentsByStudentId.set(assessment.studentId, existing);
     });
 
     // Create the students array with all class students
@@ -324,12 +309,13 @@ export class ExcelBulkUploadService {
       generatedAt: new Date().toISOString(),
       generatedBy: teacherId,
       schoolId: schoolId,
-      subjectTermId: subjectTerm.id,
+      classArmSubjectId: classArmSubject.id,
       classArmId: classArm.id,
-      assessmentStructures: assessmentStructures.map(structure => ({
+      assessmentStructures: assessmentStructures.map((structure: any) => ({
+        id: structure.id,
         name: structure.name,
         maxScore: structure.maxScore,
-        isExam: structure.isExam
+        isExam: structure.isExam,
       }))
     };
 
@@ -565,6 +551,7 @@ export class ExcelBulkUploadService {
     fileBuffer: Buffer,
     schoolId: string,
     teacherId: string,
+    termId?: string,
   ): Promise<BulkUploadResult> {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(fileBuffer);
@@ -574,9 +561,36 @@ export class ExcelBulkUploadService {
     if (!metadata) {
       throw new BadRequestException('Invalid template: Metadata not found in hidden sources');
     }
-    
+
     // Validate metadata
     await this.validateMetadata(metadata, schoolId, teacherId);
+
+    // If termId is provided, resolve the term by ID and override the metadata term name
+    if (termId) {
+      const termRecord = await this.prisma.term.findFirst({
+        where: { id: termId, academicSession: { schoolId }, deletedAt: null },
+      });
+      if (!termRecord) {
+        throw new NotFoundException(`Term with ID "${termId}" not found`);
+      }
+      if (termRecord.isLocked) {
+        throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+      }
+      metadata.termName = termRecord.name;
+    } else {
+      // Check lock on the term resolved from metadata
+      const academicSession = await this.prisma.academicSession.findFirst({
+        where: { academicYear: metadata.sessionName, schoolId, deletedAt: null },
+      });
+      if (academicSession) {
+        const termRecord = await this.prisma.term.findFirst({
+          where: { name: { equals: metadata.termName, mode: 'insensitive' }, academicSessionId: academicSession.id, deletedAt: null },
+        });
+        if (termRecord?.isLocked) {
+          throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+        }
+      }
+    }
 
     // Get main data sheet (should be named after the class)
     const worksheet = workbook.worksheets[0]; // Get the first (and only) worksheet
@@ -659,6 +673,7 @@ export class ExcelBulkUploadService {
               assessmentName,
               numericScore,
               schoolId,
+              metadata.assessmentStructures,
             );
 
             result.success.push({
@@ -746,7 +761,7 @@ export class ExcelBulkUploadService {
             levelName: metadata.level,
             classArmName: metadata.classArm,
             schoolId: metadata.schoolId,
-            subjectTermId: metadata.subjectTermId,
+            classArmSubjectId: metadata.classArmSubjectId,
             classArmId: metadata.classArmId,
             teacherId: metadata.generatedBy,
             assessmentStructures: metadata.assessmentStructures
@@ -791,8 +806,8 @@ export class ExcelBulkUploadService {
           case 'School ID':
             metadata.schoolId = value;
             break;
-          case 'Subject Term ID':
-            metadata.subjectTermId = value;
+          case 'Class Arm Subject ID':
+            metadata.classArmSubjectId = value;
             break;
           case 'Class Arm ID':
             metadata.classArmId = value;
@@ -829,10 +844,7 @@ export class ExcelBulkUploadService {
     let teacherAccess = await this.prisma.classArmSubjectTeacher.findFirst({
       where: {
         teacherId: teacher.id,
-        classArmId: metadata.classArmId,
-        subject: {
-          name: metadata.subjectName,
-        },
+        classArmSubjectId: metadata.classArmSubjectId,
         deletedAt: null,
       },
     });
@@ -868,6 +880,7 @@ export class ExcelBulkUploadService {
     assessmentName: string,
     score: number,
     schoolId: string,
+    metadataAssessments?: Array<{ id: string; name: string; maxScore: number; isExam: boolean }>,
   ) {
     // Get academic session first
     const academicSession = await this.prisma.academicSession.findFirst({
@@ -882,7 +895,7 @@ export class ExcelBulkUploadService {
       throw new NotFoundException('Academic session not found');
     }
 
-    // Get subject first (case-insensitive)
+    // Get subject (case-insensitive)
     const subject = await this.prisma.subject.findFirst({
       where: {
         name: {
@@ -898,7 +911,7 @@ export class ExcelBulkUploadService {
       throw new NotFoundException(`Subject '${subjectName}' not found`);
     }
 
-    // Get term first (case-insensitive)
+    // Get term (case-insensitive)
     const term = await this.prisma.term.findFirst({
       where: {
         name: {
@@ -914,101 +927,74 @@ export class ExcelBulkUploadService {
       throw new NotFoundException(`Term '${termName}' not found for session '${sessionName}'`);
     }
 
-    // Get subject term
-    const subjectTerm = await this.prisma.subjectTerm.findFirst({
-      where: {
-        subjectId: subject.id,
-        termId: term.id,
-        academicSessionId: academicSession.id,
-        deletedAt: null,
-      },
-    });
-
-    if (!subjectTerm) {
-      throw new NotFoundException('Subject term not found');
-    }
-
-    // Get or create subject term student
-    let subjectTermStudent = await this.prisma.subjectTermStudent.findFirst({
+    // Find the ClassArmSubject - we need to find which class arm the student belongs to
+    const classArmStudent = await this.prisma.classArmStudent.findFirst({
       where: {
         studentId,
-        subjectTermId: subjectTerm.id,
-        deletedAt: null,
-      },
-    });
-
-    if (!subjectTermStudent) {
-      subjectTermStudent = await this.prisma.subjectTermStudent.create({
-        data: {
-          studentId,
-          subjectTermId: subjectTerm.id,
-          totalScore: 0,
-        },
-      });
-    }
-
-    // Get assessment structure to determine if it's an exam (case-insensitive)
-    const assessmentStructure = await this.prisma.assessmentStructure.findFirst({
-      where: {
-        schoolId,
-        name: {
-          equals: assessmentName,
-          mode: 'insensitive',
-        },
         isActive: true,
         deletedAt: null,
       },
     });
 
-    // Find existing assessment score (only non-deleted ones)
-    const existingAssessment = await this.prisma.subjectTermStudentAssessment.findFirst({
-      where: {
-        subjectTermStudentId: subjectTermStudent.id,
-        name: assessmentName,
-        deletedAt: null,
-      },
-    });
-
-    if (existingAssessment) {
-      // Update existing assessment
-      await this.prisma.subjectTermStudentAssessment.update({
-        where: {
-          id: existingAssessment.id,
-        },
-        data: {
-          score,
-          isExam: assessmentStructure?.isExam || false,
-        },
-      });
-    } else {
-      // Create new assessment
-      await this.prisma.subjectTermStudentAssessment.create({
-        data: {
-          name: assessmentName,
-          score,
-          isExam: assessmentStructure?.isExam || false,
-          subjectTermStudentId: subjectTermStudent.id,
-        },
-      });
+    if (!classArmStudent) {
+      throw new NotFoundException('Student is not assigned to any class arm');
     }
 
-    // Update total score
-    await this.updateTotalScore(subjectTermStudent.id);
-  }
-
-  private async updateTotalScore(subjectTermStudentId: string) {
-    const assessments = await this.prisma.subjectTermStudentAssessment.findMany({
-      where: {
-        subjectTermStudentId,
-        deletedAt: null,
-      },
+    // Get or create ClassArmSubject
+    const classArmSubject = await this.prisma.classArmSubject.upsert({
+      where: { classArmId_subjectId: { classArmId: classArmStudent.classArmId, subjectId: subject.id } },
+      create: { classArmId: classArmStudent.classArmId, subjectId: subject.id },
+      update: {},
     });
 
-    const totalScore = assessments.reduce((sum, assessment) => sum + assessment.score, 0);
+    // Look up assessment type from metadata (embedded in Excel) or from the active template
+    let assessmentEntry: { id: string; name: string; maxScore: number; isExam: boolean } | undefined;
 
-    await this.prisma.subjectTermStudent.update({
-      where: { id: subjectTermStudentId },
-      data: { totalScore },
+    if (metadataAssessments) {
+      assessmentEntry = metadataAssessments.find(
+        (a) => a.name.toLowerCase() === assessmentName.toLowerCase(),
+      );
+    }
+
+    if (!assessmentEntry) {
+      // Fallback: look up from the active template
+      const template = await this.templateService.findActiveTemplateForSchoolSession(
+        schoolId,
+        academicSession.id,
+      );
+      const entry = this.templateService.getAssessmentEntryByName(template, assessmentName);
+      if (entry) {
+        assessmentEntry = { id: entry.id, name: entry.name, maxScore: entry.maxScore, isExam: entry.isExam };
+      }
+    }
+
+    // Upsert the assessment score using the unique constraint
+    await this.prisma.classArmStudentAssessment.upsert({
+      where: {
+        classArmSubjectId_studentId_termId_name: {
+          classArmSubjectId: classArmSubject.id,
+          studentId,
+          termId: term.id,
+          name: assessmentName,
+        },
+      },
+      create: {
+        classArmSubjectId: classArmSubject.id,
+        studentId,
+        termId: term.id,
+        name: assessmentName,
+        score,
+        isExam: assessmentEntry?.isExam || false,
+        assessmentTypeId: assessmentEntry?.id,
+        maxScore: assessmentEntry?.maxScore,
+      },
+      update: {
+        score,
+        isExam: assessmentEntry?.isExam || false,
+        assessmentTypeId: assessmentEntry?.id,
+        maxScore: assessmentEntry?.maxScore,
+        deletedAt: null,
+      },
     });
   }
 }

@@ -134,6 +134,24 @@ export class AdminTeacherController {
     return this.adminTeacherService.updateTeacher(userId, teacherId, updateTeacherDto);
   }
 
+  @Get(':teacherId/subject-assignments')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Teacher subject assignments retrieved successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Teacher not found',
+  })
+  @ApiParam({ name: 'teacherId', description: 'Teacher ID' })
+  async getTeacherSubjectAssignments(
+    @GetCurrentUserId() userId: string,
+    @Param('teacherId') teacherId: string,
+  ) {
+    return this.adminTeacherService.getTeacherSubjectAssignments(userId, teacherId);
+  }
+
   @Delete(':teacherId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiResponse({

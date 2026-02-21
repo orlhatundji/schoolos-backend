@@ -9,7 +9,10 @@ export class PaymentStructuresRepository {
 
   async create(data: CreatePaymentStructureDto & { schoolId: string }) {
     return this.prisma.paymentStructure.create({
-      data,
+      data: {
+        ...data,
+        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      },
       include: {
         academicSession: true,
         term: true,
@@ -76,7 +79,10 @@ export class PaymentStructuresRepository {
   async update(id: string, data: UpdatePaymentStructureDto) {
     return this.prisma.paymentStructure.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      },
       include: {
         academicSession: true,
         term: true,

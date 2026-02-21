@@ -4,9 +4,9 @@ import { Prisma, StudentStatus, UserType } from '@prisma/client';
 import { BaseService } from '../../common/base-service';
 import { CounterService } from '../../common/counter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PasswordHasher } from '../../utils/hasher/hasher';
 import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { PasswordGenerator } from '../../utils/password/password.generator';
+import { MailQueueService } from '../../utils/mail-queue/mail-queue.service';
 import { SchoolsService } from '../schools';
 import { ClassArmStudentService } from './services/class-arm-student.service';
 import { UserTypes } from '../users/constants';
@@ -31,23 +31,26 @@ export class StudentsService extends BaseService {
     private readonly counterService: CounterService,
     private readonly prisma: PrismaService,
     private readonly passwordGenerator: PasswordGenerator,
-    private readonly passwordHasher: PasswordHasher,
     private readonly classArmStudentService: ClassArmStudentService,
+    private readonly mailQueueService: MailQueueService,
   ) {
     super(StudentsService.name);
   }
 
   async create(createStudentDto: CreateStudentDto, schoolId: string): Promise<Student> {
     if (createStudentDto.admissionNo) {
-      await this.throwIfStudentAdmissionNoExists(createStudentDto.admissionNo);
+      await this.throwIfStudentAdmissionNoExists(createStudentDto.admissionNo, schoolId);
     }
 
     return this.save(createStudentDto, schoolId);
   }
 
-  private async throwIfStudentAdmissionNoExists(admissionNo: string) {
+  private async throwIfStudentAdmissionNoExists(admissionNo: string, schoolId: string) {
     const existingStudent = await this.studentsRepository.findOne({
-      where: { admissionNo },
+      where: {
+        admissionNo,
+        user: { schoolId },
+      },
     });
 
     if (existingStudent) {
@@ -67,17 +70,17 @@ export class StudentsService extends BaseService {
       ...userData
     } = createStudentDto;
 
-    // Use fixed default password for all students
-    const defaultPassword = 'default123';
-    const hashedPassword = await this.passwordHasher.hash(defaultPassword);
+    // Use student's surname (lowercase) as default password
+    // Note: userService.save() handles the password hashing
+    const defaultPassword = userData.lastName.toLowerCase();
 
     // Create user data with only User model fields
     const userCreateData = {
       ...userData,
-      password: hashedPassword,
+      password: defaultPassword,
       type: UserType.STUDENT,
       schoolId: schoolId,
-      mustUpdatePassword: false, // Allow students to use default password without forcing change
+      mustUpdatePassword: true, // Force students to update password on first login
       dateOfBirth: userData.dateOfBirth || new Date().toISOString().split('T')[0], // Provide default date string if not set
       email:
         userData.email ||
@@ -97,13 +100,31 @@ export class StudentsService extends BaseService {
       nextSeq,
     );
 
-    const studentData = {
+    const studentData: any = {
       userId: user.id,
       studentNo,
       guardianId,
       admissionNo,
       admissionDate: dateTime,
     };
+
+    // Add guardian information if provided
+    if (guardianInformation) {
+      studentData.guardianFirstName = guardianInformation.firstName;
+      studentData.guardianLastName = guardianInformation.lastName;
+      studentData.guardianEmail = guardianInformation.email;
+      studentData.guardianPhone = guardianInformation.phone;
+    }
+
+    // Add address as JSON if provided
+    if (address) {
+      studentData.address = { ...address };
+    }
+
+    // Add medical information as JSON if provided
+    if (medicalInformation) {
+      studentData.medicalInformation = JSON.parse(JSON.stringify(medicalInformation));
+    }
 
     const student = await this.studentsRepository.create(studentData, {
       include: { user: true },
@@ -125,17 +146,30 @@ export class StudentsService extends BaseService {
     // Create ClassArmStudent relationship
     await this.classArmStudentService.enrollStudent(student.id, classArmId, currentSession.id);
 
-    // Note: guardianInformation, medicalInformation, and address handling
-    // These fields are received but not yet processed - requires additional
-    // database models and service logic to be implemented
-    if (guardianInformation) {
-      // Guardian information processing not yet implemented
-    }
-    if (medicalInformation) {
-      // Medical information processing not yet implemented
-    }
-    if (address) {
-      // Address information processing not yet implemented
+    // Send welcome email with credentials (non-blocking)
+    try {
+      const recipientEmail = userCreateData.email;
+      await this.mailQueueService.add({
+        recipientAddress: recipientEmail,
+        recipientName: `${userData.firstName} ${userData.lastName}`,
+        subject: `Welcome to ${school.name} - Your Login Credentials`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Welcome to ${school.name}!</h2>
+            <p>Hi ${userData.firstName},</p>
+            <p>Your student account has been created. Here are your login credentials:</p>
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Student ID:</strong> ${studentNo}</p>
+              <p style="margin: 5px 0;"><strong>Email:</strong> ${recipientEmail}</p>
+              <p style="margin: 5px 0;"><strong>Password:</strong> ${defaultPassword}</p>
+            </div>
+            <p style="color: #e74c3c;"><strong>Important:</strong> Please change your password after your first login.</p>
+            <p>Best regards,<br/>The ${school.name} Team</p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to queue welcome email for student ${studentNo}:`, error);
     }
 
     return student;
@@ -435,28 +469,29 @@ export class StudentsService extends BaseService {
       });
     }
 
-    // Handle guardianInformation - this should create/update guardian
+    // Handle guardianInformation - store directly on student
     if (
       updateStudentDto.guardianInformation &&
       Object.keys(updateStudentDto.guardianInformation).length > 0
     ) {
-      // TODO: Implement guardian information update logic
-      // This would involve creating or updating a guardian record
+      const { firstName, lastName, email, phone } = updateStudentDto.guardianInformation;
+      if (firstName) updateData.guardianFirstName = firstName;
+      if (lastName) updateData.guardianLastName = lastName;
+      if (email) updateData.guardianEmail = email;
+      if (phone) updateData.guardianPhone = phone;
     }
 
-    // Handle medicalInformation - this should be stored in user or separate medical record
+    // Handle address - store as JSON on student
+    if (updateStudentDto.address && Object.keys(updateStudentDto.address).length > 0) {
+      updateData.address = { ...updateStudentDto.address };
+    }
+
+    // Handle medical information - store as JSON on student
     if (
       updateStudentDto.medicalInformation &&
       Object.keys(updateStudentDto.medicalInformation).length > 0
     ) {
-      // TODO: Implement medical information update logic
-      // This would involve creating or updating medical records
-    }
-
-    // Handle address - this should create/update address
-    if (updateStudentDto.address && Object.keys(updateStudentDto.address).length > 0) {
-      // TODO: Implement address update logic
-      // This would involve creating or updating an address record
+      updateData.medicalInformation = JSON.parse(JSON.stringify(updateStudentDto.medicalInformation));
     }
 
     // Only update if there's actual data to update

@@ -1,7 +1,7 @@
 import * as Joi from 'joi';
 
 export const ConfigValidationSchema = Joi.object({
-  NODE_ENV: Joi.string().valid('development', 'production', 'prod', 'test'),
+  NODE_ENV: Joi.string().valid('development', 'production', 'prod', 'test', 'staging'),
   PORT: Joi.number().default(3000),
 
   DATABASE_URL: Joi.string().required(),
@@ -26,4 +26,11 @@ export const ConfigValidationSchema = Joi.object({
 
   DEFAULT_SOURCE_EMAIL: Joi.string().required(),
   OTP_GENERATOR_KEY: Joi.string().required(),
+
+  AWS_REGION: Joi.string().required(),
+  AWS_ACCESS_KEY_ID: Joi.string().required(),
+  AWS_SECRET_ACCESS_KEY: Joi.string().required(),
+  AWS_S3_BUCKET: Joi.string().required(),
+  AWS_S3_ENDPOINT: Joi.string().required(),
+  AWS_S3_FOLDER: Joi.string().required(),
 });

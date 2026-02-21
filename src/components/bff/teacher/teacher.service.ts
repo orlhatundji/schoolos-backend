@@ -1159,7 +1159,8 @@ export class TeacherService {
       }
       selectedTerm = { id: termRecord.id, name: termRecord.name, isLocked: termRecord.isLocked, isCurrent: termRecord.isCurrent };
     } else {
-      const currentTermRecord = currentSession?.terms?.find((t) => t.isCurrent);
+      // Try to find the term marked as current; fall back to first term in the session
+      const currentTermRecord = currentSession?.terms?.find((t) => t.isCurrent) || currentSession?.terms?.[0];
       if (currentTermRecord) {
         selectedTerm = { id: currentTermRecord.id, name: currentTermRecord.name, isLocked: currentTermRecord.isLocked, isCurrent: currentTermRecord.isCurrent };
       }
@@ -1273,11 +1274,13 @@ export class TeacherService {
         name: currentSession?.academicYear,
         isCurrent: currentSession?.isCurrent,
       },
-      currentTerm: {
-        id: selectedTerm?.id,
-        name: selectedTerm?.name,
-        isLocked: selectedTerm?.isLocked ?? false,
-      },
+      currentTerm: selectedTerm
+        ? {
+            id: selectedTerm.id,
+            name: selectedTerm.name,
+            isLocked: selectedTerm.isLocked,
+          }
+        : null,
       availableTerms,
       classStats,
       students: studentsWithScores,

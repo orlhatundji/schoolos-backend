@@ -126,6 +126,7 @@ export class BffAdminSubjectService {
         id: subject.id,
         name: subject.name,
         department: subject.department?.name || null,
+        departmentId: subject.departmentId || null,
         category: subject.category?.name || null,
         classesCount,
         studentCount,

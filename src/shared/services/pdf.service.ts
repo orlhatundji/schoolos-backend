@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as Handlebars from 'handlebars';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { StudentResultsData } from '../../components/bff/student/types';
 
@@ -123,7 +123,12 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
       return this.templateCache.get(templateId)!;
     }
 
-    const templatePath = join(__dirname, '..', 'templates', 'results', `${templateId}.hbs`);
+    // Try __dirname-relative path first (works with ts-node/dev), then fall back
+    // to dist/shared/ path (compiled output puts .js in dist/src/ but assets go to dist/)
+    let templatePath = join(__dirname, '..', 'templates', 'results', `${templateId}.hbs`);
+    if (!existsSync(templatePath)) {
+      templatePath = join(process.cwd(), 'dist', 'shared', 'templates', 'results', `${templateId}.hbs`);
+    }
     const source = readFileSync(templatePath, 'utf8');
     const compiled = Handlebars.compile(source);
     this.templateCache.set(templateId, compiled);

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { SchoolsService } from '../schools/schools.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { SchoolConfigDto, UpdateSchoolConfigDto } from './dto';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class SettingsService {
   constructor(
     private readonly schoolsService: SchoolsService,
     private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
   ) {}
 
   async getSchoolConfig(userId: string): Promise<SchoolConfigDto> {
@@ -53,6 +55,7 @@ export class SettingsService {
       studentCapacity: school.studentCapacity || '',
       description: school.description || '',
       colorScheme: school.colorScheme || 'default',
+      resultTemplateId: school.resultTemplateId || 'classic',
       schoolAddress: primaryAddress ? {
         street: primaryAddress.street1,
         street2: primaryAddress.street2,
@@ -102,6 +105,13 @@ export class SettingsService {
     }
 
     if (updateData.logoUrl) {
+      // Delete old logo from S3 if it exists
+      if (user.school.logoUrl) {
+        const oldKey = this.storageService.extractKeyFromUrl(user.school.logoUrl);
+        if (oldKey) {
+          this.storageService.deleteObject(oldKey);
+        }
+      }
       updatePayload.logoUrl = updateData.logoUrl;
       updatedFields.push('logoUrl');
     }
@@ -142,6 +152,14 @@ export class SettingsService {
     if (updateData.colorScheme !== undefined) {
       updatePayload.colorScheme = updateData.colorScheme;
       updatedFields.push('colorScheme');
+    }
+    if (updateData.resultTemplateId !== undefined) {
+      const validTemplates = ['classic', 'modern', 'traditional', 'colorful', 'professional'];
+      if (!validTemplates.includes(updateData.resultTemplateId)) {
+        throw new BadRequestException('Invalid result template ID');
+      }
+      updatePayload.resultTemplateId = updateData.resultTemplateId;
+      updatedFields.push('resultTemplateId');
     }
 
     // Handle contact info updates

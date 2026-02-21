@@ -208,6 +208,11 @@ export class CreateStudentDto {
   @IsUrl()
   avatarUrl?: string;
 
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  stateOfOrigin?: string;
+
   @ApiProperty()
   @IsOptional()
   @IsString()

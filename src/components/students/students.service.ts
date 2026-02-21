@@ -4,9 +4,9 @@ import { Prisma, StudentStatus, UserType } from '@prisma/client';
 import { BaseService } from '../../common/base-service';
 import { CounterService } from '../../common/counter';
 import { PrismaService } from '../../prisma/prisma.service';
-import { PasswordHasher } from '../../utils/hasher/hasher';
 import { getNextUserEntityNoFormatted } from '../../utils/misc';
 import { PasswordGenerator } from '../../utils/password/password.generator';
+import { MailQueueService } from '../../utils/mail-queue/mail-queue.service';
 import { SchoolsService } from '../schools';
 import { ClassArmStudentService } from './services/class-arm-student.service';
 import { UserTypes } from '../users/constants';
@@ -31,8 +31,8 @@ export class StudentsService extends BaseService {
     private readonly counterService: CounterService,
     private readonly prisma: PrismaService,
     private readonly passwordGenerator: PasswordGenerator,
-    private readonly passwordHasher: PasswordHasher,
     private readonly classArmStudentService: ClassArmStudentService,
+    private readonly mailQueueService: MailQueueService,
   ) {
     super(StudentsService.name);
   }
@@ -70,17 +70,17 @@ export class StudentsService extends BaseService {
       ...userData
     } = createStudentDto;
 
-    // Use fixed default password for all students
-    const defaultPassword = 'default123';
-    const hashedPassword = await this.passwordHasher.hash(defaultPassword);
+    // Use student's surname (lowercase) as default password
+    // Note: userService.save() handles the password hashing
+    const defaultPassword = userData.lastName.toLowerCase();
 
     // Create user data with only User model fields
     const userCreateData = {
       ...userData,
-      password: hashedPassword,
+      password: defaultPassword,
       type: UserType.STUDENT,
       schoolId: schoolId,
-      mustUpdatePassword: false, // Allow students to use default password without forcing change
+      mustUpdatePassword: true, // Force students to update password on first login
       dateOfBirth: userData.dateOfBirth || new Date().toISOString().split('T')[0], // Provide default date string if not set
       email:
         userData.email ||
@@ -145,6 +145,32 @@ export class StudentsService extends BaseService {
 
     // Create ClassArmStudent relationship
     await this.classArmStudentService.enrollStudent(student.id, classArmId, currentSession.id);
+
+    // Send welcome email with credentials (non-blocking)
+    try {
+      const recipientEmail = userCreateData.email;
+      await this.mailQueueService.add({
+        recipientAddress: recipientEmail,
+        recipientName: `${userData.firstName} ${userData.lastName}`,
+        subject: `Welcome to ${school.name} - Your Login Credentials`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Welcome to ${school.name}!</h2>
+            <p>Hi ${userData.firstName},</p>
+            <p>Your student account has been created. Here are your login credentials:</p>
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Student ID:</strong> ${studentNo}</p>
+              <p style="margin: 5px 0;"><strong>Email:</strong> ${recipientEmail}</p>
+              <p style="margin: 5px 0;"><strong>Password:</strong> ${defaultPassword}</p>
+            </div>
+            <p style="color: #e74c3c;"><strong>Important:</strong> Please change your password after your first login.</p>
+            <p>Best regards,<br/>The ${school.name} Team</p>
+          </div>
+        `,
+      });
+    } catch (error) {
+      this.logger.error(`Failed to queue welcome email for student ${studentNo}:`, error);
+    }
 
     return student;
   }

@@ -49,6 +49,7 @@ export interface TopPerformer {
   name: string;
   score: number;
   subject: string;
+  avatarUrl: string | null;
 }
 
 export interface StudentInfo {
@@ -91,11 +92,13 @@ export interface ClassroomDetailsData {
     name: string;
     phone: string | null;
     email: string;
+    avatarUrl: string | null;
   } | null;
   classCaptain: {
     id: string;
     name: string;
     admissionNumber: string;
+    avatarUrl: string | null;
   } | null;
   students: StudentInfo[];
   topPerformers: TopPerformer[];
@@ -111,6 +114,7 @@ export interface StudentDetailInfo {
   stateOfOrigin: string;
   guardianName: string;
   guardianPhone: string | null;
+  guardianEmail: string | null;
   telephone: string | null;
   className: string;
   classLevel: string;
@@ -588,4 +592,52 @@ export interface DashboardSummaryData {
   financialStats: DashboardFinancialStats;
   operationalStats: DashboardOperationalStats;
   academicInfo: AcademicInfo;
+}
+
+export interface ClassChampion {
+  id: string;
+  name: string;
+  score: number;
+  className: string;
+  classLevel: string;
+  teacherName: string;
+  avatarUrl: string | null;
+}
+
+export interface TopClassChampionsData {
+  champions: ClassChampion[];
+  academicSession: string;
+  term: string;
+}
+
+// Classroom Broadsheet types
+export interface ClassroomBroadsheetData {
+  schoolName: string;
+  classroom: { id: string; name: string; levelName: string };
+  academicSession: { id: string; name: string };
+  terms: { id: string; name: string; isCurrent: boolean }[];
+  subjects: { id: string; name: string; classArmSubjectId: string }[];
+  assessmentStructure: { name: string; maxScore: number; isExam: boolean; order: number }[];
+  students: ClassroomBroadsheetStudent[];
+  gradingModel: Record<string, [number, number]> | null;
+}
+
+export interface ClassroomBroadsheetStudent {
+  id: string;
+  studentNo: string;
+  fullName: string;
+  gender: string;
+  subjects: ClassroomBroadsheetStudentSubject[];
+  grandTotal: number;
+  overallAverage: number;
+  rank: number;
+  remarks: string;
+}
+
+export interface ClassroomBroadsheetStudentSubject {
+  subjectId: string;
+  subjectName: string;
+  classArmSubjectId: string;
+  termScores: { termId: string; total: number; percentage: number; grade: string }[];
+  average: number;
 }

@@ -5,6 +5,7 @@ import { SchoolConfigDto, UpdateSchoolConfigDto } from './dto';
 import { GetCurrentUserId } from '../../common/decorators';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
 import { StrategyEnum } from '../auth/strategies';
+import { PdfService } from '../../shared/services';
 
 @Controller('settings')
 @ApiTags('Settings')
@@ -53,6 +54,20 @@ export class SettingsController {
       success: true,
       message: 'School configuration updated successfully',
       data: result,
+    };
+  }
+
+  @Get('result-templates')
+  @ApiOperation({ summary: 'Get available result templates' })
+  @ApiResponse({
+    status: 200,
+    description: 'Result templates retrieved successfully',
+  })
+  getResultTemplates() {
+    return {
+      success: true,
+      message: 'Result templates retrieved successfully',
+      data: PdfService.TEMPLATE_INFO,
     };
   }
 

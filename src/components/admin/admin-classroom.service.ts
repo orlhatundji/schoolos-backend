@@ -132,10 +132,9 @@ export class AdminClassroomService {
       );
     }
 
-    // Soft delete the classroom
-    await this.prisma.classArm.update({
+    // Hard delete the classroom — safe because we've verified no students or teachers are assigned
+    await this.prisma.classArm.delete({
       where: { id: classroomId },
-      data: { deletedAt: new Date() },
     });
 
     return { message: 'Classroom deleted successfully' };

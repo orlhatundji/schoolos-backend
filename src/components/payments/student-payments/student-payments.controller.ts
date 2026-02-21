@@ -106,6 +106,21 @@ export class StudentPaymentsController {
     return this.studentPaymentsService.markPaymentAsPaid(userId, id, body.paidAmount, body.paidAt);
   }
 
+  @Post('verify-reference')
+  @CheckPolicies()
+  @ApiOperation({ summary: 'Verify and reconcile a payment by Paystack reference' })
+  @ApiResponse({ status: 200, description: 'Payment verified and reconciled' })
+  @ApiResponse({ status: 400, description: 'Payment not successful on Paystack' })
+  @ApiResponse({ status: 404, description: 'Payment record not found for reference' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  verifyByReference(
+    @GetCurrentUserId() userId: string,
+    @Body() body: { reference: string },
+  ) {
+    return this.studentPaymentsService.verifyPaymentByReference(userId, body.reference);
+  }
+
   @Post(':id/waive')
   @CheckPolicies()
   @ApiOperation({ summary: 'Waive a student payment' })

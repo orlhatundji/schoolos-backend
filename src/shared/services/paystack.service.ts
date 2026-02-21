@@ -10,6 +10,35 @@ export interface PaystackPaymentRequest {
   currency?: string;
   metadata?: Record<string, any>;
   callback_url?: string;
+  subaccount?: string;
+  transaction_charge?: number; // Platform's charge in kobo
+}
+
+export interface PaystackBank {
+  id: number;
+  name: string;
+  slug: string;
+  code: string;
+  longcode: string;
+  country: string;
+  currency: string;
+  type: string;
+  active: boolean;
+}
+
+export interface PaystackResolvedAccount {
+  account_number: string;
+  account_name: string;
+  bank_id: number;
+}
+
+export interface PaystackSubaccount {
+  subaccount_code: string;
+  business_name: string;
+  settlement_bank: string;
+  account_number: string;
+  percentage_charge: number;
+  id: number;
 }
 
 export interface PaystackPaymentResponse {
@@ -111,14 +140,25 @@ export class PaystackService {
     paymentRequest: PaystackPaymentRequest,
   ): Promise<PaystackPaymentResponse> {
     try {
-      const response = await this.paystackClient.post('/transaction/initialize', {
+      const payload: Record<string, any> = {
         amount: paymentRequest.amount,
         email: paymentRequest.email,
         reference: paymentRequest.reference,
         currency: paymentRequest.currency || 'NGN',
         metadata: paymentRequest.metadata,
         callback_url: paymentRequest.callback_url,
-      });
+      };
+
+      if (paymentRequest.subaccount) {
+        payload.subaccount = paymentRequest.subaccount;
+        payload.bearer = 'account'; // School (subaccount) bears nothing extra; platform gets transaction_charge
+      }
+
+      if (paymentRequest.transaction_charge !== undefined) {
+        payload.transaction_charge = paymentRequest.transaction_charge;
+      }
+
+      const response = await this.paystackClient.post('/transaction/initialize', payload);
 
       if (!response.data.status) {
         throw new BadRequestException(response.data.message || 'Failed to initialize payment');
@@ -152,22 +192,6 @@ export class PaystackService {
         throw new BadRequestException(error.response.data.message);
       }
       throw new BadRequestException('Failed to verify payment');
-    }
-  }
-
-  /**
-   * Get payment details by reference
-   */
-  async getPaymentDetails(reference: string): Promise<PaystackVerificationResponse> {
-    try {
-      const response = await this.paystackClient.get(`/transaction/verify/${reference}`);
-      return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to get payment details: ${error.message}`, error.stack);
-      if (error.response?.data?.message) {
-        throw new BadRequestException(error.response.data.message);
-      }
-      throw new BadRequestException('Failed to get payment details');
     }
   }
 
@@ -208,31 +232,93 @@ export class PaystackService {
   }
 
   /**
-   * Get webhook events (for debugging)
+   * List Nigerian banks from Paystack
    */
-  async getWebhookEvents(): Promise<any> {
+  async listBanks(): Promise<PaystackBank[]> {
     try {
-      const response = await this.paystackClient.get('/webhook');
-      return response.data;
+      const response = await this.paystackClient.get('/bank', {
+        params: { country: 'nigeria', perPage: 100 },
+      });
+      return response.data.data;
     } catch (error) {
-      this.logger.error(`Failed to get webhook events: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to get webhook events');
+      this.logger.error(`Failed to list banks: ${error.message}`, error.stack);
+      throw new BadRequestException('Failed to fetch bank list');
     }
   }
 
   /**
-   * Create webhook endpoint
+   * Resolve/verify a bank account number
    */
-  async createWebhook(url: string, events: string[]): Promise<any> {
+  async resolveAccountNumber(
+    accountNumber: string,
+    bankCode: string,
+  ): Promise<PaystackResolvedAccount> {
     try {
-      const response = await this.paystackClient.post('/webhook', {
-        url,
-        events,
+      const response = await this.paystackClient.get('/bank/resolve', {
+        params: { account_number: accountNumber, bank_code: bankCode },
       });
-      return response.data;
+      if (!response.data.status) {
+        throw new BadRequestException(response.data.message || 'Failed to resolve account');
+      }
+      return response.data.data;
     } catch (error) {
-      this.logger.error(`Failed to create webhook: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to create webhook');
+      this.logger.error(`Failed to resolve account: ${error.message}`, error.stack);
+      if (error.response?.data?.message) {
+        throw new BadRequestException(error.response.data.message);
+      }
+      throw new BadRequestException('Failed to verify bank account');
     }
   }
+
+  /**
+   * Create a Paystack subaccount for a school
+   */
+  async createSubaccount(
+    businessName: string,
+    bankCode: string,
+    accountNumber: string,
+    percentageCharge: number = 0,
+  ): Promise<PaystackSubaccount> {
+    try {
+      const response = await this.paystackClient.post('/subaccount', {
+        business_name: businessName,
+        settlement_bank: bankCode,
+        account_number: accountNumber,
+        percentage_charge: percentageCharge,
+      });
+      if (!response.data.status) {
+        throw new BadRequestException(response.data.message || 'Failed to create subaccount');
+      }
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to create subaccount: ${error.message}`, error.stack);
+      if (error.response?.data?.message) {
+        throw new BadRequestException(error.response.data.message);
+      }
+      throw new BadRequestException('Failed to create subaccount');
+    }
+  }
+
+  /**
+   * Update an existing Paystack subaccount
+   */
+  async updateSubaccount(
+    subaccountCode: string,
+    data: { business_name?: string; settlement_bank?: string; account_number?: string },
+  ): Promise<PaystackSubaccount> {
+    try {
+      const response = await this.paystackClient.put(`/subaccount/${subaccountCode}`, data);
+      if (!response.data.status) {
+        throw new BadRequestException(response.data.message || 'Failed to update subaccount');
+      }
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to update subaccount: ${error.message}`, error.stack);
+      if (error.response?.data?.message) {
+        throw new BadRequestException(error.response.data.message);
+      }
+      throw new BadRequestException('Failed to update subaccount');
+    }
+  }
+
 }

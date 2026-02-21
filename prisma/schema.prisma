@@ -78,6 +78,7 @@ model School {
   schoolType                   String?
   studentCapacity              String?
   colorScheme                  String?
+  resultTemplateId             String?                       @default("classic") @map("result_template_id")
   academicSessions             AcademicSession[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
   bulkImportJobs               BulkImportJob[]
@@ -96,6 +97,8 @@ model School {
   userActivities               UserActivity[]
   users                        User[]
   academicPromotionSettings    AcademicPromotionSettings?
+  bankAccount                  SchoolBankAccount?
+  platformTransactions         PlatformTransaction[]
 
   @@map("schools")
 }
@@ -203,11 +206,13 @@ model Term {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   isCurrent          Boolean             @default(false)
+  isLocked           Boolean             @default(false)
   endDate            DateTime
   startDate          DateTime
   paymentStructures  PaymentStructure[]
   assessments        ClassArmStudentAssessment[]
   studentAttendances StudentAttendance[]
+  subjectAttendances SubjectAttendance[]
   academicSession    AcademicSession            @relation(fields: [academicSessionId], references: [id])
 
   @@map("terms")
@@ -227,7 +232,7 @@ model Level {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?
-  code              String             @unique
+  code              String
   classArms         ClassArm[]
   progressionsFrom  LevelProgression[] @relation("ProgressionFromLevel")
   progressionsTo    LevelProgression[] @relation("ProgressionToLevel")
@@ -236,6 +241,7 @@ model Level {
   promotionsFrom    StudentPromotion[] @relation("PromotionFromLevel")
   promotionsTo      StudentPromotion[] @relation("PromotionToLevel")
 
+  @@unique([code, schoolId])
   @@map("levels")
 }
 
@@ -253,13 +259,14 @@ model Department {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   deletedAt DateTime?
-  code      String     @unique
+  code      String
   classArms ClassArm[]
   school    School     @relation(fields: [schoolId], references: [id])
   hod       Hod?
   subjects  Subject[]
   teachers  Teacher[]
 
+  @@unique([code, schoolId])
   @@index([schoolId])
   @@map("departments")
 }
@@ -284,7 +291,7 @@ model ClassArm {
   captainId               String?                  @unique
   classTeacherId          String?
   location                String?
-  slug                    String                   @unique
+  slug                    String
   classArmStudents        ClassArmStudent[]
   classArmSubjects        ClassArmSubject[]
   classArmTeachers        ClassArmTeacher[]
@@ -298,6 +305,7 @@ model ClassArm {
   promotionsFrom          StudentPromotion[]       @relation("PromotionFromClassArm")
   promotionsTo            StudentPromotion[]       @relation("PromotionToClassArm")
 
+  @@unique([slug, schoolId])
   @@unique([name, levelId, academicSessionId, schoolId], name: "unique_class_arm_per_level_session")
   @@map("class_arms")
 }
@@ -514,9 +522,10 @@ model ClassArmStudent {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
-  classArm           ClassArm            @relation(fields: [classArmId], references: [id], onDelete: Cascade)
-  student            Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentAttendances StudentAttendance[]
+  classArm            ClassArm             @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  student             Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentAttendances  StudentAttendance[]
+  subjectAttendances  SubjectAttendance[]
 
   @@unique([studentId, classArmId, academicSessionId])
   @@index([studentId])
@@ -566,6 +575,7 @@ model Subject {
   deletedAt               DateTime?
   categoryId              String?
   classArmSubjects        ClassArmSubject[]
+  subjectAttendances      SubjectAttendance[]
   category                Category?         @relation(fields: [categoryId], references: [id])
   department              Department?       @relation(fields: [departmentId], references: [id])
   school                  School            @relation(fields: [schoolId], references: [id])
@@ -706,6 +716,31 @@ model StudentAttendance {
   @@unique([classArmStudentId, date])
   @@unique([class_arm_student_id, date])
   @@map("student_attendances")
+}
+
+/// *
+/// * SubjectAttendance
+/// * -----------------
+/// * Tracks a student's attendance for a specific subject on each day.
+/// * Separated from StudentAttendance (class attendance) to allow independent tracking.
+/// * Multiple subject attendances can exist per student per day (one per subject).
+model SubjectAttendance {
+  id                String           @id @default(uuid())
+  date              DateTime
+  status            AttendanceStatus
+  subjectId         String
+  termId            String
+  classArmStudentId String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  classArmStudent   ClassArmStudent  @relation(fields: [classArmStudentId], references: [id], onDelete: Cascade)
+  term              Term             @relation(fields: [termId], references: [id])
+  subject           Subject          @relation(fields: [subjectId], references: [id])
+
+  @@unique([classArmStudentId, date, subjectId])
+  @@map("subject_attendances")
 }
 
 /// *
@@ -909,8 +944,9 @@ model StudentPayment {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?
-  paymentStructure   PaymentStructure @relation(fields: [paymentStructureId], references: [id])
-  student            Student          @relation(fields: [studentId], references: [id])
+  paymentStructure     PaymentStructure  @relation(fields: [paymentStructureId], references: [id])
+  student              Student           @relation(fields: [studentId], references: [id])
+  platformTransactions PlatformTransaction[]
 
   @@index([studentId])
   @@index([paymentStructureId])
@@ -1195,6 +1231,67 @@ model LevelProgression {
   @@map("level_progressions")
 }
 
+
+/// *
+/// * SchoolBankAccount
+/// * ------------------
+/// * Stores a school's bank account details and Paystack subaccount information.
+/// * Each school can have one bank account used for receiving student payment settlements.
+/// * The Paystack subaccount enables direct settlement of payments to the school's bank.
+model SchoolBankAccount {
+  id                     String   @id @default(uuid())
+  schoolId               String   @unique
+  bankCode               String
+  bankName               String
+  accountNumber          String
+  accountName            String
+  paystackSubaccountCode String?
+  isVerified             Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  createdBy              String
+  school                 School   @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@map("school_bank_accounts")
+}
+
+/// *
+/// * PlatformTransaction
+/// * -------------------
+/// * Tracks commission and fee details for each student payment processed through the platform.
+/// * Records the breakdown of charges: total charged to student, original fee, platform commission,
+/// * and Paystack processing fees. Used for financial reconciliation and reporting.
+model PlatformTransaction {
+  id                 String            @id @default(uuid())
+  schoolId           String
+  studentPaymentId   String?
+  paymentReference   String            @unique
+  totalCharged       Decimal           @db.Decimal(10, 2)
+  feeAmount          Decimal           @db.Decimal(10, 2)
+  platformCommission Decimal           @db.Decimal(10, 2)
+  paystackFee        Decimal           @db.Decimal(10, 2)
+  commissionRate     Decimal           @default(0.01) @db.Decimal(5, 4)
+  currency           String            @default("NGN")
+  status             TransactionStatus @default(PENDING)
+  settledAt          DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  school             School            @relation(fields: [schoolId], references: [id])
+  studentPayment     StudentPayment?   @relation(fields: [studentPaymentId], references: [id])
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([paymentReference])
+  @@map("platform_transactions")
+}
+
+enum TransactionStatus {
+  PENDING
+  SETTLED
+  FAILED
+  REFUNDED
+}
 
 enum AttendanceStatus {
   PRESENT

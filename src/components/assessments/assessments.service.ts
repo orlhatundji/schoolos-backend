@@ -35,7 +35,8 @@ export class AssessmentService {
     fileBuffer: Buffer,
     schoolId: string,
     teacherId: string,
+    termId?: string,
   ): Promise<BulkUploadResultDto> {
-    return this.excelBulkUploadService.processUpload(fileBuffer, schoolId, teacherId);
+    return this.excelBulkUploadService.processUpload(fileBuffer, schoolId, teacherId, termId);
   }
 }

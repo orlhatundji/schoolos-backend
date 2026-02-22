@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 
@@ -116,6 +116,33 @@ export class StudentController {
       success: true,
       message: 'Student profile retrieved successfully',
       data: profile,
+    };
+  }
+
+  @Put('change-password')
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'CHANGE_PASSWORD',
+    entityType: 'STUDENT_PROFILE',
+    description: 'Student changed password',
+    category: 'STUDENT',
+  })
+  @ApiOperation({ summary: 'Change student password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 401, description: 'Invalid current password' })
+  async changePassword(
+    @GetCurrentUserId() userId: string,
+    @Body() passwordData: { oldPassword: string; newPassword: string },
+  ) {
+    await this.studentService.changePassword(
+      userId,
+      passwordData.oldPassword,
+      passwordData.newPassword,
+    );
+    return {
+      success: true,
+      message: 'Password changed successfully',
     };
   }
 

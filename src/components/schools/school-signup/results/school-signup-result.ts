@@ -64,12 +64,6 @@ export class SchoolSignupRequestEntity {
 
     return entity;
   }
-
-  public static fromArray(
-    signupRequests: SchoolSignupRequestWithReviewer[],
-  ): SchoolSignupRequestEntity[] {
-    return signupRequests.map((request) => this.from(request));
-  }
 }
 
 export class SchoolSignupResult extends BaseResultWithData<SchoolSignupRequestEntity> {
@@ -82,54 +76,5 @@ export class SchoolSignupResult extends BaseResultWithData<SchoolSignupRequestEn
   ): SchoolSignupResult {
     const entity = SchoolSignupRequestEntity.from(signupRequest);
     return new SchoolSignupResult(options.status, options.message, entity);
-  }
-}
-
-export class ManySchoolSignupResult extends BaseResultWithData<SchoolSignupRequestEntity[]> {
-  @ApiProperty({ type: () => [SchoolSignupRequestEntity] })
-  public data: SchoolSignupRequestEntity[];
-
-  public static from(
-    signupRequests: SchoolSignupRequestWithReviewer[],
-    options: ResultOptions,
-  ): ManySchoolSignupResult {
-    const entities = SchoolSignupRequestEntity.fromArray(signupRequests);
-    return new ManySchoolSignupResult(options.status, options.message, entities);
-  }
-}
-
-export class SchoolSignupApprovalResult extends BaseResultWithData<{
-  requestId: string;
-  status: string;
-  schoolId?: string;
-  schoolCode?: string;
-  adminUserId?: string;
-  approvedAt?: Date;
-  message: string;
-}> {
-  @ApiProperty()
-  public data: {
-    requestId: string;
-    status: string;
-    schoolId?: string;
-    schoolCode?: string;
-    adminUserId?: string;
-    approvedAt?: Date;
-    message: string;
-  };
-
-  public static from(
-    data: {
-      requestId: string;
-      status: string;
-      schoolId?: string;
-      schoolCode?: string;
-      adminUserId?: string;
-      approvedAt?: Date;
-      message: string;
-    },
-    options: ResultOptions,
-  ): SchoolSignupApprovalResult {
-    return new SchoolSignupApprovalResult(options.status, options.message, data);
   }
 }

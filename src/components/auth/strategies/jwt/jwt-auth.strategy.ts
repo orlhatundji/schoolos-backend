@@ -22,7 +22,6 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, StrategyEnum.JWT
   }
 
   async validate(payload: IJwtPayload) {
-    // Use userId (sub) from JWT, not email - email is not unique across schools
     const user = await this._findUserOrThrow(payload.sub);
     return {
       sub: user.id,

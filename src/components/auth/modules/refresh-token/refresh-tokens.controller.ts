@@ -10,7 +10,6 @@ import { AuthMessages } from '../../results';
 import { RefreshTokenResult } from './results';
 import { RefreshTokenGuard } from '../../strategies/jwt/guards';
 import { StrategyEnum } from '../../strategies';
-import { TokenTypes } from './types';
 
 @Controller('tokens')
 @ApiTags('Refresh Tokens')
@@ -35,19 +34,5 @@ export class RefershTokensController {
     @GetCurrentUser('refreshToken') refreshToken: string,
   ) {
     return this.tokensService.refreshToken(userId, refreshToken);
-  }
-
-  @Post('blacklist')
-  @HttpCode(HttpStatus.OK)
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: AuthMessages.SUCCESS.TOKEN_BLACKLISTED,
-  })
-  @ApiUnauthorizedResponse({
-    description: AuthMessages.FAILURE.ACCESS_DENIED,
-  })
-  async blacklistToken(@GetCurrentUserId() userId: string) {
-    await this.tokensService.blacklistToken(userId, TokenTypes.REFRESH_TOKEN);
-    return { message: AuthMessages.SUCCESS.TOKEN_BLACKLISTED };
   }
 }

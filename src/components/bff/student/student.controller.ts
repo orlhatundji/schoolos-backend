@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 
@@ -119,41 +119,30 @@ export class StudentController {
     };
   }
 
-  @Get('attendance')
-  @ApiOperation({ summary: 'Get student attendance records' })
-  @ApiQuery({
-    name: 'startDate',
-    required: false,
-    type: String,
-    description: 'Start date for attendance records (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    required: false,
-    type: String,
-    description: 'End date for attendance records (YYYY-MM-DD)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Student attendance records retrieved successfully',
-  })
+  @Put('change-password')
   @UseInterceptors(ActivityLogInterceptor)
   @LogActivity({
-    action: 'VIEW_STUDENT_ATTENDANCE',
-    entityType: 'STUDENT_ATTENDANCE',
-    description: 'Student viewed attendance records',
+    action: 'CHANGE_PASSWORD',
+    entityType: 'STUDENT_PROFILE',
+    description: 'Student changed password',
     category: 'STUDENT',
   })
-  async getStudentAttendance(
+  @ApiOperation({ summary: 'Change student password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
+  @ApiResponse({ status: 401, description: 'Invalid current password' })
+  async changePassword(
     @GetCurrentUserId() userId: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
+    @Body() passwordData: { oldPassword: string; newPassword: string },
   ) {
-    const attendance = await this.studentService.getStudentAttendance(userId, startDate, endDate);
+    await this.studentService.changePassword(
+      userId,
+      passwordData.oldPassword,
+      passwordData.newPassword,
+    );
     return {
       success: true,
-      message: 'Student attendance records retrieved successfully',
-      data: attendance,
+      message: 'Password changed successfully',
     };
   }
 
@@ -178,48 +167,6 @@ export class StudentController {
       success: true,
       message: 'Student academic sessions with terms retrieved successfully',
       data: sessions,
-    };
-  }
-
-  @Get('subjects')
-  @ApiOperation({ summary: 'Get student enrolled subjects' })
-  @ApiQuery({
-    name: 'academicSessionId',
-    required: false,
-    type: String,
-    description: 'Academic session ID to filter subjects',
-  })
-  @ApiQuery({
-    name: 'termId',
-    required: false,
-    type: String,
-    description: 'Term ID to filter subjects',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Student subjects retrieved successfully',
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_SUBJECTS',
-    entityType: 'STUDENT_SUBJECTS',
-    description: 'Student viewed enrolled subjects',
-    category: 'STUDENT',
-  })
-  async getStudentSubjects(
-    @GetCurrentUserId() userId: string,
-    @Query('academicSessionId') academicSessionId?: string,
-    @Query('termId') termId?: string,
-  ) {
-    const subjects = await this.studentService.getStudentSubjects(
-      userId,
-      academicSessionId,
-      termId,
-    );
-    return {
-      success: true,
-      message: 'Student subjects retrieved successfully',
-      data: subjects,
     };
   }
 

@@ -32,90 +32,6 @@ export class BulkUploadController {
     private readonly activityLogService: ActivityLogService,
   ) {}
 
-  @Get('template')
-  @ApiOperation({
-    summary: 'Download CSV template for bulk student upload',
-    description:
-      'Downloads a CSV template with sample data and column descriptions for bulk student upload',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'CSV template file download',
-    content: {
-      'text/csv': {
-        schema: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-    },
-  })
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async downloadTemplate(@Request() req: any, @Res() res: Response): Promise<void> {
-    const schoolId = req.user?.schoolId;
-    if (!schoolId) {
-      throw new BadRequestException('School ID not found in user context');
-    }
-
-    await this.templateService.generateCsvTemplate(schoolId, res);
-  }
-
-  @Get('template/excel')
-  @ApiOperation({
-    summary: 'Download Excel template with dropdowns for bulk student upload',
-    description:
-      'Downloads an Excel template with dropdown lists for gender and class selection, plus detailed instructions',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Excel template file download',
-    content: {
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
-        schema: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-    },
-  })
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async downloadExcelTemplate(@Request() req: any, @Res() res: Response): Promise<void> {
-    const schoolId = req.user?.schoolId;
-    if (!schoolId) {
-      throw new BadRequestException('School ID not found in user context');
-    }
-
-    await this.templateService.generateExcelTemplate(schoolId, res);
-  }
-
-  @Get('template/google-sheets')
-  @ApiOperation({
-    summary: 'Download Google Sheets compatible template for bulk student upload',
-    description:
-      'Downloads a CSV template optimized for Google Sheets with class options in a separate sheet',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'CSV template file download',
-    content: {
-      'text/csv': {
-        schema: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-    },
-  })
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async downloadGoogleSheetsTemplate(@Request() req: any, @Res() res: Response): Promise<void> {
-    const schoolId = req.user?.schoolId;
-    if (!schoolId) {
-      throw new BadRequestException('School ID not found in user context');
-    }
-
-    await this.templateService.generateGoogleSheetsTemplate(schoolId, res);
-  }
-
   @Get('template/exceljs')
   @ApiOperation({
     summary: 'Download Excel template with working dropdowns (ExcelJS)',
@@ -384,32 +300,5 @@ export class BulkUploadController {
     res.setHeader('Content-Length', Buffer.byteLength(csvContent));
 
     res.send(csvContent);
-  }
-
-  @Get('jobs')
-  @ApiOperation({
-    summary: 'Get bulk import job history',
-    description: 'Returns a list of bulk import jobs for the current school',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'List of bulk import jobs',
-  })
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async getJobHistory(@Request() req: any) {
-    const schoolId = req.user?.schoolId;
-    if (!schoolId) {
-      throw new BadRequestException('School ID not found in user context');
-    }
-
-    // This would be implemented in the service
-    // For now, return a placeholder response
-    return {
-      success: true,
-      data: {
-        jobs: [],
-        message: 'Job history feature coming soon',
-      },
-    };
   }
 }

@@ -17,26 +17,6 @@ export class UsersService extends BaseService {
     super(UsersService.name);
   }
 
-  async create(createUserDto: CreateUserDto) {
-    return this.save(createUserDto);
-  }
-
-  async save(createUserDto: CreateUserDto) {
-    const { password, email, dateOfBirth, ...others } = createUserDto;
-    const hashedPassword = await this.hasher.hash(password);
-
-    // Convert dateOfBirth string to Date object if provided
-    const dateOfBirthDate = dateOfBirth ? new Date(dateOfBirth) : undefined;
-
-    const createdUser = await this.userRepository.create({
-      ...others,
-      email,
-      password: hashedPassword,
-      dateOfBirth: dateOfBirthDate,
-    });
-    return createdUser;
-  }
-
   async findByEmail(email: string) {
     return this.userRepository.findOne({
       where: { email },
@@ -46,6 +26,21 @@ export class UsersService extends BaseService {
 
   findById(id: string) {
     return this.userRepository.findById(id);
+  }
+
+  async save(createUserDto: CreateUserDto) {
+    const { password, email, dateOfBirth, ...others } = createUserDto;
+    const hashedPassword = await this.hasher.hash(password);
+    const dateOfBirthDate = dateOfBirth ? new Date(dateOfBirth) : undefined;
+
+    const createdUser = await this.userRepository.create({
+      ...others,
+      email,
+      password: hashedPassword,
+      dateOfBirth: dateOfBirthDate,
+    });
+
+    return createdUser;
   }
 
   async update(id: string, updateObj: UpdateUserDto) {
@@ -71,10 +66,6 @@ export class UsersService extends BaseService {
         lastLoginAt: new Date(),
       },
     );
-  }
-
-  async remove(id: string) {
-    return this.userRepository.delete({ id });
   }
 
   async updateByStudentId(studentId: string, updateObj: UpdateUserDto) {

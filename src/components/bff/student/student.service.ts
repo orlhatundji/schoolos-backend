@@ -1,10 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaystackService } from '../../../shared/services/paystack.service';
 import { FeeCalculationService } from '../../../shared/services/fee-calculation.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
+import { PasswordHasher } from '../../../utils/hasher';
 import {
   StudentAttendanceData,
   StudentDashboardData,
@@ -23,6 +24,7 @@ export class StudentService extends BaseService {
     private readonly paystackService: PaystackService,
     private readonly feeCalculationService: FeeCalculationService,
     private readonly templateService: AssessmentStructureTemplateService,
+    private readonly passwordHasher: PasswordHasher,
   ) {
     super(StudentService.name);
   }
@@ -664,6 +666,32 @@ export class StudentService extends BaseService {
           }
         : undefined,
     };
+  }
+
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+    const student = await this.prisma.student.findFirst({
+      where: { userId },
+      include: { user: true },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const isOldPasswordValid = await this.passwordHasher.compare(
+      oldPassword,
+      student.user.password,
+    );
+    if (!isOldPasswordValid) {
+      throw new ForbiddenException('Invalid current password');
+    }
+
+    const hashedNewPassword = await this.passwordHasher.hash(newPassword);
+
+    await this.prisma.user.update({
+      where: { id: student.userId },
+      data: { password: hashedNewPassword },
+    });
   }
 
   async getStudentAttendance(

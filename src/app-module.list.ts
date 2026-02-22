@@ -23,7 +23,6 @@ import { RolesManagerModule } from './components/roles-manager';
 import { SchoolsModule } from './components/schools/schools.module';
 import { SettingsModule } from './components/settings/settings.module';
 import { StudentsModule } from './components/students/students.module';
-import { StudentPromotionsModule } from './components/student-promotions/student-promotions.module';
 import { SubjectsModule } from './components/subjects/subjects.module';
 import { UsersModule } from './components/users/users.module';
 import getConfiguration from './config/configuration';
@@ -60,7 +59,6 @@ export const AppModuleList = [
   SettingsModule,
   AcademicSettingsModule,
   StudentsModule,
-  StudentPromotionsModule,
   AuthModule,
   AcademicTimelinesModule,
   RolesManagerModule,

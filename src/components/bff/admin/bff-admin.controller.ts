@@ -330,30 +330,6 @@ export class BffAdminController {
     return new AdminClassroomDetailsResult(data);
   }
 
-  @Get('classroom-by-slug/:slug/details')
-  @ApiParam({ name: 'slug', description: 'Classroom slug (e.g., jss1-a-2024-2025)' })
-  @ClassroomDetailsPageQuery()
-  @ClassroomDetailsLimitQuery()
-  @ClassroomDetailsResponse()
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async getClassroomDetailsBySlug(
-    @GetCurrentUserId() userId: string,
-    @Param('slug') slug: string,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-  ) {
-    const pageNumber = parseInt(page, 10) || 1;
-    const limitNumber = parseInt(limit, 10) || 10;
-
-    const data = await this.bffAdminService.getClassroomDetailsDataBySlug(
-      userId,
-      slug,
-      pageNumber,
-      limitNumber,
-    );
-    return new AdminClassroomDetailsResult(data);
-  }
-
   @Get('classroom-details')
   @ApiQuery({
     name: 'level',
@@ -389,33 +365,6 @@ export class BffAdminController {
       limitNumber,
     );
     return new AdminClassroomDetailsResult(data);
-  }
-
-  @Get('students')
-  @StudentDetailsPageQuery()
-  @StudentDetailsLimitQuery()
-  @StudentDetailsClassroomQuery()
-  @StudentDetailsSearchQuery()
-  @StudentDetailsResponse()
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  async getStudentDetails(
-    @GetCurrentUserId() userId: string,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '20',
-    @Query('classroomId') classroomId?: string,
-    @Query('search') search?: string,
-  ) {
-    const pageNumber = parseInt(page, 10) || 1;
-    const limitNumber = parseInt(limit, 10) || 20;
-
-    const data = await this.bffAdminService.getStudentDetailsData(
-      userId,
-      pageNumber,
-      limitNumber,
-      classroomId,
-      search,
-    );
-    return new StudentDetailsResult(data);
   }
 
   @Get('student/:studentId')

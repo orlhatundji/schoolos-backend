@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Header,
   Param,
@@ -22,10 +21,8 @@ import { ActivityLogInterceptor } from '../../../common/interceptors/activity-lo
 import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
 import {
-  CreateStudentAssessmentScoreDto,
   UpdateStudentAssessmentScoreDto,
   BulkCreateStudentAssessmentScoreDto,
-  BulkUpdateStudentAssessmentScoreDto,
   UpsertStudentAssessmentScoreDto,
   MarkClassAttendanceDto,
   MarkSubjectAttendanceDto,
@@ -42,7 +39,6 @@ import {
   TeacherDashboardResult,
   TeacherEventsResult,
   TeacherProfileResult,
-  TeacherSubjectsResult,
   BulkStudentAssessmentScoreResultClass,
   ClassAttendanceResultResponse,
   SubjectAttendanceResultResponse,
@@ -74,12 +70,6 @@ export class TeacherController {
   async getTeacherClasses(@GetCurrentUserId() userId: string) {
     const classes = await this.teacherService.getTeacherClasses(userId);
     return new TeacherClassesResult(classes);
-  }
-
-  @Get('subjects')
-  async getTeacherSubjects(@GetCurrentUserId() userId: string) {
-    const subjects = await this.teacherService.getTeacherSubjects(userId);
-    return new TeacherSubjectsResult(subjects);
   }
 
   @Get('subject-assignments')
@@ -338,30 +328,6 @@ export class TeacherController {
   }
 
   // Student Assessment Score Management Endpoints
-  @Post('student-assessment-scores')
-  @ApiOperation({ summary: 'Create a new student assessment score' })
-  @ApiResponse({ status: 201, description: 'Assessment score created successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
-  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to teach this subject' })
-  @ApiResponse({ status: 404, description: 'Student or subject not found' })
-  @LogActivity({
-    action: 'CREATE_STUDENT_ASSESSMENT_SCORE',
-    entityType: 'STUDENT_ASSESSMENT_SCORE',
-    description: 'Teacher created student assessment score',
-    category: 'TEACHER',
-  })
-  async createStudentAssessmentScore(
-    @GetCurrentUserId() userId: string,
-    @Body() createDto: CreateStudentAssessmentScoreDto,
-  ) {
-    const result = await this.teacherService.createStudentAssessmentScore(userId, createDto);
-    return {
-      success: true,
-      message: 'Assessment score created successfully',
-      data: result,
-    };
-  }
-
   @Patch('student-assessment-scores/:id')
   @ApiOperation({ summary: 'Update an existing student assessment score' })
   @ApiResponse({ status: 200, description: 'Assessment score updated successfully' })
@@ -388,29 +354,6 @@ export class TeacherController {
       success: true,
       message: 'Assessment score updated successfully',
       data: result,
-    };
-  }
-
-  @Delete('student-assessment-scores/:id')
-  @ApiOperation({ summary: 'Delete a student assessment score' })
-  @ApiResponse({ status: 200, description: 'Assessment score deleted successfully' })
-  @ApiResponse({ status: 403, description: 'Forbidden - not authorized to delete this assessment' })
-  @ApiResponse({ status: 404, description: 'Assessment score not found' })
-  @LogActivity({
-    action: 'DELETE_STUDENT_ASSESSMENT_SCORE',
-    entityType: 'STUDENT_ASSESSMENT_SCORE',
-    description: 'Teacher deleted student assessment score',
-    category: 'TEACHER',
-  })
-  async deleteStudentAssessmentScore(
-    @GetCurrentUserId() userId: string,
-    @Param('id') assessmentId: string,
-  ) {
-    const result = await this.teacherService.deleteStudentAssessmentScore(userId, assessmentId);
-    return {
-      success: true,
-      message: result.message,
-      data: result.deletedAssessment,
     };
   }
 
@@ -441,38 +384,6 @@ export class TeacherController {
     return BulkStudentAssessmentScoreResultClass.from(result, {
       status: 201,
       message: `Creation completed. ${result.success.length} successful, ${result.failed.length} failed.`,
-    });
-  }
-
-  @Patch('student-assessment-scores/batch')
-  @ApiOperation({ summary: 'Update multiple student assessment scores' })
-  @ApiResponse({
-    status: 200,
-    description: 'Assessment scores update completed',
-    type: BulkStudentAssessmentScoreResultClass,
-  })
-  @ApiResponse({ status: 400, description: 'Bad request - invalid data' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - not authorized to modify assessment scores',
-  })
-  @LogActivity({
-    action: 'BULK_UPDATE_STUDENT_ASSESSMENT_SCORES',
-    entityType: 'STUDENT_ASSESSMENT_SCORES',
-    description: 'Teacher updated multiple student assessment scores',
-    category: 'TEACHER',
-  })
-  async bulkUpdateStudentAssessmentScores(
-    @GetCurrentUserId() userId: string,
-    @Body() bulkUpdateDto: BulkUpdateStudentAssessmentScoreDto,
-  ) {
-    const result = await this.teacherService.bulkUpdateStudentAssessmentScores(
-      userId,
-      bulkUpdateDto,
-    );
-    return BulkStudentAssessmentScoreResultClass.from(result, {
-      status: 200,
-      message: `Update completed. ${result.success.length} successful, ${result.failed.length} failed.`,
     });
   }
 

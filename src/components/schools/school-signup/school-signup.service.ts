@@ -1,15 +1,10 @@
-import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SchoolSignupRepository } from './school-signup.repository';
-import {
-  CreateSchoolSignupDto,
-  UpdateSchoolSignupStatusDto,
-  GetSchoolSignupRequestsDto,
-} from './dto';
-import { SchoolSignupRequestWithReviewer } from './types/school-signup';
+import { CreateSchoolSignupDto } from './dto';
 import { SchoolsService } from '../schools.service';
 import { SchoolSignupMessages } from './results/messages';
 import { MailQueueService } from '../../../utils/mail-queue/mail-queue.service';
-import { Prisma, SchoolSignupRequest, SchoolSignupStatus } from '@prisma/client';
+import { SchoolSignupRequest, SchoolSignupStatus } from '@prisma/client';
 import { CounterService } from '../../../common/counter';
 import { generateSchoolCode, generateSchoolAcronym } from '../../../utils/misc';
 
@@ -104,110 +99,5 @@ export class SchoolSignupService {
       }
       throw error;
     }
-  }
-
-  async getSignupRequest(id: string): Promise<SchoolSignupRequest> {
-    const signupRequest = await this.schoolSignupRepository.findById(id);
-    if (!signupRequest) {
-      throw new NotFoundException(SchoolSignupMessages.FAILURE.SIGNUP_REQUEST_NOT_FOUND);
-    }
-    return signupRequest;
-  }
-
-  async getAllSignupRequests(
-    filters?: GetSchoolSignupRequestsDto,
-  ): Promise<SchoolSignupRequestWithReviewer[]> {
-    const where: Prisma.SchoolSignupRequestWhereInput = {};
-
-    // Apply status filter if provided
-    if (filters?.status) {
-      where.status = filters.status;
-    }
-
-    return this.schoolSignupRepository.findAllWithReviewer({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: filters?.limit || undefined,
-    });
-  }
-
-  async updateSignupStatus(
-    id: string,
-    updateDto: UpdateSchoolSignupStatusDto,
-    reviewerId: string,
-  ): Promise<{
-    requestId: string;
-    status: string;
-    message: string;
-    reviewedAt: Date;
-  }> {
-    const signupRequest = await this.getSignupRequest(id);
-
-    if (updateDto.action === 'approve') {
-      return this.approveSignupRequest(signupRequest, updateDto.notes, reviewerId);
-    }
-
-    if (updateDto.action === 'reject') {
-      return this.rejectSignupRequest(
-        signupRequest,
-        updateDto.rejectionReason,
-        updateDto.notes,
-        reviewerId,
-      );
-    }
-
-    throw new BadRequestException(SchoolSignupMessages.FAILURE.INVALID_ACTION);
-  }
-
-  private async approveSignupRequest(
-    signupRequest: SchoolSignupRequest,
-    notes: string,
-    reviewerId: string,
-  ) {
-    const req = await this.schoolSignupRepository.update(
-      { id: signupRequest.id },
-      {
-        status: SchoolSignupStatus.APPROVED,
-        reviewedAt: new Date(),
-        reviewer: {
-          connect: { id: reviewerId },
-        },
-        notes,
-      },
-    );
-
-    return {
-      requestId: signupRequest.id,
-      status: 'APPROVED',
-      message: SchoolSignupMessages.SUCCESS.SIGNUP_REQUEST_APPROVED,
-      reviewedAt: req.reviewedAt,
-    };
-  }
-
-  private async rejectSignupRequest(
-    signupRequest: SchoolSignupRequest,
-    rejectionReason: string,
-    notes: string,
-    reviewerId: string,
-  ) {
-    const req = await this.schoolSignupRepository.update(
-      { id: signupRequest.id },
-      {
-        status: SchoolSignupStatus.REJECTED,
-        reviewedAt: new Date(),
-        reviewer: {
-          connect: { id: reviewerId },
-        },
-        notes,
-        rejectionReason,
-      },
-    );
-
-    return {
-      requestId: signupRequest.id,
-      status: 'REJECTED',
-      message: SchoolSignupMessages.SUCCESS.SIGNUP_REQUEST_REJECTED,
-      reviewedAt: req.reviewedAt,
-    };
   }
 }

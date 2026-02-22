@@ -10,7 +10,6 @@ import { UsersModule } from '../users/users.module';
 import { CounterModule } from '../../common/counter/counter.module';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
-import { ComplaintsService } from './services/complaints.service';
 import { PlatformBootstrapService } from './services/platform-bootstrap.service';
 import { SchoolsManagementService } from './services/schools-management.service';
 import { SignupApprovalService } from './services/signup-approval.service';
@@ -23,11 +22,10 @@ import { SignupApprovalService } from './services/signup-approval.service';
     PlatformBootstrapService,
     SchoolsManagementService,
     SignupApprovalService,
-    ComplaintsService,
     Encryptor,
     PasswordGenerator,
     PasswordHasher,
   ],
-  exports: [PlatformService, SchoolsManagementService, SignupApprovalService, ComplaintsService],
+  exports: [PlatformService, SchoolsManagementService, SignupApprovalService],
 })
 export class PlatformModule {}

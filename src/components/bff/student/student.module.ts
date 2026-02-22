@@ -6,13 +6,14 @@ import { JwtAuthModule } from '../../auth/strategies/jwt/jwt-auth.module';
 import { SharedServicesModule } from '../../../shared/shared-services.module';
 import { AssessmentStructuresModule } from '../../assessment-structures/assessment-structures.module';
 import { Encryptor } from '../../../utils/encryptor';
+import { PasswordHasher } from '../../../utils/hasher';
 import { StudentController } from './student.controller';
 import { StudentService } from './student.service';
 
 @Module({
   imports: [PrismaModule, ActivityLogModule, JwtAuthModule, SharedServicesModule, AssessmentStructuresModule],
   controllers: [StudentController],
-  providers: [StudentService, Encryptor],
+  providers: [StudentService, Encryptor, PasswordHasher],
   exports: [StudentService],
 })
 export class StudentModule {}

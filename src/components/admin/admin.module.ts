@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AdminService } from './admin.service';
-import { AdminController } from './admin.controller';
 import { AdminTeacherController } from './admin-teacher.controller';
 import { AdminTeacherService } from './admin-teacher.service';
 import { AdminClassroomController } from './admin-classroom.controller';
@@ -18,7 +16,7 @@ import { MailQueueModule } from '../../utils/mail-queue/mail-queue.module';
 
 @Module({
   imports: [UsersModule, AuthModule, PrismaModule, CounterModule, MailQueueModule],
-  controllers: [AdminController, AdminTeacherController, AdminClassroomController, DropdownsController],
-  providers: [AdminService, AdminTeacherService, AdminClassroomService, DropdownsService, Encryptor, PasswordHasher, PasswordGenerator],
+  controllers: [AdminTeacherController, AdminClassroomController, DropdownsController],
+  providers: [AdminTeacherService, AdminClassroomService, DropdownsService, Encryptor, PasswordHasher, PasswordGenerator],
 })
 export class AdminModule {}

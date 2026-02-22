@@ -1,15 +1,11 @@
-import { Injectable, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SchoolSignupRepository } from './school-signup.repository';
-import {
-  CreateSchoolSignupDto,
-  UpdateSchoolSignupStatusDto,
-  GetSchoolSignupRequestsDto,
-} from './dto';
-import { SchoolSignupRequestWithReviewer } from './types/school-signup';
+import { CreateSchoolSignupDto } from './dto';
 import { SchoolsService } from '../schools.service';
 import { SchoolSignupMessages } from './results/messages';
 import { MailQueueService } from '../../../utils/mail-queue/mail-queue.service';
-import { Prisma, SchoolSignupRequest, SchoolSignupStatus } from '@prisma/client';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { SchoolSignupRequest, SchoolSignupStatus } from '@prisma/client';
 import { CounterService } from '../../../common/counter';
 import { generateSchoolCode, generateSchoolAcronym } from '../../../utils/misc';
 
@@ -22,6 +18,7 @@ export class SchoolSignupService {
     private readonly schoolsService: SchoolsService,
     private readonly counterService: CounterService,
     private readonly mailQueueService: MailQueueService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async createSignupRequest(
@@ -67,7 +64,73 @@ export class SchoolSignupService {
       this.logger.error(`Failed to queue acknowledgement email for signup ${signupRequest.id}:`, error);
     }
 
+    // Notify all SYSTEM_ADMIN users about the new signup request
+    await this.notifySystemAdmins(signupRequest, createSchoolSignupDto);
+
     return signupRequest;
+  }
+
+  private async notifySystemAdmins(
+    signupRequest: SchoolSignupRequest,
+    dto: CreateSchoolSignupDto,
+  ): Promise<void> {
+    try {
+      const systemAdmins = await this.prisma.user.findMany({
+        where: {
+          type: 'SYSTEM_ADMIN',
+          deletedAt: null,
+        },
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      });
+
+      if (systemAdmins.length === 0) {
+        this.logger.warn('No SYSTEM_ADMIN users found to notify about new signup request');
+        return;
+      }
+
+      const { contactPerson, schoolName } = dto;
+      const platformUrl = process.env.PLATFORM_APP_BASE_URL || 'http://localhost:3004';
+
+      for (const admin of systemAdmins) {
+        try {
+          await this.mailQueueService.add({
+            recipientAddress: admin.email,
+            recipientName: `${admin.firstName} ${admin.lastName}`,
+            subject: `New School Signup Request - ${schoolName}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #231651;">New School Signup Request</h2>
+                <p>Hi ${admin.firstName},</p>
+                <p>A new school has submitted a signup request on SchoolOS and is awaiting your review.</p>
+                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                  <p style="margin: 5px 0;"><strong>School Name:</strong> ${schoolName}</p>
+                  <p style="margin: 5px 0;"><strong>School Code:</strong> ${signupRequest.schoolCode}</p>
+                  <p style="margin: 5px 0;"><strong>Contact Person:</strong> ${contactPerson.firstName} ${contactPerson.lastName}</p>
+                  <p style="margin: 5px 0;"><strong>Contact Email:</strong> ${contactPerson.email}</p>
+                  <p style="margin: 5px 0;"><strong>Contact Phone:</strong> ${contactPerson.phone}</p>
+                  <p style="margin: 5px 0;"><strong>Location:</strong> ${dto.address.city}, ${dto.address.state}, ${dto.address.country}</p>
+                </div>
+                <p>Please log in to the platform portal to review and approve or reject this request.</p>
+                <div style="margin: 20px 0;">
+                  <a href="${platformUrl}/signup-requests" style="background-color: #231651; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Review Signup Request</a>
+                </div>
+                <p>Best regards,<br/>SchoolOS System</p>
+              </div>
+            `,
+          });
+        } catch (error) {
+          this.logger.error(`Failed to queue admin notification email for ${admin.email}:`, error);
+        }
+      }
+
+      this.logger.log(`Queued signup notification emails to ${systemAdmins.length} system admin(s)`);
+    } catch (error) {
+      this.logger.error(`Failed to notify system admins about signup ${signupRequest.id}:`, error);
+    }
   }
 
   /**
@@ -104,110 +167,5 @@ export class SchoolSignupService {
       }
       throw error;
     }
-  }
-
-  async getSignupRequest(id: string): Promise<SchoolSignupRequest> {
-    const signupRequest = await this.schoolSignupRepository.findById(id);
-    if (!signupRequest) {
-      throw new NotFoundException(SchoolSignupMessages.FAILURE.SIGNUP_REQUEST_NOT_FOUND);
-    }
-    return signupRequest;
-  }
-
-  async getAllSignupRequests(
-    filters?: GetSchoolSignupRequestsDto,
-  ): Promise<SchoolSignupRequestWithReviewer[]> {
-    const where: Prisma.SchoolSignupRequestWhereInput = {};
-
-    // Apply status filter if provided
-    if (filters?.status) {
-      where.status = filters.status;
-    }
-
-    return this.schoolSignupRepository.findAllWithReviewer({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: filters?.limit || undefined,
-    });
-  }
-
-  async updateSignupStatus(
-    id: string,
-    updateDto: UpdateSchoolSignupStatusDto,
-    reviewerId: string,
-  ): Promise<{
-    requestId: string;
-    status: string;
-    message: string;
-    reviewedAt: Date;
-  }> {
-    const signupRequest = await this.getSignupRequest(id);
-
-    if (updateDto.action === 'approve') {
-      return this.approveSignupRequest(signupRequest, updateDto.notes, reviewerId);
-    }
-
-    if (updateDto.action === 'reject') {
-      return this.rejectSignupRequest(
-        signupRequest,
-        updateDto.rejectionReason,
-        updateDto.notes,
-        reviewerId,
-      );
-    }
-
-    throw new BadRequestException(SchoolSignupMessages.FAILURE.INVALID_ACTION);
-  }
-
-  private async approveSignupRequest(
-    signupRequest: SchoolSignupRequest,
-    notes: string,
-    reviewerId: string,
-  ) {
-    const req = await this.schoolSignupRepository.update(
-      { id: signupRequest.id },
-      {
-        status: SchoolSignupStatus.APPROVED,
-        reviewedAt: new Date(),
-        reviewer: {
-          connect: { id: reviewerId },
-        },
-        notes,
-      },
-    );
-
-    return {
-      requestId: signupRequest.id,
-      status: 'APPROVED',
-      message: SchoolSignupMessages.SUCCESS.SIGNUP_REQUEST_APPROVED,
-      reviewedAt: req.reviewedAt,
-    };
-  }
-
-  private async rejectSignupRequest(
-    signupRequest: SchoolSignupRequest,
-    rejectionReason: string,
-    notes: string,
-    reviewerId: string,
-  ) {
-    const req = await this.schoolSignupRepository.update(
-      { id: signupRequest.id },
-      {
-        status: SchoolSignupStatus.REJECTED,
-        reviewedAt: new Date(),
-        reviewer: {
-          connect: { id: reviewerId },
-        },
-        notes,
-        rejectionReason,
-      },
-    );
-
-    return {
-      requestId: signupRequest.id,
-      status: 'REJECTED',
-      message: SchoolSignupMessages.SUCCESS.SIGNUP_REQUEST_REJECTED,
-      reviewedAt: req.reviewedAt,
-    };
   }
 }

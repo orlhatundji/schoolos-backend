@@ -16,39 +16,46 @@ export class TermsService extends BaseService {
     super(TermsService.name);
   }
 
-  async createTerm(data: CreateTermDto): Promise<Term> {
+  async createTerm(data: CreateTermDto, schoolId: string): Promise<Term> {
     // Convert string dates to Date objects for Prisma
     const termData = {
       ...data,
       startDate: new Date(data.startDate),
       endDate: new Date(data.endDate),
     };
-    return this.termsRepository.create(termData);
+    const term = await this.termsRepository.create(termData);
+    const currentTermId = await this.getCurrentTermIdForSchool(schoolId);
+    return this.enrichTerm(term, currentTermId);
   }
 
-  async getAllTerms(): Promise<Term[]> {
-    return this.termsRepository.findAll();
+  async getAllTerms(schoolId: string): Promise<Term[]> {
+    const terms = await this.termsRepository.findAll();
+    const currentTermId = await this.getCurrentTermIdForSchool(schoolId);
+    return terms.map(t => this.enrichTerm(t, currentTermId));
   }
 
-  async getTermById(id: string): Promise<Term> {
+  async getTermById(id: string, schoolId: string): Promise<Term> {
     const term = await this.termsRepository.findById(id);
     if (!term) {
       throw new NotFoundException(TermMessages.FAILURE.TERM_NOT_FOUND);
     }
-    return term;
+    const currentTermId = await this.getCurrentTermIdForSchool(schoolId);
+    return this.enrichTerm(term, currentTermId);
   }
 
-  async updateTerm(id: string, data: UpdateTermDto): Promise<Term> {
+  async updateTerm(id: string, data: UpdateTermDto, schoolId: string): Promise<Term> {
     // Convert string dates to Date objects for Prisma if they exist
     const updateData = {
       ...data,
       ...(data.startDate && { startDate: new Date(data.startDate) }),
       ...(data.endDate && { endDate: new Date(data.endDate) }),
     };
-    return this.termsRepository.update({ id }, updateData);
+    const term = await this.termsRepository.update({ id }, updateData);
+    const currentTermId = await this.getCurrentTermIdForSchool(schoolId);
+    return this.enrichTerm(term, currentTermId);
   }
 
-  async deleteTerm(id: string): Promise<Term> {
+  async deleteTerm(id: string, schoolId: string): Promise<Term> {
     // Check if term has associated assessments
     const assessmentCount = await this.prisma.classArmStudentAssessment.count({
       where: { termId: id, deletedAt: null },
@@ -82,49 +89,58 @@ export class TermsService extends BaseService {
       );
     }
 
-    return this.termsRepository.delete({ id });
+    const term = await this.termsRepository.delete({ id });
+    return { ...term, isCurrent: false };
   }
 
-  async lockTerm(id: string): Promise<Term> {
-    await this.getTermById(id);
-    return this.termsRepository.update({ id }, { isLocked: true });
+  async lockTerm(id: string, schoolId: string): Promise<Term> {
+    await this.getTermById(id, schoolId);
+    const term = await this.termsRepository.update({ id }, { isLocked: true });
+    const currentTermId = await this.getCurrentTermIdForSchool(schoolId);
+    return this.enrichTerm(term, currentTermId);
   }
 
-  async unlockTerm(id: string): Promise<Term> {
-    await this.getTermById(id);
-    return this.termsRepository.update({ id }, { isLocked: false });
+  async unlockTerm(id: string, schoolId: string): Promise<Term> {
+    await this.getTermById(id, schoolId);
+    const term = await this.termsRepository.update({ id }, { isLocked: false });
+    const currentTermId = await this.getCurrentTermIdForSchool(schoolId);
+    return this.enrichTerm(term, currentTermId);
   }
 
-  async setCurrentTerm(id: string): Promise<Term> {
-    // First, get the term to find its academic session
-    const term = await this.getTermById(id);
-    
-    // Use a transaction to ensure all operations succeed or fail together
-    return this.prisma.$transaction(async (tx) => {
-      // Set ALL terms across ALL sessions to not current
-      await tx.term.updateMany({
-        where: { isCurrent: true },
-        data: { isCurrent: false },
-      });
-
-      // Set ALL academic sessions to not current
-      await tx.academicSession.updateMany({
-        where: { isCurrent: true },
-        data: { isCurrent: false },
-      });
-
-      // Set the academic session of this term as current
-      await tx.academicSession.update({
-        where: { id: term.academicSessionId },
-        data: { isCurrent: true },
-      });
-
-      // Set the specified term as current
-      return tx.term.update({
-        where: { id },
-        data: { isCurrent: true },
-      });
+  async setCurrentTerm(schoolId: string, termId: string): Promise<Term> {
+    // Verify term exists and belongs to this school
+    const term = await this.prisma.term.findFirst({
+      where: {
+        id: termId,
+        deletedAt: null,
+        academicSession: { schoolId, deletedAt: null },
+      },
     });
+
+    if (!term) {
+      throw new NotFoundException(TermMessages.FAILURE.TERM_NOT_FOUND);
+    }
+
+    // Single atomic update — just point the school to this term
+    await this.prisma.school.update({
+      where: { id: schoolId },
+      data: { currentTermId: termId },
+    });
+
+    // The term we just set IS the current one
+    return { ...term, isCurrent: true };
+  }
+
+  private async getCurrentTermIdForSchool(schoolId: string): Promise<string | null> {
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { currentTermId: true },
+    });
+    return school?.currentTermId ?? null;
+  }
+
+  private enrichTerm(term: Term, currentTermId: string | null): Term {
+    return { ...term, isCurrent: term.id === currentTermId };
   }
 
 }

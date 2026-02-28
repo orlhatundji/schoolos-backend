@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { ActivityLogService } from '../../../common/services/activity-log.service';
 import { PrismaService } from '../../../prisma';
+import { CurrentTermService } from '../../../shared/services/current-term.service';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { CreateLevelDto } from './dto/create-level.dto';
@@ -39,6 +40,7 @@ export class BffAdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityLogService: ActivityLogService,
+    private readonly currentTermService: CurrentTermService,
     private readonly teacherService: BffAdminTeacherService,
     private readonly studentService: BffAdminStudentService,
     private readonly classroomService: BffAdminClassroomService,
@@ -214,11 +216,9 @@ export class BffAdminService {
     const schoolId = user.schoolId;
 
     // Get current academic session and term
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       // Return empty data for new schools without academic sessions
       return {
         overview: {
@@ -372,14 +372,6 @@ export class BffAdminService {
       };
     }
 
-    const currentTerm = await this.prisma.term.findFirst({
-      where: {
-        academicSessionId: currentSession.id,
-        // You might want to add logic to determine current term
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
     // Fetch all statistics in parallel for better performance
     const [
       studentStats,
@@ -397,16 +389,16 @@ export class BffAdminService {
     ] = await Promise.all([
       this.getStudentStats(schoolId),
       this.getTeacherStats(schoolId),
-      this.getClassroomStats(schoolId, currentSession.id),
-      this.getSubjectStats(schoolId, currentSession.id),
+      this.getClassroomStats(schoolId, current.session.id),
+      this.getSubjectStats(schoolId, current.session.id),
       this.getDepartmentStats(schoolId),
       this.getLevelStats(schoolId),
       this.getAdminStats(schoolId),
-      this.getAttendanceStats(schoolId, currentSession.id, currentTerm?.id),
-      this.getPaymentStats(schoolId, currentSession.id),
+      this.getAttendanceStats(schoolId, current.session.id, current.term.id),
+      this.getPaymentStats(schoolId, current.session.id),
       this.getAcademicPerformanceStats(schoolId),
-      this.getFinancialStats(schoolId, currentSession.id),
-      this.getOperationalStats(schoolId, currentSession.id),
+      this.getFinancialStats(schoolId, current.session.id),
+      this.getOperationalStats(schoolId, current.session.id),
     ]);
 
     return {
@@ -432,12 +424,12 @@ export class BffAdminService {
       financialStats,
       operationalStats,
       academicInfo: {
-        currentSession: currentSession.academicYear,
-        currentTerm: currentTerm?.name || 'No active term',
-        sessionStartDate: currentSession.startDate,
-        sessionEndDate: currentSession.endDate,
+        currentSession: current.session.academicYear,
+        currentTerm: current.term.name,
+        sessionStartDate: current.session.startDate,
+        sessionEndDate: current.session.endDate,
         daysRemaining: Math.ceil(
-          (currentSession.endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+          (current.session.endDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
         ),
       },
     };

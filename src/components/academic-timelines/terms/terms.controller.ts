@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Patch, Delete, HttpStatus, Req } from '@nestjs/common';
 import { TermsService } from './terms.service';
 import { CreateTermDto } from './dto/create-term.dto';
 import { UpdateTermDto } from './dto/update-term.dto';
@@ -16,8 +16,8 @@ export class TermsController {
     type: TermResult,
     description: TermMessages.SUCCESS.TERM_CREATED_SUCCESSFULLY,
   })
-  async create(@Body() data: CreateTermDto) {
-    const term = await this.termsService.createTerm(data);
+  async create(@Body() data: CreateTermDto, @Req() req: any) {
+    const term = await this.termsService.createTerm(data, req.user.schoolId);
 
     return TermResult.from(term, {
       status: HttpStatus.CREATED,
@@ -26,8 +26,8 @@ export class TermsController {
   }
 
   @Get()
-  async findAll() {
-    const terms = await this.termsService.getAllTerms();
+  async findAll(@Req() req: any) {
+    const terms = await this.termsService.getAllTerms(req.user.schoolId);
 
     return ManyTermsResult.from(terms, {
       status: HttpStatus.OK,
@@ -36,8 +36,8 @@ export class TermsController {
   }
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const term = await this.termsService.getTermById(id);
+  async findOne(@Param('id') id: string, @Req() req: any) {
+    const term = await this.termsService.getTermById(id, req.user.schoolId);
 
     return TermResult.from(term, {
       status: HttpStatus.OK,
@@ -46,8 +46,8 @@ export class TermsController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() data: UpdateTermDto) {
-    const term = await this.termsService.updateTerm(id, data);
+  async update(@Param('id') id: string, @Body() data: UpdateTermDto, @Req() req: any) {
+    const term = await this.termsService.updateTerm(id, data, req.user.schoolId);
 
     return TermResult.from(term, {
       status: HttpStatus.OK,
@@ -56,8 +56,8 @@ export class TermsController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    const term = await this.termsService.deleteTerm(id);
+  async remove(@Param('id') id: string, @Req() req: any) {
+    const term = await this.termsService.deleteTerm(id, req.user.schoolId);
 
     return TermResult.from(term, {
       status: HttpStatus.OK,
@@ -66,8 +66,8 @@ export class TermsController {
   }
 
   @Patch(':id/set-current')
-  async setCurrent(@Param('id') id: string) {
-    const term = await this.termsService.setCurrentTerm(id);
+  async setCurrent(@Param('id') id: string, @Req() req: any) {
+    const term = await this.termsService.setCurrentTerm(req.user.schoolId, id);
 
     return TermResult.from(term, {
       status: HttpStatus.OK,
@@ -76,8 +76,8 @@ export class TermsController {
   }
 
   @Patch(':id/lock')
-  async lockTerm(@Param('id') id: string) {
-    const term = await this.termsService.lockTerm(id);
+  async lockTerm(@Param('id') id: string, @Req() req: any) {
+    const term = await this.termsService.lockTerm(id, req.user.schoolId);
 
     return TermResult.from(term, {
       status: HttpStatus.OK,
@@ -86,8 +86,8 @@ export class TermsController {
   }
 
   @Patch(':id/unlock')
-  async unlockTerm(@Param('id') id: string) {
-    const term = await this.termsService.unlockTerm(id);
+  async unlockTerm(@Param('id') id: string, @Req() req: any) {
+    const term = await this.termsService.unlockTerm(id, req.user.schoolId);
 
     return TermResult.from(term, {
       status: HttpStatus.OK,

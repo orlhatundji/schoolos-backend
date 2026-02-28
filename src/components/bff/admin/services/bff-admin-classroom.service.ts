@@ -1,12 +1,16 @@
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 
 import { PrismaService } from '../../../../prisma';
+import { CurrentTermService } from '../../../../shared/services/current-term.service';
 import { AdminClassroomsViewData, ClassroomDetailsData, TopClassChampionsData } from '../types';
 import { CreateClassroomDto } from '../dto/create-classroom.dto';
 
 @Injectable()
 export class BffAdminClassroomService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
+  ) {}
 
   async getClassroomsViewData(userId: string): Promise<AdminClassroomsViewData> {
     // First, get the user's school ID
@@ -22,11 +26,9 @@ export class BffAdminClassroomService {
     const schoolId = user.schoolId;
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       // Return empty data for new schools without academic sessions
       return {
         stats: {
@@ -43,7 +45,7 @@ export class BffAdminClassroomService {
     const classArms = await this.prisma.classArm.findMany({
       where: {
         schoolId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
         deletedAt: null,
       },
       select: {
@@ -151,11 +153,9 @@ export class BffAdminClassroomService {
     const schoolId = user.schoolId;
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new Error('No current academic session found');
     }
 
@@ -164,7 +164,7 @@ export class BffAdminClassroomService {
       where: {
         id: classroomId,
         schoolId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
       },
       include: {
         level: true,
@@ -415,11 +415,9 @@ export class BffAdminClassroomService {
     const schoolId = user.schoolId;
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new BadRequestException(
         'No current academic session found. Please create an academic session first.',
       );
@@ -443,7 +441,7 @@ export class BffAdminClassroomService {
       where: {
         schoolId,
         levelId: createClassroomDto.levelId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
         name: {
           equals: createClassroomDto.name,
           mode: 'insensitive',
@@ -479,9 +477,9 @@ export class BffAdminClassroomService {
     const classroom = await this.prisma.classArm.create({
       data: {
         name: createClassroomDto.name,
-        slug: `${createClassroomDto.name.toLowerCase()}-${level.name.toLowerCase()}-${currentSession.academicYear}`,
+        slug: `${createClassroomDto.name.toLowerCase()}-${level.name.toLowerCase()}-${current.session.academicYear}`,
         levelId: createClassroomDto.levelId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
         schoolId,
         classTeacherId: createClassroomDto.classTeacherId,
       },
@@ -515,7 +513,7 @@ export class BffAdminClassroomService {
             name: `${classroom.classTeacher.user.firstName} ${classroom.classTeacher.user.lastName}`,
           }
         : null,
-      academicSession: currentSession.academicYear,
+      academicSession: current.session.academicYear,
       createdAt: classroom.createdAt,
     };
   }
@@ -703,11 +701,9 @@ export class BffAdminClassroomService {
     const schoolId = user.schoolId;
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new Error('No current academic session found');
     }
 
@@ -716,7 +712,7 @@ export class BffAdminClassroomService {
       where: {
         slug: slug,
         schoolId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
       },
       include: {
         level: true,
@@ -917,12 +913,10 @@ export class BffAdminClassroomService {
 
     const schoolId = user.schoolId;
 
-    // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    // Get current academic session and term
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       return {
         champions: [],
         academicSession: 'No active session',
@@ -930,17 +924,11 @@ export class BffAdminClassroomService {
       };
     }
 
-    // Get current term
-    const currentTerm = await this.prisma.term.findFirst({
-      where: { academicSessionId: currentSession.id },
-      orderBy: { createdAt: 'desc' },
-    });
-
     // Get all class arms with students, assessments, class teacher, and level
     const classArms = await this.prisma.classArm.findMany({
       where: {
         schoolId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
         deletedAt: null,
       },
       include: {
@@ -1001,8 +989,8 @@ export class BffAdminClassroomService {
 
     return {
       champions,
-      academicSession: currentSession.academicYear,
-      term: currentTerm?.name || 'No active term',
+      academicSession: current.session.academicYear,
+      term: current.term.name,
     };
   }
 }

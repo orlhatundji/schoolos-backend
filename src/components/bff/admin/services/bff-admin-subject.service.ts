@@ -7,6 +7,7 @@ import {
 import * as ExcelJS from 'exceljs';
 
 import { PrismaService } from '../../../../prisma';
+import { CurrentTermService } from '../../../../shared/services/current-term.service';
 import { AssessmentStructureTemplateService } from '../../../assessment-structures/assessment-structure-template.service';
 import { CreateSubjectDto } from '../dto/create-subject.dto';
 import { UpdateSubjectDto } from '../dto/update-subject.dto';
@@ -16,6 +17,7 @@ import { SubjectsViewData, SubjectDetailsData, SubjectClassAssessmentData } from
 export class BffAdminSubjectService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
     private readonly templateService: AssessmentStructureTemplateService,
   ) {}
 
@@ -33,11 +35,9 @@ export class BffAdminSubjectService {
     const schoolId = user.schoolId;
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       // Return empty data for new schools without academic sessions
       return {
         stats: {
@@ -66,7 +66,7 @@ export class BffAdminSubjectService {
           where: {
             deletedAt: null,
             classArm: {
-              academicSessionId: currentSession.id,
+              academicSessionId: current.session.id,
               deletedAt: null,
             },
           },
@@ -413,11 +413,9 @@ export class BffAdminSubjectService {
   async getSubjectDetails(userId: string, subjectId: string): Promise<SubjectDetailsData> {
     const schoolId = await this.getUserSchoolId(userId);
 
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new NotFoundException('No active academic session found');
     }
 
@@ -430,7 +428,7 @@ export class BffAdminSubjectService {
         classArmSubjects: {
           where: {
             deletedAt: null,
-            classArm: { academicSessionId: currentSession.id, deletedAt: null },
+            classArm: { academicSessionId: current.session.id, deletedAt: null },
           },
           include: {
             teachers: {
@@ -503,21 +501,14 @@ export class BffAdminSubjectService {
   ): Promise<SubjectClassAssessmentData> {
     const schoolId = await this.getUserSchoolId(userId);
 
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-      include: {
-        terms: { where: { isCurrent: true }, take: 1 },
-      },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new NotFoundException('No active academic session found');
     }
 
-    const currentTerm = currentSession.terms[0];
-    if (!currentTerm) {
-      throw new NotFoundException('No active term found');
-    }
+    const currentTerm = current.term;
+    const currentSession = current.session;
 
     // Get subject
     const subject = await this.prisma.subject.findFirst({
@@ -704,21 +695,18 @@ export class BffAdminSubjectService {
   ): Promise<Buffer> {
     const schoolId = await this.getUserSchoolId(userId);
 
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-      include: {
-        terms: { orderBy: { startDate: 'asc' } },
-      },
-    });
+    const currentData = await this.currentTermService.getCurrentSessionWithTerms(schoolId);
 
-    if (!currentSession) {
+    if (!currentData) {
       throw new NotFoundException('No active academic session found');
     }
 
-    const currentTerm = currentSession.terms.find((t) => t.isCurrent);
+    const currentSession = currentData.session;
+    const currentTerm = currentData.terms.find((t) => t.id === currentData.currentTermId);
     if (!currentTerm) {
       throw new NotFoundException('No active term found');
     }
+    const allTerms = currentData.terms;
 
     const subject = await this.prisma.subject.findFirst({
       where: { id: subjectId, schoolId, deletedAt: null },
@@ -753,8 +741,7 @@ export class BffAdminSubjectService {
     });
 
     // Separate previous terms from current term
-    const previousTerms = currentSession.terms.filter((t) => t.id !== currentTerm.id);
-    const allTerms = currentSession.terms;
+    const previousTerms = allTerms.filter((t) => t.id !== currentTerm.id);
 
     // Find the ClassArmSubject for this class-subject pair
     const classArmSubject = await this.prisma.classArmSubject.findFirst({

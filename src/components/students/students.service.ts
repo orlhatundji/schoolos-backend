@@ -9,6 +9,7 @@ import { PasswordGenerator } from '../../utils/password/password.generator';
 import { MailQueueService } from '../../utils/mail-queue/mail-queue.service';
 import { SchoolsService } from '../schools';
 import { ClassArmStudentService } from './services/class-arm-student.service';
+import { CurrentTermService } from '../../shared/services/current-term.service';
 import { UserTypes } from '../users/constants';
 import { UsersService } from '../users/users.service';
 import {
@@ -33,6 +34,7 @@ export class StudentsService extends BaseService {
     private readonly passwordGenerator: PasswordGenerator,
     private readonly classArmStudentService: ClassArmStudentService,
     private readonly mailQueueService: MailQueueService,
+    private readonly currentTermService: CurrentTermService,
   ) {
     super(StudentsService.name);
   }
@@ -131,20 +133,14 @@ export class StudentsService extends BaseService {
     });
 
     // Get the current academic session for the school
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: {
-        schoolId,
-        isCurrent: true,
-        deletedAt: null,
-      },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new BadRequestException('No current academic session found for this school');
     }
 
     // Create ClassArmStudent relationship
-    await this.classArmStudentService.enrollStudent(student.id, classArmId, currentSession.id);
+    await this.classArmStudentService.enrollStudent(student.id, classArmId, current.session.id);
 
     // Send welcome email with credentials (non-blocking)
     try {
@@ -206,22 +202,16 @@ export class StudentsService extends BaseService {
     }
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: {
-        schoolId,
-        isCurrent: true,
-        deletedAt: null,
-      },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       throw new BadRequestException('No current academic session found for this school');
     }
 
     if (levelId || classArmId) {
       where.classArmStudents = {
         some: {
-          academicSessionId: currentSession.id,
+          academicSessionId: current.session.id,
           isActive: true,
           deletedAt: null,
           ...(levelId && {
@@ -424,15 +414,9 @@ export class StudentsService extends BaseService {
     // Handle classArmId - use ClassArmStudent service
     if (updateStudentDto.classArmId) {
       // Get current academic session
-      const currentSession = await this.prisma.academicSession.findFirst({
-        where: {
-          schoolId: existingStudent.user.schoolId,
-          isCurrent: true,
-          deletedAt: null,
-        },
-      });
+      const current = await this.currentTermService.getCurrentTermWithSession(existingStudent.user.schoolId);
 
-      if (!currentSession) {
+      if (!current) {
         throw new BadRequestException('No current academic session found for this school');
       }
 
@@ -441,7 +425,7 @@ export class StudentsService extends BaseService {
         id,
         existingStudent.classArmStudents.find((cas) => cas.isActive)?.classArmId || '',
         updateStudentDto.classArmId,
-        currentSession.id,
+        current.session.id,
       );
     }
 
@@ -829,18 +813,16 @@ export class StudentsService extends BaseService {
   async getLevelsWithClassArms(schoolId: string) {
     try {
       // Get current academic session
-      const currentSession = await this.prisma.academicSession.findFirst({
-        where: { schoolId, isCurrent: true },
-      });
+      const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-      if (!currentSession) {
+      if (!current) {
         // Return empty structure if no current session
         return {
           levels: [],
         };
       }
 
-      return this.getLevelsWithClassArmsForSession(schoolId, currentSession.id);
+      return this.getLevelsWithClassArmsForSession(schoolId, current.session.id);
     } catch (error) {
       // Log the error for debugging
       console.error('Error fetching levels and class arms:', error);

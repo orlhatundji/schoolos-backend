@@ -13,9 +13,10 @@ import { Encryptor } from '../../utils/encryptor';
 import { PasswordHasher } from '../../utils/hasher';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { MailQueueModule } from '../../utils/mail-queue/mail-queue.module';
+import { SharedServicesModule } from '../../shared/shared-services.module';
 
 @Module({
-  imports: [UsersModule, AuthModule, PrismaModule, CounterModule, MailQueueModule],
+  imports: [UsersModule, AuthModule, PrismaModule, CounterModule, MailQueueModule, SharedServicesModule],
   controllers: [AdminTeacherController, AdminClassroomController, DropdownsController],
   providers: [AdminTeacherService, AdminClassroomService, DropdownsService, Encryptor, PasswordHasher, PasswordGenerator],
 })

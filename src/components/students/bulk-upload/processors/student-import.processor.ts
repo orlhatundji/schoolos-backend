@@ -5,6 +5,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import { StudentsService } from '../../students.service';
 import { ActivityLogService } from '../../../../common/services/activity-log.service';
+import { CurrentTermService } from '../../../../shared/services/current-term.service';
 import { BulkUploadJobData, StudentCreationResult } from '../types';
 
 @Processor('student-import')
@@ -16,6 +17,7 @@ export class StudentImportProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly studentsService: StudentsService,
     private readonly activityLogService: ActivityLogService,
+    private readonly currentTermService: CurrentTermService,
   ) {
     super();
   }
@@ -467,11 +469,9 @@ export class StudentImportProcessor extends WorkerHost {
 
     try {
       // Get current academic session
-      const currentSession = await this.prisma.academicSession.findFirst({
-        where: { schoolId, isCurrent: true },
-      });
+      const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-      if (!currentSession) {
+      if (!current) {
         this.logger.warn('No current academic session found for class name mapping');
         return null;
       }
@@ -480,7 +480,7 @@ export class StudentImportProcessor extends WorkerHost {
       const classArms = await this.prisma.classArm.findMany({
         where: {
           schoolId,
-          academicSessionId: currentSession.id,
+          academicSessionId: current.session.id,
           deletedAt: null,
         },
         include: {

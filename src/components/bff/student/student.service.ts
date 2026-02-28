@@ -5,6 +5,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { PaystackService } from '../../../shared/services/paystack.service';
 import { FeeCalculationService } from '../../../shared/services/fee-calculation.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
+import { CurrentTermService } from '../../../shared/services/current-term.service';
 import { PasswordHasher } from '../../../utils/hasher';
 import {
   StudentAttendanceData,
@@ -24,6 +25,7 @@ export class StudentService extends BaseService {
     private readonly paystackService: PaystackService,
     private readonly feeCalculationService: FeeCalculationService,
     private readonly templateService: AssessmentStructureTemplateService,
+    private readonly currentTermService: CurrentTermService,
     private readonly passwordHasher: PasswordHasher,
   ) {
     super(StudentService.name);
@@ -53,16 +55,9 @@ export class StudentService extends BaseService {
     }
 
     // Get current academic session and term
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { isCurrent: true, schoolId: student.user.schoolId },
-    });
-
-    const currentTerm = await this.prisma.term.findFirst({
-      where: {
-        academicSessionId: currentSession?.id,
-        isCurrent: true,
-      },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(student.user.schoolId);
+    const currentSession = current?.session ?? null;
+    const currentTerm = current?.term ?? null;
 
     // Get student assessments for the current term
     const assessments = await this.prisma.classArmStudentAssessment.findMany({
@@ -250,15 +245,15 @@ export class StudentService extends BaseService {
           ? {
               id: currentSession.id,
               academicYear: currentSession.academicYear,
-              isCurrent: currentSession.isCurrent,
+              isCurrent: true,
             }
           : null,
         currentTerm: currentTerm
           ? {
               id: currentTerm.id,
               name: currentTerm.name,
-              startDate: currentTerm.createdAt,
-              endDate: currentTerm.updatedAt,
+              startDate: currentTerm.startDate,
+              endDate: currentTerm.endDate,
             }
           : null,
       },
@@ -310,6 +305,11 @@ export class StudentService extends BaseService {
     let session = null;
     let term = null;
 
+    // Get current term/session info for isCurrent computation and fallbacks
+    const currentData = await this.currentTermService.getCurrentTermWithSession(student.user.schoolId);
+    const currentTermId = currentData?.term?.id ?? null;
+    const currentSessionId = currentData?.session?.id ?? null;
+
     if (academicSessionId) {
       session = await this.prisma.academicSession.findFirst({
         where: {
@@ -325,9 +325,11 @@ export class StudentService extends BaseService {
       }
     } else {
       // Try to find current session first, then fallback to most recent
-      session = await this.prisma.academicSession.findFirst({
-        where: { isCurrent: true, schoolId: student.user.schoolId },
-      });
+      if (currentData) {
+        session = await this.prisma.academicSession.findFirst({
+          where: { id: currentData.session.id },
+        });
+      }
 
       if (!session) {
         session = await this.prisma.academicSession.findFirst({
@@ -355,13 +357,12 @@ export class StudentService extends BaseService {
         );
       }
     } else {
-      // Try to find current term first, then fallback to most recent
-      term = await this.prisma.term.findFirst({
-        where: {
-          academicSessionId: session.id,
-          isCurrent: true,
-        },
-      });
+      // Try to use current term if it belongs to this session, then fallback to most recent
+      if (currentData && currentData.term.academicSessionId === session.id) {
+        term = await this.prisma.term.findFirst({
+          where: { id: currentData.term.id },
+        });
+      }
 
       if (!term) {
         term = await this.prisma.term.findFirst({
@@ -416,7 +417,7 @@ export class StudentService extends BaseService {
     // Get assessment structures from the session's own template.
     // For historical sessions, use read-only lookup to avoid fabricating a template
     // from the current session's structure. Only auto-create for the current session.
-    const template = session.isCurrent
+    const template = session.id === currentSessionId
       ? await this.templateService.findActiveTemplateForSchoolSession(
           student.user.schoolId,
           session.id,
@@ -545,7 +546,7 @@ export class StudentService extends BaseService {
       academicSession: {
         id: session.id,
         academicYear: session.academicYear,
-        isCurrent: session.isCurrent,
+        isCurrent: session.id === currentSessionId,
       },
       term: {
         id: term.id,
@@ -619,6 +620,7 @@ export class StudentService extends BaseService {
     // Get current academic session
     const activeClassArm = student.classArmStudents?.[0];
     const academicSession = activeClassArm?.classArm?.academicSession;
+    const profileCurrentSessionId = (await this.currentTermService.getCurrentTermWithSession(student.user.schoolId))?.session?.id ?? null;
 
     return {
       student: {
@@ -651,7 +653,7 @@ export class StudentService extends BaseService {
         ? {
             id: academicSession.id,
             academicYear: academicSession.academicYear,
-            isCurrent: academicSession.isCurrent,
+            isCurrent: academicSession.id === profileCurrentSessionId,
           }
         : undefined,
       guardian: student.guardian
@@ -775,6 +777,11 @@ export class StudentService extends BaseService {
       throw new Error('Student not found');
     }
 
+    // Get current term/session for isCurrent computation
+    const histCurrent = await this.currentTermService.getCurrentTermWithSession(student.user.schoolId);
+    const histCurrentTermId = histCurrent?.term?.id ?? null;
+    const histCurrentSessionId = histCurrent?.session?.id ?? null;
+
     // Get academic sessions where student was enrolled (through classArm or assessments)
     // Include associated terms where student has assessments
     const sessions = await this.prisma.academicSession.findMany({
@@ -813,7 +820,6 @@ export class StudentService extends BaseService {
         academicYear: true,
         startDate: true,
         endDate: true,
-        isCurrent: true,
         createdAt: true,
         terms: {
           where: {
@@ -827,7 +833,6 @@ export class StudentService extends BaseService {
           select: {
             id: true,
             name: true,
-            isCurrent: true,
             createdAt: true,
           },
           orderBy: { createdAt: 'asc' },
@@ -841,12 +846,12 @@ export class StudentService extends BaseService {
       academicYear: session.academicYear,
       startDate: session.startDate,
       endDate: session.endDate,
-      isCurrent: session.isCurrent,
+      isCurrent: session.id === histCurrentSessionId,
       createdAt: session.createdAt,
       terms: session.terms.map((term) => ({
         id: term.id,
         name: term.name,
-        isCurrent: term.isCurrent,
+        isCurrent: term.id === histCurrentTermId,
         createdAt: term.createdAt,
       })),
     }));
@@ -869,29 +874,30 @@ export class StudentService extends BaseService {
     let session = null;
     let term = null;
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    const subjectsCurrent = await this.currentTermService.getCurrentTermWithSession(user.schoolId);
+
     if (academicSessionId) {
       session = await this.prisma.academicSession.findUnique({
         where: { id: academicSessionId },
       });
     } else {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-      session = await this.prisma.academicSession.findFirst({
-        where: { isCurrent: true, schoolId: user.schoolId },
-      });
+      if (subjectsCurrent) {
+        session = await this.prisma.academicSession.findFirst({
+          where: { id: subjectsCurrent.session.id },
+        });
+      }
     }
 
     if (termId) {
       term = await this.prisma.term.findUnique({
         where: { id: termId },
       });
-    } else if (session) {
+    } else if (session && subjectsCurrent && subjectsCurrent.term.academicSessionId === session.id) {
       term = await this.prisma.term.findFirst({
-        where: {
-          academicSessionId: session.id,
-          isCurrent: true,
-        },
+        where: { id: subjectsCurrent.term.id },
       });
     }
 
@@ -900,10 +906,6 @@ export class StudentService extends BaseService {
     }
 
     // Get school's grading model
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
     const gradingModel = user?.schoolId
       ? await this.prisma.gradingModel.findUnique({ where: { schoolId: user.schoolId } })
       : null;

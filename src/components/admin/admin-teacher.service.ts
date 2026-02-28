@@ -9,6 +9,7 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { UserType } from '@prisma/client';
 
 import { PrismaService } from '../../prisma';
+import { CurrentTermService } from '../../shared/services/current-term.service';
 import { PasswordHasher } from '../../utils/hasher';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { CounterService } from '../../common/counter';
@@ -32,6 +33,7 @@ export class AdminTeacherService {
     private readonly passwordGenerator: PasswordGenerator,
     private readonly counterService: CounterService,
     private readonly mailQueueService: MailQueueService,
+    private readonly currentTermService: CurrentTermService,
   ) {}
 
   async createTeacher(userId: string, createTeacherDto: CreateTeacherDto): Promise<TeacherResult> {
@@ -308,13 +310,15 @@ export class AdminTeacherService {
     const skip = (page - 1) * limit;
 
     // Get target session (either specified or current)
-    const targetSession = academicSessionId 
-      ? await this.prisma.academicSession.findFirst({
-          where: { id: academicSessionId, schoolId: user.schoolId },
-        })
-      : await this.prisma.academicSession.findFirst({
-          where: { schoolId: user.schoolId, isCurrent: true },
-        });
+    let targetSession: { id: string } | null = null;
+    if (academicSessionId) {
+      targetSession = await this.prisma.academicSession.findFirst({
+        where: { id: academicSessionId, schoolId: user.schoolId },
+      });
+    } else {
+      const current = await this.currentTermService.getCurrentTermWithSession(user.schoolId);
+      targetSession = current ? { id: current.session.id } : null;
+    }
 
     // Get total count
     const totalRecords = await this.prisma.teacher.count({
@@ -815,19 +819,17 @@ export class AdminTeacherService {
     }
 
     // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId: user.schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(user.schoolId);
 
     // Get teacher's subject assignments with class arm and subject details
     const assignments = await this.prisma.classArmSubjectTeacher.findMany({
       where: {
         teacherId,
         deletedAt: null,
-        ...(currentSession && {
+        ...(current && {
           classArmSubject: {
             classArm: {
-              academicSessionId: currentSession.id,
+              academicSessionId: current.session.id,
               deletedAt: null,
             },
           },

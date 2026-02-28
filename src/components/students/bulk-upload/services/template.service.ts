@@ -5,10 +5,14 @@ import * as ExcelJS from 'exceljs';
 
 import { BaseService } from '../../../../common/base-service';
 import { PrismaService } from '../../../../prisma/prisma.service';
+import { CurrentTermService } from '../../../../shared/services/current-term.service';
 
 @Injectable()
 export class TemplateService extends BaseService {
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
+  ) {
     super(TemplateService.name);
   }
 
@@ -111,20 +115,18 @@ export class TemplateService extends BaseService {
   async getClassArmsForTemplate(schoolId: string): Promise<any[]> {
     try {
       // Get current academic session
-      const currentSession = await this.prisma.academicSession.findFirst({
-        where: { schoolId, isCurrent: true },
-      });
+      const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-      if (!currentSession) {
+      if (!current) {
         // Return empty array if no current session
         return [];
       }
 
       const classArms = await this.prisma.classArm.findMany({
-        where: { 
-          schoolId, 
-          academicSessionId: currentSession.id,
-          deletedAt: null 
+        where: {
+          schoolId,
+          academicSessionId: current.session.id,
+          deletedAt: null
         },
         include: { level: true },
         orderBy: [{ level: { order: 'asc' } }, { name: 'asc' }],

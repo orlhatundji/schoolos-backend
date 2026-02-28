@@ -44,6 +44,7 @@ import {
 } from './results';
 import { StudentsService } from './students.service';
 import { ActivityLogService } from '../../common/services/activity-log.service';
+import { CurrentTermService } from '../../shared/services/current-term.service';
 
 @Controller('students')
 @ApiTags('Student')
@@ -53,6 +54,7 @@ export class StudentsController {
   constructor(
     private readonly studentsService: StudentsService,
     private readonly activityLogService: ActivityLogService,
+    private readonly currentTermService: CurrentTermService,
   ) {}
 
   @Post()
@@ -146,11 +148,9 @@ export class StudentsController {
     }
 
     // Get current session
-    const currentSession = await this.studentsService['prisma'].academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       return { error: 'No current session found' };
     }
 
@@ -158,7 +158,7 @@ export class StudentsController {
     const classArms = await this.studentsService['prisma'].classArm.findMany({
       where: {
         schoolId,
-        academicSessionId: currentSession.id,
+        academicSessionId: current.session.id,
         deletedAt: null,
       },
       include: {
@@ -184,15 +184,15 @@ export class StudentsController {
     // Get total class arm students
     const totalClassArmStudents = await this.studentsService['prisma'].classArmStudent.count({
       where: {
-        classArm: { schoolId, academicSessionId: currentSession.id },
+        classArm: { schoolId, academicSessionId: current.session.id },
         isActive: true,
       },
     });
 
     return {
       schoolId,
-      currentSessionId: currentSession.id,
-      currentSessionYear: currentSession.academicYear,
+      currentSessionId: current.session.id,
+      currentSessionYear: current.session.academicYear,
       totalStudents,
       totalClassArmStudents,
       classArms: classArms.map((ca) => ({

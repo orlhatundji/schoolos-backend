@@ -10,6 +10,7 @@ import { PasswordHasher } from '../../../utils/hasher';
 import { PaystackService } from '../../../shared/services/paystack.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
+import { CurrentTermService } from '../../../shared/services/current-term.service';
 import { StorageService } from '../../storage/storage.service';
 import {
   ClassDetails,
@@ -37,6 +38,7 @@ export class TeacherService {
     private readonly passwordHasher: PasswordHasher,
     private readonly paystackService: PaystackService,
     private readonly templateService: AssessmentStructureTemplateService,
+    private readonly currentTermService: CurrentTermService,
     private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
     private readonly storageService: StorageService,
   ) {}
@@ -48,11 +50,9 @@ export class TeacherService {
     const schoolId = teacher.user.schoolId;
 
     // Get current academic session and term
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-    });
+    const dashboardCurrent = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
-    if (!currentSession) {
+    if (!dashboardCurrent) {
       // Return empty data for new schools without academic sessions
       return {
         stats: {
@@ -74,12 +74,8 @@ export class TeacherService {
       };
     }
 
-    const currentTerm = await this.prisma.term.findFirst({
-      where: {
-        academicSessionId: currentSession.id,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const currentSession = dashboardCurrent.session;
+    const currentTerm = dashboardCurrent.term;
 
     // Get all unique classes the teacher is assigned to
     const allClasses = [
@@ -295,6 +291,20 @@ export class TeacherService {
 
   // Helper method to get teacher with relations
   private async getTeacherWithRelations(userId: string) {
+    // First, get the user to find schoolId, then get currentSessionId
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    const currentSessionId = user?.schoolId
+      ? (await this.currentTermService.getCurrentTermWithSession(user.schoolId))?.session?.id ?? undefined
+      : undefined;
+
+    // Build the academicSession filter: use currentSessionId if available, otherwise match nothing
+    const sessionFilter = currentSessionId
+      ? { academicSessionId: currentSessionId }
+      : { academicSessionId: 'no-current-session' };
+
     const teacher = await this.prisma.teacher.findFirst({
       where: {
         userId,
@@ -312,9 +322,7 @@ export class TeacherService {
             deletedAt: null,
             classArmSubject: {
               classArm: {
-                academicSession: {
-                  isCurrent: true,
-                },
+                ...sessionFilter,
                 deletedAt: null,
               },
             },
@@ -339,9 +347,7 @@ export class TeacherService {
           where: {
             deletedAt: null,
             classArm: {
-              academicSession: {
-                isCurrent: true,
-              },
+              ...sessionFilter,
               deletedAt: null,
             },
           },
@@ -358,9 +364,7 @@ export class TeacherService {
         },
         classArmsAsTeacher: {
           where: {
-            academicSession: {
-              isCurrent: true,
-            },
+            ...sessionFilter,
             deletedAt: null,
           },
           include: {
@@ -722,11 +726,11 @@ export class TeacherService {
 
   // Helper method to get current session
   private async getCurrentSession(schoolId: string) {
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
+    if (!current) return null;
+    return this.prisma.academicSession.findFirst({
+      where: { id: current.session.id },
     });
-
-    return currentSession;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -1144,11 +1148,12 @@ export class TeacherService {
       );
     }
 
-    // Get current session/term
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { isCurrent: true, schoolId },
-      include: { terms: { where: { deletedAt: null }, orderBy: { startDate: 'asc' } } },
-    });
+    // Get current session/term using CurrentTermService
+    const assessmentCurrent = await this.currentTermService.getCurrentSessionWithTerms(schoolId);
+    const assessmentCurrentTermId = assessmentCurrent?.currentTermId ?? null;
+    const currentSession = assessmentCurrent
+      ? { id: assessmentCurrent.session.id, academicYear: assessmentCurrent.session.academicYear, terms: assessmentCurrent.terms }
+      : null;
 
     // Resolve selected term: use termId if provided, otherwise fall back to current term
     let selectedTerm: { id: string; name: string; isLocked: boolean; isCurrent: boolean } | undefined;
@@ -1159,12 +1164,12 @@ export class TeacherService {
       if (!termRecord) {
         throw new NotFoundException(`Term with ID "${termId}" not found`);
       }
-      selectedTerm = { id: termRecord.id, name: termRecord.name, isLocked: termRecord.isLocked, isCurrent: termRecord.isCurrent };
+      selectedTerm = { id: termRecord.id, name: termRecord.name, isLocked: termRecord.isLocked, isCurrent: termRecord.id === assessmentCurrentTermId };
     } else {
-      // Try to find the term marked as current; fall back to first term in the session
-      const currentTermRecord = currentSession?.terms?.find((t) => t.isCurrent) || currentSession?.terms?.[0];
+      // Try to find the current term; fall back to first term in the session
+      const currentTermRecord = currentSession?.terms?.find((t) => t.id === assessmentCurrentTermId) || currentSession?.terms?.[0];
       if (currentTermRecord) {
-        selectedTerm = { id: currentTermRecord.id, name: currentTermRecord.name, isLocked: currentTermRecord.isLocked, isCurrent: currentTermRecord.isCurrent };
+        selectedTerm = { id: currentTermRecord.id, name: currentTermRecord.name, isLocked: currentTermRecord.isLocked, isCurrent: currentTermRecord.id === assessmentCurrentTermId };
       }
     }
 
@@ -1172,7 +1177,7 @@ export class TeacherService {
     const availableTerms = (currentSession?.terms || []).map((t) => ({
       id: t.id,
       name: t.name,
-      isCurrent: t.isCurrent,
+      isCurrent: t.id === assessmentCurrentTermId,
       isLocked: t.isLocked,
     }));
 
@@ -1274,7 +1279,7 @@ export class TeacherService {
       academicSession: {
         id: currentSession?.id,
         name: currentSession?.academicYear,
-        isCurrent: currentSession?.isCurrent,
+        isCurrent: true,
       },
       currentTerm: selectedTerm
         ? {
@@ -1408,12 +1413,12 @@ export class TeacherService {
       if (!termRecord) throw new Error(`Term with ID "${createDto.termId}" not found`);
       term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     } else {
-      const currentSession = await this.prisma.academicSession.findFirst({
-        where: { isCurrent: true, schoolId },
-        include: { terms: { where: { name: { equals: createDto.termName, mode: 'insensitive' }, deletedAt: null } } },
+      const createCurrent = await this.currentTermService.getCurrentTermWithSession(schoolId);
+      if (!createCurrent) throw new Error('No current academic session found');
+      // Find term by name within current session
+      const termRecord = await this.prisma.term.findFirst({
+        where: { academicSessionId: createCurrent.session.id, name: { equals: createDto.termName, mode: 'insensitive' }, deletedAt: null },
       });
-      if (!currentSession) throw new Error('No current academic session found');
-      const termRecord = currentSession.terms[0];
       if (!termRecord) throw new Error(`Term "${createDto.termName}" not found in current academic session`);
       term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     }
@@ -1677,12 +1682,11 @@ export class TeacherService {
       if (!termRecord) throw new Error(`Term with ID "${termId}" not found`);
       term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     } else {
-      const currentSession = await this.prisma.academicSession.findFirst({
-        where: { isCurrent: true, schoolId },
-        include: { terms: { where: { name: { equals: termName, mode: 'insensitive' }, deletedAt: null } } },
+      const upsertCurrent = await this.currentTermService.getCurrentTermWithSession(schoolId);
+      if (!upsertCurrent) throw new Error('No current academic session found');
+      const termRecord = await this.prisma.term.findFirst({
+        where: { academicSessionId: upsertCurrent.session.id, name: { equals: termName, mode: 'insensitive' }, deletedAt: null },
       });
-      if (!currentSession) throw new Error('No current academic session found');
-      const termRecord = currentSession.terms[0];
       if (!termRecord) throw new Error(`Term "${termName}" not found in current academic session`);
       term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
     }
@@ -2311,16 +2315,10 @@ export class TeacherService {
       throw new NotFoundException('Teacher not found');
     }
 
-    // Get current academic session
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: {
-        schoolId: teacher.user.schoolId,
-        isCurrent: true,
-        deletedAt: null,
-      },
-    });
+    // Get current academic session and term via CurrentTermService
+    const current = await this.currentTermService.getCurrentTermWithSession(teacher.user.schoolId);
 
-    if (!currentSession) {
+    if (!current) {
       // Return empty data for new schools without academic sessions
       return {
         currentSession: null,
@@ -2328,32 +2326,19 @@ export class TeacherService {
       };
     }
 
-    // Get current term
-    const currentTerm = await this.prisma.term.findFirst({
-      where: {
-        academicSessionId: currentSession.id,
-        isCurrent: true,
-        deletedAt: null,
-      },
-    });
-
-    if (!currentTerm) {
-      throw new NotFoundException('No current term found');
-    }
-
     return {
       currentSession: {
-        id: currentSession.id,
-        academicYear: currentSession.academicYear,
-        startDate: currentSession.startDate,
-        endDate: currentSession.endDate,
-        isCurrent: currentSession.isCurrent,
+        id: current.session.id,
+        academicYear: current.session.academicYear,
+        startDate: current.session.startDate,
+        endDate: current.session.endDate,
+        isCurrent: true,
       },
       currentTerm: {
-        id: currentTerm.id,
-        name: currentTerm.name,
-        academicSessionId: currentTerm.academicSessionId,
-        isCurrent: currentTerm.isCurrent,
+        id: current.term.id,
+        name: current.term.name,
+        academicSessionId: current.term.academicSessionId,
+        isCurrent: true,
       },
     };
   }
@@ -2742,11 +2727,14 @@ export class TeacherService {
       throw new NotFoundException('Teacher not found');
     }
 
+    const verifyCurrent = await this.currentTermService.getCurrentTermWithSession(teacher.user.schoolId);
+    const verifyCurrentSessionId = verifyCurrent?.session?.id;
+
     const classArm = await this.prisma.classArm.findFirst({
       where: {
         id: classArmId,
         deletedAt: null,
-        academicSession: { isCurrent: true },
+        ...(verifyCurrentSessionId ? { academicSessionId: verifyCurrentSessionId } : {}),
       },
     });
 

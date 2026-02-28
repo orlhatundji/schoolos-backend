@@ -60,6 +60,7 @@ jobs:
         host: ${{ secrets.LIGHTSAIL_HOST }}
         username: ${{ secrets.LIGHTSAIL_USERNAME }}
         key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+        command_timeout: 20m
         script: |
           # Install Chromium dependencies for Puppeteer (skip if already installed)
           if ! dpkg -s libgbm1 > /dev/null 2>&1; then
@@ -146,6 +147,7 @@ jobs:
         host: ${{ secrets.LIGHTSAIL_HOST_STAGING }}
         username: ${{ secrets.LIGHTSAIL_USERNAME_STAGING }}
         key: ${{ secrets.LIGHTSAIL_SSH_KEY_STAGING }}
+        command_timeout: 20m
         script: |
           # Install Chromium dependencies for Puppeteer (skip if already installed)
           if ! dpkg -s libgbm1 > /dev/null 2>&1; then

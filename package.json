@@ -123,7 +123,8 @@
       "@scarf/scarf",
       "bcrypt",
       "esbuild",
-      "prisma"
+      "prisma",
+      "puppeteer"
     ]
   },
   "engines": {

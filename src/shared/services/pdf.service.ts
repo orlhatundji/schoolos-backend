@@ -123,11 +123,18 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
       return this.templateCache.get(templateId)!;
     }
 
-    // Try __dirname-relative path first (works with ts-node/dev), then fall back
-    // to dist/shared/ path (compiled output puts .js in dist/src/ but assets go to dist/)
-    let templatePath = join(__dirname, '..', 'templates', 'results', `${templateId}.hbs`);
-    if (!existsSync(templatePath)) {
-      templatePath = join(process.cwd(), 'dist', 'shared', 'templates', 'results', `${templateId}.hbs`);
+    // Try multiple paths: ts-node/dev (__dirname relative), then production paths
+    // In dev: __dirname = src/shared/services → ../templates works
+    // In prod: __dirname = dist/src/shared/services → need to go up further
+    const candidates = [
+      join(__dirname, '..', 'templates', 'results', `${templateId}.hbs`),
+      join(__dirname, '..', '..', '..', 'shared', 'templates', 'results', `${templateId}.hbs`),
+      join(process.cwd(), 'dist', 'shared', 'templates', 'results', `${templateId}.hbs`),
+      join(process.cwd(), 'dist', 'src', 'shared', 'templates', 'results', `${templateId}.hbs`),
+    ];
+    const templatePath = candidates.find((p) => existsSync(p));
+    if (!templatePath) {
+      throw new Error(`Template "${templateId}" not found. Searched: ${candidates.join(', ')}`);
     }
     const source = readFileSync(templatePath, 'utf8');
     const compiled = Handlebars.compile(source);

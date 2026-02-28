@@ -79,22 +79,25 @@ jobs:
 
           # Install dependencies
           pnpm install --no-frozen-lockfile
-          
+
+          # Ensure Puppeteer's Chrome binary is installed
+          npx puppeteer browsers install chrome
+
           # Generate Prisma client
           pnpm run db-generate
-          
+
           # Build the application
           NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
-          
+
           # Run database migrations
           npx prisma migrate deploy
-          
+
           # Restart the application with PM2
           pm2 restart schoolos-backend || pm2 start dist/src/main.js --name schoolos-backend
-          
+
           # Save PM2 configuration
           pm2 save
-          
+
           echo "Production deployment completed successfully!"
 
   deploy-staging:
@@ -162,20 +165,23 @@ jobs:
 
           # Install dependencies
           pnpm install --no-frozen-lockfile
-          
+
+          # Ensure Puppeteer's Chrome binary is installed
+          npx puppeteer browsers install chrome
+
           # Generate Prisma client
           pnpm run db-generate
-          
+
           # Build the application
           NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
-          
+
           # Run database migrations
           npx prisma migrate deploy
-          
+
           # Restart the application with PM2 (staging process name)
           pm2 restart schoolos-backend || pm2 start dist/src/main.js --name schoolos-backend
-          
+
           # Save PM2 configuration
           pm2 save
-          
+
           echo "Staging deployment completed successfully!"

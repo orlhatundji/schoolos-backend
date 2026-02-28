@@ -48,7 +48,7 @@ export class SchoolSignupService {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">We've Received Your Signup Request!</h2>
             <p>Hi ${contactPerson.firstName},</p>
-            <p>Thank you for registering <strong>${schoolName}</strong> with SchoolOS. Your signup request has been received and is currently under review.</p>
+            <p>Thank you for registering <strong>${schoolName}</strong> with Schos. Your signup request has been received and is currently under review.</p>
             <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
               <p style="margin: 5px 0;"><strong>School Name:</strong> ${schoolName}</p>
               <p style="margin: 5px 0;"><strong>Reference Code:</strong> ${schoolCode}</p>
@@ -56,7 +56,7 @@ export class SchoolSignupService {
             </div>
             <p>Our team will review your request and get back to you shortly. You will receive another email once your request has been processed.</p>
             <p>If you have any questions in the meantime, please don't hesitate to reach out.</p>
-            <p>Best regards,<br/>The SchoolOS Team</p>
+            <p>Best regards,<br/>The Schos Team</p>
           </div>
         `,
       });
@@ -105,7 +105,7 @@ export class SchoolSignupService {
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #231651;">New School Signup Request</h2>
                 <p>Hi ${admin.firstName},</p>
-                <p>A new school has submitted a signup request on SchoolOS and is awaiting your review.</p>
+                <p>A new school has submitted a signup request on Schos and is awaiting your review.</p>
                 <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
                   <p style="margin: 5px 0;"><strong>School Name:</strong> ${schoolName}</p>
                   <p style="margin: 5px 0;"><strong>School Code:</strong> ${signupRequest.schoolCode}</p>
@@ -118,7 +118,7 @@ export class SchoolSignupService {
                 <div style="margin: 20px 0;">
                   <a href="${platformUrl}/signup-requests" style="background-color: #231651; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Review Signup Request</a>
                 </div>
-                <p>Best regards,<br/>SchoolOS System</p>
+                <p>Best regards,<br/>Schos System</p>
               </div>
             `,
           });

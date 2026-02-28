@@ -220,7 +220,7 @@ jobs:
 
 
           # Restart the application with PM2 (staging process name)
-          pm2 restart schos-backend || pm2 start dist/src/main.js --name Schos-backend
+          pm2 restart schos-backend || pm2 start dist/src/main.js --name schos-backend
           
           # Save PM2 configuration
           pm2 save

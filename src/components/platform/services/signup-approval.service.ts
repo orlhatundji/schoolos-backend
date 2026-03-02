@@ -7,7 +7,7 @@ import { PasswordGenerator } from '../../../utils/password/password.generator';
 import { PasswordHasher } from '../../../utils/hasher/hasher';
 import { MailService } from '../../../utils/mail/mail.service';
 import { CounterService } from '../../../common/counter';
-import { getNextUserEntityNoFormatted } from '../../../utils/misc';
+import { getNextUserEntityNoFormatted, generateSchoolAcronym, generateSchoolCode } from '../../../utils/misc';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -105,6 +105,8 @@ export class SignupApprovalService {
     // Type cast the JSON data
     const contactPersonData = request.contactPerson as any;
 
+    const schoolCode = await this.generateUniqueSchoolCode(request.schoolName);
+
     // Generate secure admin password before transaction
     const adminPassword = this.passwordGenerator.generate();
 
@@ -127,7 +129,7 @@ export class SignupApprovalService {
       const school = await tx.school.create({
         data: {
           name: request.schoolName,
-          code: request.schoolCode,
+          code: schoolCode,
           primaryAddressId: address.id,
           phone: contactPersonData.phone,
           email: contactPersonData.email,
@@ -179,11 +181,11 @@ export class SignupApprovalService {
         },
       });
 
-      // 7. Update signup request status
       const updatedRequest = await tx.schoolSignupRequest.update({
         where: { id },
         data: {
           status: SchoolSignupStatus.APPROVED,
+          schoolCode,
           reviewedAt: new Date(),
           notes: approveSignupDto.notes,
           // Note: reviewerId should be set from the authenticated user context
@@ -215,6 +217,32 @@ export class SignupApprovalService {
       ...result,
       message: 'School account created successfully. Admin credentials sent to the contact person.',
     };
+  }
+
+  /**
+   * Generates a unique school code by combining school name acronym with a prefix-specific sequence number.
+   * Checks for collisions against existing schools and retries if necessary.
+   */
+  private async generateUniqueSchoolCode(schoolName: string): Promise<string> {
+    const prefix = generateSchoolAcronym(schoolName);
+    const counterEntity = `school_prefix_${prefix}`;
+
+    const maxRetries = 5;
+    for (let i = 0; i < maxRetries; i++) {
+      const sequenceNo = await this.counterService.getNextGlobalSequenceNo(counterEntity);
+      const schoolCode = generateSchoolCode(schoolName, sequenceNo);
+
+      // Verify uniqueness against existing schools
+      const existingSchool = await this.prisma.school.findUnique({
+        where: { code: schoolCode },
+      });
+
+      if (!existingSchool) {
+        return schoolCode;
+      }
+    }
+
+    throw new BadRequestException('Unable to generate a unique school code. Please try again.');
   }
 
   private async sendWelcomeEmail(data: {

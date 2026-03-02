@@ -2,11 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { TeacherStatus, EmploymentType } from '@prisma/client';
 
 import { PrismaService } from '../../../../prisma';
+import { CurrentTermService } from '../../../../shared/services/current-term.service';
 import { TeachersViewData, SingleTeacherDetails } from '../types';
 
 @Injectable()
 export class BffAdminTeacherService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
+  ) {}
 
   async getTeachersViewData(userId: string, academicSessionId?: string): Promise<TeachersViewData> {
     // First, get the user's school ID
@@ -22,13 +26,15 @@ export class BffAdminTeacherService {
     const schoolId = user.schoolId;
 
     // Get the target academic session (either specified or current)
-    const targetSession = academicSessionId 
-      ? await this.prisma.academicSession.findFirst({
-          where: { id: academicSessionId, schoolId },
-        })
-      : await this.prisma.academicSession.findFirst({
-          where: { schoolId, isCurrent: true },
-        });
+    let targetSession;
+    if (academicSessionId) {
+      targetSession = await this.prisma.academicSession.findFirst({
+        where: { id: academicSessionId, schoolId },
+      });
+    } else {
+      const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
+      targetSession = current?.session ?? null;
+    }
 
     if (!targetSession) {
       throw new Error('Academic session not found');

@@ -34,7 +34,7 @@ export class AppController {
         subject: body.subject || 'Test Email',
         html:
           body.html ||
-          '<h1>Test Email</h1><p>This is a test email from the SchoolOS backend.</p>',
+          '<h1>Test Email</h1><p>This is a test email from the Schos backend.</p>',
       });
 
       return {

@@ -79,6 +79,8 @@ model School {
   studentCapacity              String?
   colorScheme                  String?
   resultTemplateId             String?                       @default("classic") @map("result_template_id")
+  currentTermId                String?                       @map("current_term_id")
+  currentTerm                  Term?                         @relation("SchoolCurrentTerm", fields: [currentTermId], references: [id])
   academicSessions             AcademicSession[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
   bulkImportJobs               BulkImportJob[]
@@ -130,13 +132,12 @@ model AcademicPromotionSettings {
 /// * Each session has a start and end date, and is associated with a specific school.
 /// * Academic sessions are divided into terms (e.g., First Term, Second Term).
 /// * This entity is central for grouping all academic activities, such as attendance, grading, and curriculum planning, within a specific school year.
-/// * The isCurrent flag indicates if this is the active session for the school.
+/// * The active session is determined via School.currentTermId → Term.academicSessionId.
 model AcademicSession {
   id                           String                        @id @default(uuid())
   academicYear                 String
   startDate                    DateTime
   endDate                      DateTime
-  isCurrent                    Boolean                       @default(false)
   schoolId                     String
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
@@ -205,7 +206,6 @@ model Term {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
-  isCurrent          Boolean             @default(false)
   isLocked           Boolean             @default(false)
   endDate            DateTime
   startDate          DateTime
@@ -214,6 +214,7 @@ model Term {
   studentAttendances StudentAttendance[]
   subjectAttendances SubjectAttendance[]
   academicSession    AcademicSession            @relation(fields: [academicSessionId], references: [id])
+  schoolsAsCurrent   School[]                   @relation("SchoolCurrentTerm")
 
   @@map("terms")
 }

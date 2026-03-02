@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../../../../prisma';
+import { CurrentTermService } from '../../../../shared/services/current-term.service';
 import { PaginatedStudentDetails, SingleStudentDetails, StudentsViewData } from '../types';
 
 @Injectable()
 export class BffAdminStudentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
+  ) {}
 
   async getStudentDetailsData(
     userId: string,
@@ -28,13 +32,15 @@ export class BffAdminStudentService {
     const schoolId = user.schoolId;
 
     // Get the target academic session (either specified or current)
-    const targetSession = academicSessionId
-      ? await this.prisma.academicSession.findFirst({
-          where: { id: academicSessionId, schoolId },
-        })
-      : await this.prisma.academicSession.findFirst({
-          where: { schoolId, isCurrent: true },
-        });
+    let targetSession;
+    if (academicSessionId) {
+      targetSession = await this.prisma.academicSession.findFirst({
+        where: { id: academicSessionId, schoolId },
+      });
+    } else {
+      const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
+      targetSession = current?.session ?? null;
+    }
 
     // Build where clause for filtering
     const whereClause: any = {
@@ -355,13 +361,15 @@ export class BffAdminStudentService {
     const schoolId = user.schoolId;
 
     // Get the target academic session (either specified or current)
-    const targetSession = academicSessionId
-      ? await this.prisma.academicSession.findFirst({
-          where: { id: academicSessionId, schoolId },
-        })
-      : await this.prisma.academicSession.findFirst({
-          where: { schoolId, isCurrent: true },
-        });
+    let targetSession;
+    if (academicSessionId) {
+      targetSession = await this.prisma.academicSession.findFirst({
+        where: { id: academicSessionId, schoolId },
+      });
+    } else {
+      const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
+      targetSession = current?.session ?? null;
+    }
 
     if (!targetSession) {
       // Return empty data for new schools without academic sessions

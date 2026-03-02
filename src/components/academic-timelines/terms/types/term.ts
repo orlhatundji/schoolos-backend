@@ -3,4 +3,5 @@ import { Term as PrismaTerm, StudentAttendance, ClassArmStudentAssessment } from
 export interface Term extends PrismaTerm {
   studentAttendance?: StudentAttendance[];
   assessments?: ClassArmStudentAssessment[];
+  isCurrent?: boolean;
 }

@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 export class AppService {
   getHello() {
     return {
-      message: 'SchoolOS API is running',
+      message: 'Schos API is running',
       status: 'success',
     };
   }

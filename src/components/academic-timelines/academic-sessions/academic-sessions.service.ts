@@ -51,19 +51,14 @@ export class AcademicSessionsService extends BaseService {
       schoolId: user.schoolId,
     };
 
+    // Remove isCurrent from session data — we use school.currentTermId now
+    const { isCurrent, ...sessionDataWithoutIsCurrent } = dataWithSchoolId;
+
     // Use a transaction to ensure all operations succeed or fail together
     const result = await this.prisma.$transaction(async (tx) => {
-      // If marking as current, unset isCurrent on all other sessions for this school
-      if (dataWithSchoolId.isCurrent) {
-        await tx.academicSession.updateMany({
-          where: { schoolId: user.schoolId, isCurrent: true },
-          data: { isCurrent: false },
-        });
-      }
-
       // Create the academic session
       const newSession = await tx.academicSession.create({
-        data: dataWithSchoolId,
+        data: sessionDataWithoutIsCurrent,
       });
 
       // Create assessment structure template for the new session
@@ -76,8 +71,19 @@ export class AcademicSessionsService extends BaseService {
       // Create terms for the new session
       await this.createTermsForNewSessionInTransaction(tx, newSession.id, dto.terms);
 
-      // Note: Class arms are now created manually or during student promotion
-      // Automatic creation has been removed to prevent slug conflicts and allow manual control
+      // If marked as current, set the first term of this session as the school's current term
+      if (isCurrent) {
+        const firstTerm = await tx.term.findFirst({
+          where: { academicSessionId: newSession.id },
+          orderBy: { startDate: 'asc' },
+        });
+        if (firstTerm) {
+          await tx.school.update({
+            where: { id: user.schoolId },
+            data: { currentTermId: firstTerm.id },
+          });
+        }
+      }
 
       return newSession;
     });
@@ -109,7 +115,12 @@ export class AcademicSessionsService extends BaseService {
       throw new NotFoundException(AcademicSessionMessages.FAILURE.SESSION_NOT_FOUND);
     }
 
-    return academicSession;
+    // Compute isCurrent (session doesn't include terms, so check via term count)
+    const currentTermId = await this.getCurrentTermIdForSchool(user.schoolId);
+    const isCurrent = currentTermId != null
+      && (await this.prisma.term.count({ where: { id: currentTermId, academicSessionId: id } })) > 0;
+
+    return { ...academicSession, isCurrent };
   }
 
   async getAllAcademicSessions(userId: string): Promise<AcademicSession[]> {
@@ -125,7 +136,7 @@ export class AcademicSessionsService extends BaseService {
       );
     }
 
-    return this.academicSessionsRepository.findAll({
+    const sessions = await this.academicSessionsRepository.findAll({
       where: { schoolId: user.schoolId },
       include: {
         terms: {
@@ -135,6 +146,10 @@ export class AcademicSessionsService extends BaseService {
         },
       },
     });
+
+    // Enrich sessions and nested terms with computed isCurrent
+    const currentTermId = await this.getCurrentTermIdForSchool(user.schoolId);
+    return this.enrichSessionsWithIsCurrent(sessions, currentTermId);
   }
 
   async updateAcademicSession(
@@ -149,19 +164,24 @@ export class AcademicSessionsService extends BaseService {
     
     // Update the academic session (without terms)
     const updatedSession = await this.academicSessionsRepository.update({ id }, sessionData);
-    
+
     // If terms are provided, update them as well
     if (terms && terms.length > 0) {
-      // Note: This is a simplified approach. In a real scenario, you might want to:
-      // 1. Delete existing terms and create new ones, or
-      // 2. Update existing terms and create new ones, or
-      // 3. Provide a more sophisticated term management API
       throw new BadRequestException(
         'Term updates are not supported through the session update endpoint. Please use the dedicated term management endpoints.',
       );
     }
 
-    return updatedSession;
+    // Compute isCurrent for the updated session
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    const currentTermId = await this.getCurrentTermIdForSchool(user!.schoolId!);
+    const isCurrent = currentTermId != null
+      && (await this.prisma.term.count({ where: { id: currentTermId, academicSessionId: id } })) > 0;
+
+    return { ...updatedSession, isCurrent };
   }
 
   async deleteAcademicSession(userId: string, id: string): Promise<AcademicSession> {
@@ -312,26 +332,56 @@ export class AcademicSessionsService extends BaseService {
       );
     }
 
-    // Find the academic session that contains the current term
-    const sessionWithCurrentTerm = await this.prisma.academicSession.findFirst({
-      where: {
-        schoolId: user.schoolId,
-        terms: {
-          some: {
-            isCurrent: true,
-          },
-        },
-      },
-      include: {
-        terms: {
-          where: {
-            isCurrent: true,
+    // Find the current term via school.currentTermId and include its session
+    const school = await this.prisma.school.findUnique({
+      where: { id: user.schoolId },
+      select: {
+        currentTerm: {
+          include: {
+            academicSession: {
+              include: {
+                terms: { where: { deletedAt: null } },
+              },
+            },
           },
         },
       },
     });
 
-    return sessionWithCurrentTerm;
+    if (!school?.currentTerm) return null;
+
+    // Return the session with only the current term in the terms array (for backward compat)
+    const { academicSession } = school.currentTerm;
+    const { terms, ...sessionData } = academicSession;
+    return {
+      ...sessionData,
+      isCurrent: true,
+      terms: [{ ...school.currentTerm, isCurrent: true }],
+    } as AcademicSession;
+  }
+
+  private async getCurrentTermIdForSchool(schoolId: string): Promise<string | null> {
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { currentTermId: true },
+    });
+    return school?.currentTermId ?? null;
+  }
+
+  private enrichSessionsWithIsCurrent(
+    sessions: AcademicSession[],
+    currentTermId: string | null,
+  ): AcademicSession[] {
+    return sessions.map(session => ({
+      ...session,
+      isCurrent: currentTermId != null
+        && Array.isArray(session.terms)
+        && session.terms.some(t => t.id === currentTermId),
+      terms: session.terms?.map(t => ({
+        ...t,
+        isCurrent: t.id === currentTermId,
+      })),
+    }));
   }
 
   private async createAssessmentStructureForNewSessionInTransaction(

@@ -1,11 +1,15 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
+import { CurrentTermService } from '../../shared/services/current-term.service';
 import { TeacherStatus } from '@prisma/client';
 import { DropdownData } from './types';
 
 @Injectable()
 export class DropdownsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
+  ) {}
 
   async getDropdownData(
     userId: string,
@@ -43,6 +47,9 @@ export class DropdownsService {
       ...(includeInactiveTeachers ? {} : { status: TeacherStatus.ACTIVE }),
       deletedAt: null,
     };
+
+    // Get current term ID to compute isCurrent for sessions
+    const currentTermId = await this.currentTermService.getCurrentTermId(schoolId);
 
     // Fetch all data in parallel for better performance
     const [teachers, departments, academicSessions, levels, terms, subjects] = await Promise.all([
@@ -88,9 +95,15 @@ export class DropdownsService {
         orderBy: { name: 'asc' },
       }),
 
-      // Academic Sessions
+      // Academic Sessions (include terms to compute isCurrent)
       this.prisma.academicSession.findMany({
         where: { schoolId },
+        include: {
+          terms: {
+            where: { deletedAt: null },
+            select: { id: true },
+          },
+        },
         orderBy: { academicYear: 'desc' },
       }),
 
@@ -153,7 +166,7 @@ export class DropdownsService {
     const academicSessionsData = academicSessions.map((session) => ({
       id: session.id,
       academicYear: session.academicYear,
-      isCurrent: session.isCurrent,
+      isCurrent: currentTermId ? session.terms.some((t) => t.id === currentTermId) : false,
       startDate: session.startDate,
       endDate: session.endDate,
     }));

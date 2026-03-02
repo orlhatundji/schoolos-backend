@@ -19,6 +19,7 @@ import {
   TemplateService,
   StudentImportProcessor,
 } from './bulk-upload';
+import { SharedServicesModule } from '../../shared/shared-services.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import {
     CounterModule,
     SchoolsModule,
     MailQueueModule,
+    SharedServicesModule,
     BullModule.registerQueue({
       name: 'student-import',
     }),

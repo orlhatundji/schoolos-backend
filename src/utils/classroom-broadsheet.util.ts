@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import * as ExcelJS from 'exceljs';
 
 import { PrismaService } from '../prisma';
+import { CurrentTermService } from '../shared/services/current-term.service';
 import { AssessmentStructureTemplateService } from '../components/assessment-structures/assessment-structure-template.service';
 import {
   ClassroomBroadsheetData,
@@ -13,6 +14,7 @@ import {
 export class ClassroomBroadsheetBuilder {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly currentTermService: CurrentTermService,
     private readonly templateService: AssessmentStructureTemplateService,
   ) {}
 
@@ -24,18 +26,14 @@ export class ClassroomBroadsheetBuilder {
     });
 
     // 1. Get current academic session with all terms
-    const currentSession = await this.prisma.academicSession.findFirst({
-      where: { schoolId, isCurrent: true },
-      include: {
-        terms: { orderBy: { startDate: 'asc' } },
-      },
-    });
+    const currentSessionData = await this.currentTermService.getCurrentSessionWithTerms(schoolId);
 
-    if (!currentSession) {
+    if (!currentSessionData) {
       throw new NotFoundException('No active academic session found');
     }
 
-    const terms = currentSession.terms;
+    const { session: currentSession, terms, currentTermId } = currentSessionData;
+
     if (terms.length === 0) {
       throw new NotFoundException('No terms found for current session');
     }
@@ -226,7 +224,7 @@ export class ClassroomBroadsheetBuilder {
       terms: terms.map((t) => ({
         id: t.id,
         name: t.name,
-        isCurrent: t.isCurrent,
+        isCurrent: t.id === currentTermId,
       })),
       subjects: classArmSubjects.map((cas) => ({
         id: cas.subjectId,

@@ -332,13 +332,15 @@ async function main() {
         data: {
           academicYear,
           schoolId: school.id,
-          isCurrent: academicYear === previousAcademicYear,
           startDate: faker.date.past(),
           endDate: faker.date.future(),
         },
       }),
     ),
   );
+
+  // Track which session is "current" for seeding purposes
+  const currentSeedSession = sessions.find((s) => s.academicYear === currentAcademicYear);
 
   const terms = [];
   for (const session of sessions) {
@@ -349,7 +351,7 @@ async function main() {
           academicSessionId: session.id,
           startDate: new Date('2024-01-01'),
           endDate: new Date('2024-03-31'),
-          isCurrent: session.isCurrent && name === 'First Term', // Mark first term of current session as current
+          // First term of current session will be set as school.currentTermId below
         },
       });
       terms.push(term);
@@ -369,9 +371,18 @@ async function main() {
     });
   }
 
+  // Set the first term of the current session as the school's current term
+  const currentTermForSeed = terms.find((t) => t.academicSessionId === currentSeedSession?.id);
+  if (currentTermForSeed) {
+    await prisma.school.update({
+      where: { id: school.id },
+      data: { currentTermId: currentTermForSeed.id },
+    });
+  }
+
   console.log('Creating class arms...');
   const classArms = [];
-  const currentSessionForClassArms = sessions.find((s) => s.isCurrent);
+  const currentSessionForClassArms = currentSeedSession;
   for (const level of levels) {
     for (const arm of ['A', 'B', 'C']) {
       const dept = faker.helpers.arrayElement(departments);
@@ -485,11 +496,7 @@ async function main() {
   // const nextYearValue = year + 1;
   // const targetAcademicYear = `${year}/${nextYearValue}`;
 
-  // First, unset all current sessions for this school
-  await prisma.academicSession.updateMany({
-    where: { schoolId: school.id },
-    data: { isCurrent: false },
-  });
+  // Current term is already set via school.currentTermId above
 
   // Then set the current year session as current
   // const targetSession = await prisma.academicSession.findFirst({
@@ -753,7 +760,7 @@ async function main() {
 
   console.log('Creating subject assessments for students...');
   // Subject assessments - Create comprehensive data for all students and subjects
-  const currentSession = sessions.find((s) => s.isCurrent);
+  const currentSession = currentSeedSession;
   const currentSessionTerms = terms.filter((t) => t.academicSessionId === currentSession?.id);
 
   // Create assessments for ALL students and ALL classArmSubjects
@@ -815,13 +822,12 @@ async function main() {
   // Create default assessment structure for the school using utility
   const defaultAssessmentStructures = getDefaultAssessmentStructure();
 
-  // Get the current academic session for the school
-  const currentAcademicSession = await prisma.academicSession.findFirst({
-    where: {
-      schoolId: school.id,
-      isCurrent: true,
-    },
+  // Get the current academic session for the school via school.currentTermId
+  const schoolWithCurrentTerm = await prisma.school.findUnique({
+    where: { id: school.id },
+    select: { currentTerm: { select: { academicSession: true } } },
   });
+  const currentAcademicSession = schoolWithCurrentTerm?.currentTerm?.academicSession ?? null;
 
   if (!currentAcademicSession) {
     console.log('⚠️ No current academic session found, skipping assessment structure creation');

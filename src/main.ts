@@ -72,8 +72,8 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('SchoolOS Portal')
-    .setDescription('The SchoolOS API Documentation')
+    .setTitle('Schos Portal')
+    .setDescription('The Schos API Documentation')
     .setVersion('0.1')
     .addBearerAuth(
       {

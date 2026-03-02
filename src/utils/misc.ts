@@ -58,9 +58,16 @@ export const generateSchoolAcronym = (
     return 'SCH'; // Default fallback
   }
 
-  const acronym = schoolName
+  const significantWords = schoolName
     .split(/\s+/)
-    .filter((word) => word.length > 0 && !SKIP_WORDS.has(word.toLowerCase()))
+    .filter((word) => word.length > 0 && !SKIP_WORDS.has(word.toLowerCase()));
+
+  // For single-word names, use the first 3 characters of that word
+  if (significantWords.length === 1) {
+    return significantWords[0].slice(0, 3).toUpperCase();
+  }
+
+  const acronym = significantWords
     .map((word) => word[0].toUpperCase())
     .join('')
     .slice(0, maxLength);

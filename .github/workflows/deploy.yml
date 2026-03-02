@@ -17,26 +17,26 @@ jobs:
   deploy-production:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '23'
-        
+
     - name: Setup pnpm
       uses: pnpm/action-setup@v2
       with:
         version: 9
-        
+
     - name: Get pnpm store directory
       shell: bash
       run: |
         echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-        
+
     - name: Setup pnpm cache
       uses: actions/cache@v3
       with:
@@ -44,15 +44,15 @@ jobs:
         key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
         restore-keys: |
           ${{ runner.os }}-pnpm-store-
-      
+
     - name: Install dependencies
       run: pnpm install --no-frozen-lockfile
-      
+
     - name: Generate Prisma client
       run: pnpm run db-generate
-      
+
     - name: Build application
-      run:  NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
+      run: NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
 
     - name: Deploy to Lightsail (Production)
       uses: appleboy/ssh-action@v1.0.3
@@ -73,7 +73,7 @@ jobs:
           fi
 
           # Navigate to app directory
-          cd /home/bitnami/schoolos-backend
+          cd /home/bitnami/schos-backend
 
           # Pull latest changes
           git pull origin main
@@ -94,7 +94,7 @@ jobs:
           npx prisma migrate deploy
 
           # Restart the application with PM2
-          pm2 restart schoolos-backend || pm2 start dist/src/main.js --name schoolos-backend
+          pm2 restart schos-backend || pm2 start dist/src/main.js --name schos-backend
 
           # Save PM2 configuration
           pm2 save
@@ -104,26 +104,26 @@ jobs:
   deploy-staging:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/staging' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '23'
-        
+
     - name: Setup pnpm
       uses: pnpm/action-setup@v2
       with:
         version: 9
-        
+
     - name: Get pnpm store directory
       shell: bash
       run: |
         echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-        
+
     - name: Setup pnpm cache
       uses: actions/cache@v3
       with:
@@ -131,15 +131,15 @@ jobs:
         key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
         restore-keys: |
           ${{ runner.os }}-pnpm-store-
-      
+
     - name: Install dependencies
       run: pnpm install --no-frozen-lockfile
-      
+
     - name: Generate Prisma client
       run: pnpm run db-generate
-      
+
     - name: Build application
-      run:  NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
+      run: NODE_OPTIONS="--max-old-space-size=2048" pnpm run build
 
     - name: Deploy to Lightsail (Staging)
       uses: appleboy/ssh-action@v1.0.3
@@ -160,7 +160,7 @@ jobs:
           fi
 
           # Navigate to app directory
-          cd /home/bitnami/schoolos-backend
+          cd /home/bitnami/schos-backend
 
           # Pull latest changes from staging branch
           git pull origin staging
@@ -181,7 +181,7 @@ jobs:
           npx prisma migrate deploy
 
           # Restart the application with PM2 (staging process name)
-          pm2 restart schoolos-backend || pm2 start dist/src/main.js --name schoolos-backend
+          pm2 restart schos-backend || pm2 start dist/src/main.js --name schos-backend
 
           # Save PM2 configuration
           pm2 save

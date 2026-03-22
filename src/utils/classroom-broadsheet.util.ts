@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 
 import { PrismaService } from '../prisma';
@@ -18,7 +18,10 @@ export class ClassroomBroadsheetBuilder {
     private readonly templateService: AssessmentStructureTemplateService,
   ) {}
 
-  async buildBroadsheetData(schoolId: string, classArmId: string): Promise<ClassroomBroadsheetData> {
+  async buildBroadsheetData(
+    schoolId: string,
+    classArmId: string,
+  ): Promise<ClassroomBroadsheetData> {
     // 0. Get school name
     const school = await this.prisma.school.findUnique({
       where: { id: schoolId },
@@ -29,7 +32,9 @@ export class ClassroomBroadsheetBuilder {
     const currentSessionData = await this.currentTermService.getCurrentSessionWithTerms(schoolId);
 
     if (!currentSessionData) {
-      throw new NotFoundException('No active academic session found');
+      throw new NotFoundException(
+        'No current term set. Please set a current term in academic settings.',
+      );
     }
 
     const { session: currentSession, terms, currentTermId } = currentSessionData;
@@ -130,7 +135,8 @@ export class ClassroomBroadsheetBuilder {
         const termScores = terms.map((term) => {
           const termAssessments = subjectAssessments?.get(term.id) || [];
           const total = termAssessments.reduce((sum, a) => sum + a.score, 0);
-          const percentage = totalMaxScore > 0 ? Math.round((total / totalMaxScore) * 100 * 100) / 100 : 0;
+          const percentage =
+            totalMaxScore > 0 ? Math.round((total / totalMaxScore) * 100 * 100) / 100 : 0;
           const grade = this.calculateGradeFromModel(percentage, gradingModel?.model);
 
           return {
@@ -284,7 +290,8 @@ export class ClassroomBroadsheetBuilder {
         const overallAverage =
           subjectPercentages.length > 0
             ? Math.round(
-                (subjectPercentages.reduce((sum, p) => sum + p, 0) / subjectPercentages.length) * 100,
+                (subjectPercentages.reduce((sum, p) => sum + p, 0) / subjectPercentages.length) *
+                  100,
               ) / 100
             : 0;
         return { ...student, overallAverage, rank: 0, remarks: '' };

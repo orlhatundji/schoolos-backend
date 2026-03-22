@@ -156,7 +156,7 @@ export class BffAdminClassroomService {
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
     if (!current) {
-      throw new Error('No current academic session found');
+      throw new Error('No current term set. Please set a current term in academic settings.');
     }
 
     // Get classroom details with efficient direct references (filtered by current session)
@@ -313,7 +313,8 @@ export class BffAdminClassroomService {
       .map(([studentId, data]) => ({
         id: studentId,
         name: `${data.student.user.firstName} ${data.student.user.lastName}`,
-        score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
+        score:
+          data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
         subject: data.latestSubject,
         avatarUrl: data.student.user.avatarUrl || null,
       }))
@@ -419,7 +420,7 @@ export class BffAdminClassroomService {
 
     if (!current) {
       throw new BadRequestException(
-        'No current academic session found. Please create an academic session first.',
+        'No current term set. Please set a current term in academic settings.',
       );
     }
 
@@ -704,7 +705,7 @@ export class BffAdminClassroomService {
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
     if (!current) {
-      throw new Error('No current academic session found');
+      throw new Error('No current term set. Please set a current term in academic settings.');
     }
 
     // Get classroom details by slug (filtered by current session)
@@ -965,8 +966,7 @@ export class BffAdminClassroomService {
               (sum, a) => sum + (a.maxScore || 0),
               0,
             );
-            const totalPercentage =
-              totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0;
+            const totalPercentage = totalMaxScore > 0 ? (totalScore / totalMaxScore) * 100 : 0;
 
             return {
               id: cas.student.id,

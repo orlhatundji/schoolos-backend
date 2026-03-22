@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -13,12 +13,17 @@ export class CurrentTermService {
       where: { id: schoolId },
       select: { currentTermId: true },
     });
-    return school?.currentTermId ?? null;
+    if (school?.currentTermId) return school.currentTermId;
+
+    // Auto-resolve if school has terms but no currentTermId set
+    const resolved = await this.autoResolveCurrentTerm(schoolId);
+    return resolved?.term.id ?? null;
   }
 
   /**
    * Get the current term with its parent academic session.
    * This is the most common pattern — most services need both.
+   * If currentTermId is null but the school has sessions/terms, auto-sets the most recent term.
    */
   async getCurrentTermWithSession(schoolId: string): Promise<{
     term: {
@@ -39,6 +44,7 @@ export class CurrentTermService {
     const school = await this.prisma.school.findUnique({
       where: { id: schoolId },
       select: {
+        currentTermId: true,
         currentTerm: {
           select: {
             id: true,
@@ -60,10 +66,13 @@ export class CurrentTermService {
       },
     });
 
-    if (!school?.currentTerm) return null;
+    if (school?.currentTerm) {
+      const { academicSession, ...term } = school.currentTerm;
+      return { term, session: academicSession };
+    }
 
-    const { academicSession, ...term } = school.currentTerm;
-    return { term, session: academicSession };
+    // Auto-resolve: find the most recent term for this school and set it as current
+    return this.autoResolveCurrentTerm(schoolId);
   }
 
   /**
@@ -115,7 +124,14 @@ export class CurrentTermService {
       },
     });
 
-    if (!school?.currentTerm?.academicSession || !school.currentTermId) return null;
+    if (!school?.currentTerm?.academicSession || !school.currentTermId) {
+      // Auto-resolve if possible
+      const resolved = await this.autoResolveCurrentTerm(schoolId);
+      if (!resolved) return null;
+
+      // Re-fetch with all terms now that currentTermId is set
+      return this.getCurrentSessionWithTerms(schoolId);
+    }
 
     const { academicSession } = school.currentTerm;
     return {
@@ -151,5 +167,64 @@ export class CurrentTermService {
       where: { id: schoolId },
       data: { currentTermId: termId },
     });
+  }
+
+  /**
+   * Auto-resolve: when currentTermId is null, find the most recent term
+   * for this school, set it as current, and return the data.
+   * This self-heals schools that were created without setting a current term.
+   */
+  private async autoResolveCurrentTerm(schoolId: string): Promise<{
+    term: {
+      id: string;
+      name: string;
+      startDate: Date;
+      endDate: Date;
+      isLocked: boolean;
+      academicSessionId: string;
+    };
+    session: {
+      id: string;
+      academicYear: string;
+      startDate: Date;
+      endDate: Date;
+    };
+  } | null> {
+    // Pick the first term of the most recent session (not the latest term overall).
+    // Schools that never set a current term are likely just starting out.
+    const latestTerm = await this.prisma.term.findFirst({
+      where: {
+        deletedAt: null,
+        academicSession: { schoolId, deletedAt: null },
+      },
+      orderBy: [{ academicSession: { startDate: 'desc' } }, { startDate: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        startDate: true,
+        endDate: true,
+        isLocked: true,
+        academicSessionId: true,
+        academicSession: {
+          select: {
+            id: true,
+            academicYear: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+      },
+    });
+
+    if (!latestTerm) return null;
+
+    // Persist so this only happens once
+    await this.prisma.school.update({
+      where: { id: schoolId },
+      data: { currentTermId: latestTerm.id },
+    });
+
+    const { academicSession, ...term } = latestTerm;
+    return { term, session: academicSession };
   }
 }

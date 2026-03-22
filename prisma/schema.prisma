@@ -101,6 +101,7 @@ model School {
   academicPromotionSettings    AcademicPromotionSettings?
   bankAccount                  SchoolBankAccount?
   platformTransactions         PlatformTransaction[]
+  commentTemplates             CommentTemplate[]
 
   @@map("schools")
 }
@@ -213,6 +214,7 @@ model Term {
   assessments        ClassArmStudentAssessment[]
   studentAttendances StudentAttendance[]
   subjectAttendances SubjectAttendance[]
+  resultComments     ResultComment[]
   academicSession    AcademicSession            @relation(fields: [academicSessionId], references: [id])
   schoolsAsCurrent   School[]                   @relation("SchoolCurrentTerm")
 
@@ -305,6 +307,7 @@ model ClassArm {
   paymentStructures       PaymentStructure[]
   promotionsFrom          StudentPromotion[]       @relation("PromotionFromClassArm")
   promotionsTo            StudentPromotion[]       @relation("PromotionToClassArm")
+  resultComments          ResultComment[]
 
   @@unique([slug, schoolId])
   @@unique([name, levelId, academicSessionId, schoolId], name: "unique_class_arm_per_level_session")
@@ -347,11 +350,14 @@ model User {
   student             Student?
   systemAdmin         SystemAdmin?
   teacher             Teacher?
-  activities          UserActivity[]
-  preferences         UserPreferences?
-  tokens              UserToken[]
-  address             Address?             @relation(fields: [addressId], references: [id])
-  school              School?              @relation(fields: [schoolId], references: [id])
+  activities              UserActivity[]
+  preferences             UserPreferences?
+  tokens                  UserToken[]
+  address                 Address?             @relation(fields: [addressId], references: [id])
+  school                  School?              @relation(fields: [schoolId], references: [id])
+  teacherResultComments   ResultComment[]      @relation("TeacherCommentBy")
+  principalResultComments ResultComment[]      @relation("PrincipalCommentBy")
+  commentTemplatesCreated CommentTemplate[]    @relation("CommentTemplateCreatedBy")
 
   @@map("users")
 }
@@ -496,6 +502,7 @@ model Student {
   promotedFrom          StudentPromotion[]          @relation("PromotedStudent")
   promotions            StudentPromotion[]
   statusHistory         StudentStatusHistory[]
+  resultComments        ResultComment[]
   guardian              Guardian?                   @relation(fields: [guardianId], references: [id])
   user                  User                        @relation(fields: [userId], references: [id])
 
@@ -1446,4 +1453,61 @@ enum PromotionType {
   REPEAT
   GRADUATION
   TRANSFER
+}
+
+enum CommentTemplateType {
+  TEACHER
+  PRINCIPAL
+}
+
+/// *
+/// * ResultComment
+/// * -------------
+/// * Stores teacher and principal comments on student results per term per class.
+/// * Each student can have one comment record per class arm per term.
+/// * Teachers add teacherComment, principals/admins add principalComment.
+model ResultComment {
+  id                   String   @id @default(uuid())
+  studentId            String
+  classArmId           String
+  termId               String
+  teacherComment       String?  @db.Text
+  principalComment     String?  @db.Text
+  teacherCommentById   String?  @map("teacher_comment_by_id")
+  principalCommentById String?  @map("principal_comment_by_id")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  student            Student  @relation(fields: [studentId], references: [id])
+  classArm           ClassArm @relation(fields: [classArmId], references: [id])
+  term               Term     @relation(fields: [termId], references: [id])
+  teacherCommentBy   User?    @relation("TeacherCommentBy", fields: [teacherCommentById], references: [id])
+  principalCommentBy User?    @relation("PrincipalCommentBy", fields: [principalCommentById], references: [id])
+
+  @@unique([studentId, classArmId, termId])
+  @@index([classArmId, termId])
+  @@map("result_comments")
+}
+
+/// *
+/// * CommentTemplate
+/// * ---------------
+/// * Reusable comment templates for teachers and principals.
+/// * Each school can have multiple templates of different types.
+/// * Templates can be soft-deleted.
+model CommentTemplate {
+  id          String              @id @default(uuid())
+  schoolId    String
+  content     String              @db.Text
+  type        CommentTemplateType
+  createdById String              @map("created_by_id")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+
+  school    School @relation(fields: [schoolId], references: [id])
+  createdBy User   @relation("CommentTemplateCreatedBy", fields: [createdById], references: [id])
+
+  @@index([schoolId, type])
+  @@map("comment_templates")
 }

@@ -218,11 +218,11 @@
   <div class="remarks-section">
     <div class="remark-block">
       <div class="remark-label">Class Teacher's Remark</div>
-      <div class="remark-underline"></div>
+      {{#if teacherComment}}<div style="font-size:10px; color:#495057; padding:4px 0;">{{teacherComment}}</div>{{else}}<div class="remark-underline"></div>{{/if}}
     </div>
     <div class="remark-block">
       <div class="remark-label">Principal's Remark</div>
-      <div class="remark-underline"></div>
+      {{#if principalComment}}<div style="font-size:10px; color:#495057; padding:4px 0;">{{principalComment}}</div>{{else}}<div class="remark-underline"></div>{{/if}}
     </div>
   </div>
 

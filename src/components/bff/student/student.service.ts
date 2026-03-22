@@ -522,6 +522,19 @@ export class StudentService extends BaseService {
       ? [addr.city, addr.state, addr.country].filter(Boolean).join(', ')
       : undefined;
 
+    // Fetch result comments (teacher and principal)
+    const resultComment = currentClassArmId
+      ? await this.prisma.resultComment.findUnique({
+          where: {
+            studentId_classArmId_termId: {
+              studentId: student.id,
+              classArmId: currentClassArmId,
+              termId: term.id,
+            },
+          },
+        })
+      : null;
+
     return {
       school: {
         name: school?.name || 'School',
@@ -570,6 +583,8 @@ export class StudentService extends BaseService {
         grade: this.calculateGrade(averageScore, gradingModel?.model),
       },
       gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
+      teacherComment: resultComment?.teacherComment ?? null,
+      principalComment: resultComment?.principalComment ?? null,
     };
   }
 

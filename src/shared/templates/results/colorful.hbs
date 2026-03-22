@@ -235,11 +235,11 @@
   <div class="bottom-section">
     <div class="remark-card">
       <div class="remark-title">Class Teacher's Remark</div>
-      <div class="remark-line"></div>
+      {{#if teacherComment}}<div style="font-size:10px; color:#495057; padding:4px 0;">{{teacherComment}}</div>{{else}}<div class="remark-line"></div>{{/if}}
     </div>
     <div class="remark-card">
       <div class="remark-title">Principal's Remark</div>
-      <div class="remark-line"></div>
+      {{#if principalComment}}<div style="font-size:10px; color:#495057; padding:4px 0;">{{principalComment}}</div>{{else}}<div class="remark-line"></div>{{/if}}
     </div>
   </div>
 

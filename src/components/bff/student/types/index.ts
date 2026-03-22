@@ -114,6 +114,8 @@ export interface StudentResultsData {
     grade?: string;
   };
   gradingModel?: Record<string, [number, number]> | null;
+  teacherComment?: string | null;
+  principalComment?: string | null;
 }
 
 export interface StudentProfileData {

@@ -632,6 +632,8 @@ export interface ClassroomBroadsheetStudent {
   overallAverage: number;
   rank: number;
   remarks: string;
+  teacherComment?: string;
+  principalComment?: string;
 }
 
 export interface ClassroomBroadsheetStudentSubject {

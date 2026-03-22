@@ -213,11 +213,11 @@
   <div class="remarks-section">
     <div class="remark-row">
       <span class="remark-label">Class Teacher's Remark:</span>
-      <span class="remark-line"></span>
+      {{#if teacherComment}}<span style="font-size:10px; color:#333; margin-left:8px;">{{teacherComment}}</span>{{else}}<span class="remark-line"></span>{{/if}}
     </div>
     <div class="remark-row">
       <span class="remark-label">Principal's Remark:</span>
-      <span class="remark-line"></span>
+      {{#if principalComment}}<span style="font-size:10px; color:#333; margin-left:8px;">{{principalComment}}</span>{{else}}<span class="remark-line"></span>{{/if}}
     </div>
   </div>
 

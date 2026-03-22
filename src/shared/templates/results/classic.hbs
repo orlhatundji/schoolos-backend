@@ -192,9 +192,16 @@
   {{/if}}
 
   <div class="remarks-box">
-    <div class="remarks-title">Teacher's Remarks</div>
+    <div class="remarks-title">Class Teacher's Remark</div>
     <div class="remarks-text">
-      ____________________________________________________________________________________________________________
+      {{#if teacherComment}}{{teacherComment}}{{else}}____________________________________________________________________________________________________________{{/if}}
+    </div>
+  </div>
+
+  <div class="remarks-box">
+    <div class="remarks-title">Principal's Remark</div>
+    <div class="remarks-text">
+      {{#if principalComment}}{{principalComment}}{{else}}____________________________________________________________________________________________________________{{/if}}
     </div>
   </div>
 

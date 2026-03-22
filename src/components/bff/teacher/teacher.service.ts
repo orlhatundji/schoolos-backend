@@ -419,6 +419,7 @@ export class TeacherService {
       qualification: teacher.qualification,
       joinDate: teacher.joinDate.toISOString(),
       avatar: teacher.user.avatarUrl,
+      signatureUrl: teacher.signatureUrl,
       subjects,
       classesAssigned,
     };
@@ -431,6 +432,14 @@ export class TeacherService {
     // Delete old avatar from S3 if a new one is being set
     if (updateData.avatarUrl && teacher.user.avatarUrl) {
       const oldKey = this.storageService.extractKeyFromUrl(teacher.user.avatarUrl);
+      if (oldKey) {
+        this.storageService.deleteObject(oldKey);
+      }
+    }
+
+    // Delete old signature from S3 if a new one is being set
+    if (updateData.signatureUrl && teacher.signatureUrl) {
+      const oldKey = this.storageService.extractKeyFromUrl(teacher.signatureUrl);
       if (oldKey) {
         this.storageService.deleteObject(oldKey);
       }
@@ -452,6 +461,14 @@ export class TeacherService {
       await this.prisma.user.update({
         where: { id: teacher.userId },
         data: userUpdateData,
+      });
+    }
+
+    // Update teacher-specific fields (signature)
+    if (updateData.signatureUrl !== undefined) {
+      await this.prisma.teacher.update({
+        where: { id: teacher.id },
+        data: { signatureUrl: updateData.signatureUrl },
       });
     }
 

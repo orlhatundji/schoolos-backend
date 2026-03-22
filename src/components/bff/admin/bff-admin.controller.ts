@@ -410,6 +410,27 @@ export class BffAdminController {
     return data;
   }
 
+  // ─── Principal Signature Endpoint ──────────────────────
+
+  @Put('principal-signature')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @ApiOperation({ summary: 'Upload/update principal signature for report cards' })
+  @ApiResponse({ status: 200, description: 'Principal signature updated successfully' })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'UPDATE_PRINCIPAL_SIGNATURE',
+    entityType: 'SCHOOL',
+    description: 'Admin updated principal signature',
+    category: 'ADMINISTRATION',
+  })
+  async updatePrincipalSignature(
+    @GetCurrentUserId() userId: string,
+    @Body() body: { signatureUrl: string },
+  ) {
+    const data = await this.bffAdminService.updatePrincipalSignature(userId, body.signatureUrl);
+    return { success: true, message: 'Principal signature updated successfully', data };
+  }
+
   // ─── Result Comment Endpoints ──────────────────────────
 
   @Put('result-comment')

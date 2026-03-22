@@ -55,15 +55,17 @@ export class SettingsService {
       studentCapacity: school.studentCapacity || '',
       description: school.description || '',
       colorScheme: school.colorScheme || 'default',
-      resultTemplateId: school.resultTemplateId || 'classic',
-      schoolAddress: primaryAddress ? {
-        street: primaryAddress.street1,
-        street2: primaryAddress.street2,
-        city: primaryAddress.city,
-        state: primaryAddress.state,
-        country: primaryAddress.country,
-        postalCode: primaryAddress.zip,
-      } : null,
+      resultTemplateId: school.resultTemplateId || 'professional',
+      schoolAddress: primaryAddress
+        ? {
+            street: primaryAddress.street1,
+            street2: primaryAddress.street2,
+            city: primaryAddress.city,
+            state: primaryAddress.state,
+            country: primaryAddress.country,
+            postalCode: primaryAddress.zip,
+          }
+        : null,
       contactInfo: {
         phone: school.phone || '',
         email: school.email || '',
@@ -84,7 +86,10 @@ export class SettingsService {
     };
   }
 
-  async updateSchoolConfig(userId: string, updateData: UpdateSchoolConfigDto): Promise<{ updatedFields: string[]; updatedAt: Date }> {
+  async updateSchoolConfig(
+    userId: string,
+    updateData: UpdateSchoolConfigDto,
+  ): Promise<{ updatedFields: string[]; updatedAt: Date }> {
     // Get user's school
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -310,7 +315,9 @@ export class SettingsService {
         throw new BadRequestException(`Grade "${grade}" range must be numeric`);
       }
       if (min > max) {
-        throw new BadRequestException(`Grade "${grade}" min (${min}) cannot be greater than max (${max})`);
+        throw new BadRequestException(
+          `Grade "${grade}" min (${min}) cannot be greater than max (${max})`,
+        );
       }
       if (min < 0 || max > 100) {
         throw new BadRequestException(`Grade "${grade}" range must be between 0 and 100`);
@@ -336,7 +343,9 @@ export class SettingsService {
       throw new BadRequestException(`Grading model must cover from 0. Lowest min is ${lowestMin}`);
     }
     if (highestMax !== 100) {
-      throw new BadRequestException(`Grading model must cover up to 100. Highest max is ${highestMax}`);
+      throw new BadRequestException(
+        `Grading model must cover up to 100. Highest max is ${highestMax}`,
+      );
     }
   }
 }

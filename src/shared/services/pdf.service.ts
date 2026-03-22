@@ -100,7 +100,7 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
   async generateStudentResultPDF(
     resultsData: StudentResultsData,
-    templateId: string = 'classic',
+    templateId: string = 'professional',
   ): Promise<Buffer> {
     await this.ensureBrowser();
 

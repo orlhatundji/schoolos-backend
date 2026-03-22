@@ -535,13 +535,25 @@ export class StudentService extends BaseService {
         })
       : null;
 
+    // Fetch class teacher's signature and name for the report card
+    const currentClassArm = student.classArmStudents?.[0]?.classArm;
+    const classTeacher = currentClassArm?.classTeacherId
+      ? await this.prisma.teacher.findUnique({
+          where: { id: currentClassArm.classTeacherId },
+          select: {
+            signatureUrl: true,
+            user: { select: { firstName: true, lastName: true } },
+          },
+        })
+      : null;
+
     return {
       school: {
         name: school?.name || 'School',
         motto: school?.motto || undefined,
         logoUrl: school?.logoUrl || undefined,
         address: schoolAddress,
-        resultTemplateId: school?.resultTemplateId || 'classic',
+        resultTemplateId: school?.resultTemplateId || 'professional',
       },
       student: {
         id: student.id,
@@ -585,6 +597,10 @@ export class StudentService extends BaseService {
       gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
       teacherComment: resultComment?.teacherComment ?? null,
       principalComment: resultComment?.principalComment ?? null,
+      teacherSignatureUrl: classTeacher?.signatureUrl ?? null,
+      teacherName: classTeacher ? `${classTeacher.user.firstName} ${classTeacher.user.lastName}` : null,
+      principalSignatureUrl: school?.principalSignatureUrl ?? null,
+      principalName: school?.principalName ?? null,
     };
   }
 

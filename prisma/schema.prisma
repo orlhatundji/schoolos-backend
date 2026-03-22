@@ -78,7 +78,8 @@ model School {
   schoolType                   String?
   studentCapacity              String?
   colorScheme                  String?
-  resultTemplateId             String?                       @default("classic") @map("result_template_id")
+  principalSignatureUrl        String?
+  resultTemplateId             String?                       @default("professional") @map("result_template_id")
   currentTermId                String?                       @map("current_term_id")
   currentTerm                  Term?                         @relation("SchoolCurrentTerm", fields: [currentTermId], references: [id])
   academicSessions             AcademicSession[]
@@ -441,6 +442,7 @@ model Teacher {
   employmentType          EmploymentType           @default(FULL_TIME)
   joinDate                DateTime                 @default(now())
   qualification           String?
+  signatureUrl            String?
   status                  TeacherStatus            @default(ACTIVE)
   departmentId            String?
   classArmSubjectTeachers ClassArmSubjectTeacher[]

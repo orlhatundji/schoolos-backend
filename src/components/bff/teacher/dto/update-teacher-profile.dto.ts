@@ -27,6 +27,11 @@ export class UpdateTeacherProfileDto {
   @IsString()
   avatarUrl?: string;
 
+  @ApiProperty({ description: 'Signature URL', required: false })
+  @IsOptional()
+  @IsString()
+  signatureUrl?: string;
+
   @ApiProperty({ description: 'Date of birth', required: false })
   @IsOptional()
   @IsDateString()

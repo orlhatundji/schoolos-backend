@@ -416,7 +416,6 @@ export class StudentImportProcessor extends WorkerHost {
       guardianEmail,
       guardianPhone,
       guardianRelationship,
-      className, // Remove className as it's only used for mapping, not for user creation
       ...studentFields
     } = record;
 
@@ -472,7 +471,7 @@ export class StudentImportProcessor extends WorkerHost {
       const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
       if (!current) {
-        this.logger.warn('No current academic session found for class name mapping');
+        this.logger.warn('No current term set for class name mapping');
         return null;
       }
 

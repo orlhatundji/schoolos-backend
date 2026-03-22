@@ -167,7 +167,9 @@ export class TeacherService {
       studentsCount: cast.classArmSubject.classArm.classArmStudents.length,
       nextClassTime: this.getNextClassTime(cast.classArmSubject.classArm.id),
       location: (cast.classArmSubject.classArm as any).location || undefined,
-      isClassTeacher: teacher.classArmsAsTeacher.some((cat) => cat.id === cast.classArmSubject.classArm.id),
+      isClassTeacher: teacher.classArmsAsTeacher.some(
+        (cat) => cat.id === cast.classArmSubject.classArm.id,
+      ),
     }));
   }
 
@@ -297,7 +299,8 @@ export class TeacherService {
       select: { schoolId: true },
     });
     const currentSessionId = user?.schoolId
-      ? (await this.currentTermService.getCurrentTermWithSession(user.schoolId))?.session?.id ?? undefined
+      ? ((await this.currentTermService.getCurrentTermWithSession(user.schoolId))?.session?.id ??
+        undefined)
       : undefined;
 
     // Build the academicSession filter: use currentSessionId if available, otherwise match nothing
@@ -390,17 +393,13 @@ export class TeacherService {
 
     // Extract unique subject names from class arm subject assignments
     const subjects = [
-      ...new Set(
-        teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name),
-      ),
+      ...new Set(teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name)),
     ];
 
     // Extract unique class names from class arm assignments and primary class arms
     const classArmNames = new Set<string>();
     for (const cat of teacher.classArmTeachers) {
-      classArmNames.add(
-        `${cat.classArm.level.name} ${cat.classArm.name}`,
-      );
+      classArmNames.add(`${cat.classArm.level.name} ${cat.classArm.name}`);
     }
     for (const ca of teacher.classArmsAsTeacher) {
       classArmNames.add(`${ca.level.name} ${ca.name}`);
@@ -591,7 +590,7 @@ export class TeacherService {
     // If there's a pending payment, check if it's still valid (30 minutes)
     if (existingPendingPayment) {
       const paymentAge = Date.now() - existingPendingPayment.createdAt.getTime();
-      const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+      // const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
 
       if (paymentAge < 0) {
         // Payment is still valid, return the existing authorization URL
@@ -733,7 +732,7 @@ export class TeacherService {
         paymentId: payment.id,
         status: 'PAID',
       };
-    } catch (error) {
+    } catch {
       return {
         success: false,
         message: 'Payment verification failed',
@@ -973,7 +972,10 @@ export class TeacherService {
       const assessments = (student as any).assessments || [];
       if (assessments.length > 0) {
         const totalScore = assessments.reduce((sum: number, a: any) => sum + a.score, 0);
-        const totalMaxScore = assessments.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
+        const totalMaxScore = assessments.reduce(
+          (sum: number, a: any) => sum + (a.maxScore || 0),
+          0,
+        );
         performanceMap.set(student.id, { totalScore, totalMaxScore, student });
       }
     });
@@ -982,18 +984,21 @@ export class TeacherService {
       .map(([studentId, data]) => ({
         id: studentId,
         name: `${data.student.user.firstName} ${data.student.user.lastName}`,
-        score: data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
+        score:
+          data.totalMaxScore > 0 ? Math.round((data.totalScore / data.totalMaxScore) * 100) : 0,
         avatarUrl: data.student.user.avatarUrl || null,
       }))
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
 
     // Calculate real average score from all students with assessments
-    const allScores = Array.from(performanceMap.values())
-      .map((data) => data.totalMaxScore > 0 ? (data.totalScore / data.totalMaxScore) * 100 : 0);
-    const averageScore = allScores.length > 0
-      ? Math.round((allScores.reduce((sum, s) => sum + s, 0) / allScores.length) * 100) / 100
-      : 0;
+    const allScores = Array.from(performanceMap.values()).map((data) =>
+      data.totalMaxScore > 0 ? (data.totalScore / data.totalMaxScore) * 100 : 0,
+    );
+    const averageScore =
+      allScores.length > 0
+        ? Math.round((allScores.reduce((sum, s) => sum + s, 0) / allScores.length) * 100) / 100
+        : 0;
 
     return {
       id: classArmData.id,
@@ -1076,13 +1081,15 @@ export class TeacherService {
 
     // Verify the teacher is either the class teacher OR teaches any subject in this class
     const isClassTeacher = classArmData.classTeacherId === teacher.id;
-    const teachesAnySubject = (classArmData as any).classArmSubjects.some(
-      (cas: any) => cas.teachers.some((t: any) => t.teacherId === teacher.id),
+    const teachesAnySubject = (classArmData as any).classArmSubjects.some((cas: any) =>
+      cas.teachers.some((t: any) => t.teacherId === teacher.id),
     );
 
     if (!isClassTeacher && !teachesAnySubject) {
       const availableAssignments = (classArmData as any).classArmSubjects
-        .flatMap((cas: any) => cas.teachers.map((t: any) => `teacherId=${t.teacherId}, subjectName=${cas.subject.name}`))
+        .flatMap((cas: any) =>
+          cas.teachers.map((t: any) => `teacherId=${t.teacherId}, subjectName=${cas.subject.name}`),
+        )
         .join('; ');
 
       throw new ForbiddenException(
@@ -1108,7 +1115,7 @@ export class TeacherService {
         stateOfOrigin: student.user.stateOfOrigin || undefined,
         guardianName: student.guardian
           ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-          : (student.guardianFirstName || student.guardianLastName)
+          : student.guardianFirstName || student.guardianLastName
             ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
             : undefined,
         guardianPhone: student.guardian?.user.phone || student.guardianPhone || undefined,
@@ -1169,11 +1176,17 @@ export class TeacherService {
     const assessmentCurrent = await this.currentTermService.getCurrentSessionWithTerms(schoolId);
     const assessmentCurrentTermId = assessmentCurrent?.currentTermId ?? null;
     const currentSession = assessmentCurrent
-      ? { id: assessmentCurrent.session.id, academicYear: assessmentCurrent.session.academicYear, terms: assessmentCurrent.terms }
+      ? {
+          id: assessmentCurrent.session.id,
+          academicYear: assessmentCurrent.session.academicYear,
+          terms: assessmentCurrent.terms,
+        }
       : null;
 
     // Resolve selected term: use termId if provided, otherwise fall back to current term
-    let selectedTerm: { id: string; name: string; isLocked: boolean; isCurrent: boolean } | undefined;
+    let selectedTerm:
+      | { id: string; name: string; isLocked: boolean; isCurrent: boolean }
+      | undefined;
     if (termId) {
       const termRecord = await this.prisma.term.findFirst({
         where: { id: termId, academicSession: { schoolId }, deletedAt: null },
@@ -1181,12 +1194,24 @@ export class TeacherService {
       if (!termRecord) {
         throw new NotFoundException(`Term with ID "${termId}" not found`);
       }
-      selectedTerm = { id: termRecord.id, name: termRecord.name, isLocked: termRecord.isLocked, isCurrent: termRecord.id === assessmentCurrentTermId };
+      selectedTerm = {
+        id: termRecord.id,
+        name: termRecord.name,
+        isLocked: termRecord.isLocked,
+        isCurrent: termRecord.id === assessmentCurrentTermId,
+      };
     } else {
       // Try to find the current term; fall back to first term in the session
-      const currentTermRecord = currentSession?.terms?.find((t) => t.id === assessmentCurrentTermId) || currentSession?.terms?.[0];
+      const currentTermRecord =
+        currentSession?.terms?.find((t) => t.id === assessmentCurrentTermId) ||
+        currentSession?.terms?.[0];
       if (currentTermRecord) {
-        selectedTerm = { id: currentTermRecord.id, name: currentTermRecord.name, isLocked: currentTermRecord.isLocked, isCurrent: currentTermRecord.id === assessmentCurrentTermId };
+        selectedTerm = {
+          id: currentTermRecord.id,
+          name: currentTermRecord.name,
+          isLocked: currentTermRecord.isLocked,
+          isCurrent: currentTermRecord.id === assessmentCurrentTermId,
+        };
       }
     }
 
@@ -1238,7 +1263,11 @@ export class TeacherService {
           studentAssessments.map(async (assessment) => {
             const maxScore =
               assessment.maxScore ||
-              (await this.getMaxScoreForAssessmentType(assessment.name, schoolId, currentSession?.id));
+              (await this.getMaxScoreForAssessmentType(
+                assessment.name,
+                schoolId,
+                currentSession?.id,
+              ));
             const percentage = maxScore > 0 ? Math.round((assessment.score / maxScore) * 100) : 0;
             return {
               id: assessment.id,
@@ -1254,7 +1283,8 @@ export class TeacherService {
 
         const totalScore = assessments.reduce((sum, a) => sum + a.score, 0);
         const totalMaxScore = assessments.reduce((sum, a) => sum + a.maxScore, 0);
-        const totalPercentage = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
+        const totalPercentage =
+          totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
 
         return {
           id: student.id,
@@ -1275,10 +1305,14 @@ export class TeacherService {
     const scores = validStudents.map((s) => s.averageScore);
     const classStats = {
       totalStudents: validStudents.length,
-      averageScore: scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
+      averageScore:
+        scores.length > 0 ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
       highestScore: scores.length > 0 ? Math.max(...scores) : 0,
       lowestScore: scores.length > 0 ? Math.min(...scores) : 0,
-      passRate: scores.length > 0 ? Math.round((scores.filter((s) => s >= 50).length / scores.length) * 100) : 0,
+      passRate:
+        scores.length > 0
+          ? Math.round((scores.filter((s) => s >= 50).length / scores.length) * 100)
+          : 0,
     };
 
     const teacherInfo = subjectTeacherRecord?.teacher || classArmSubject.teachers[0]?.teacher;
@@ -1289,10 +1323,12 @@ export class TeacherService {
       classArmId: classArmSubject.classArm.id,
       classArmName: classArmSubject.classArm.name,
       levelName: classArmSubject.classArm.level?.name || '',
-      teacher: teacherInfo ? {
-        id: teacherInfo.id,
-        name: `${teacherInfo.user.firstName} ${teacherInfo.user.lastName}`,
-      } : { id: teacher.id, name: '' },
+      teacher: teacherInfo
+        ? {
+            id: teacherInfo.id,
+            name: `${teacherInfo.user.firstName} ${teacherInfo.user.lastName}`,
+          }
+        : { id: teacher.id, name: '' },
       academicSession: {
         id: currentSession?.id,
         name: currentSession?.academicYear,
@@ -1413,7 +1449,7 @@ export class TeacherService {
     const classArmSubject = await this.prisma.classArmSubject.findUnique({
       where: { classArmId_subjectId: { classArmId, subjectId: subject.id } },
     });
-    if (!classArmSubject) throw new Error('This subject is not assigned to the student\'s class');
+    if (!classArmSubject) throw new Error("This subject is not assigned to the student's class");
 
     // Verify teacher authorization
     const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
@@ -1428,32 +1464,57 @@ export class TeacherService {
         where: { id: createDto.termId, academicSession: { schoolId } },
       });
       if (!termRecord) throw new Error(`Term with ID "${createDto.termId}" not found`);
-      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+      term = {
+        id: termRecord.id,
+        academicSessionId: termRecord.academicSessionId,
+        isLocked: termRecord.isLocked,
+      };
     } else {
       const createCurrent = await this.currentTermService.getCurrentTermWithSession(schoolId);
-      if (!createCurrent) throw new Error('No current academic session found');
+      if (!createCurrent)
+        throw new Error('No current term set. Please set a current term in academic settings.');
       // Find term by name within current session
       const termRecord = await this.prisma.term.findFirst({
-        where: { academicSessionId: createCurrent.session.id, name: { equals: createDto.termName, mode: 'insensitive' }, deletedAt: null },
+        where: {
+          academicSessionId: createCurrent.session.id,
+          name: { equals: createDto.termName, mode: 'insensitive' },
+          deletedAt: null,
+        },
       });
-      if (!termRecord) throw new Error(`Term "${createDto.termName}" not found in current academic session`);
-      term = { id: termRecord.id, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+      if (!termRecord)
+        throw new Error(`Term "${createDto.termName}" not found in current academic session`);
+      term = {
+        id: termRecord.id,
+        academicSessionId: termRecord.academicSessionId,
+        isLocked: termRecord.isLocked,
+      };
     }
 
     // Check term lock
     if (term.isLocked) {
-      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+      throw new ForbiddenException(
+        'Assessment scores for this term are locked and cannot be modified.',
+      );
     }
 
     // Look up assessment type from template
     let assessmentEntry: { id: string; maxScore: number; isExam: boolean } | undefined;
     try {
-      const template = await this.templateService.findActiveTemplateForSchoolSession(schoolId, term.academicSessionId);
-      const entry = this.templateService.getAssessmentEntryByName(template, createDto.assessmentName);
+      const template = await this.templateService.findActiveTemplateForSchoolSession(
+        schoolId,
+        term.academicSessionId,
+      );
+      const entry = this.templateService.getAssessmentEntryByName(
+        template,
+        createDto.assessmentName,
+      );
       if (entry) assessmentEntry = { id: entry.id, maxScore: entry.maxScore, isExam: entry.isExam };
-    } catch { /* proceed without template */ }
+    } catch {
+      /* proceed without template */
+    }
 
-    const isExam = createDto.isExam !== undefined ? createDto.isExam : assessmentEntry?.isExam || false;
+    const isExam =
+      createDto.isExam !== undefined ? createDto.isExam : assessmentEntry?.isExam || false;
 
     // Create assessment score directly
     const assessmentScore = await this.prisma.classArmStudentAssessment.create({
@@ -1512,13 +1573,20 @@ export class TeacherService {
 
     // Verify teacher authorization
     const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
-      where: { classArmSubjectId: existing.classArmSubjectId, teacherId: teacher.id, deletedAt: null },
+      where: {
+        classArmSubjectId: existing.classArmSubjectId,
+        teacherId: teacher.id,
+        deletedAt: null,
+      },
     });
-    if (!authorized) throw new ForbiddenException('You are not authorized to modify this assessment score');
+    if (!authorized)
+      throw new ForbiddenException('You are not authorized to modify this assessment score');
 
     // Check term lock
     if (existing.term.isLocked) {
-      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+      throw new ForbiddenException(
+        'Assessment scores for this term are locked and cannot be modified.',
+      );
     }
 
     // Update directly — no totalScore recalculation needed
@@ -1566,13 +1634,19 @@ export class TeacherService {
 
     // Verify teacher authorization
     const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
-      where: { classArmSubjectId: existing.classArmSubjectId, teacherId: teacher.id, deletedAt: null },
+      where: {
+        classArmSubjectId: existing.classArmSubjectId,
+        teacherId: teacher.id,
+        deletedAt: null,
+      },
     });
     if (!authorized) throw new Error('You are not authorized to delete this assessment score');
 
     // Check term lock
     if (existing.term.isLocked) {
-      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+      throw new ForbiddenException(
+        'Assessment scores for this term are locked and cannot be modified.',
+      );
     }
 
     // Soft delete — no totalScore recalculation needed
@@ -1697,27 +1771,49 @@ export class TeacherService {
         where: { id: termId, academicSession: { schoolId } },
       });
       if (!termRecord) throw new Error(`Term with ID "${termId}" not found`);
-      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+      term = {
+        id: termRecord.id,
+        name: termRecord.name,
+        academicSessionId: termRecord.academicSessionId,
+        isLocked: termRecord.isLocked,
+      };
     } else {
       const upsertCurrent = await this.currentTermService.getCurrentTermWithSession(schoolId);
-      if (!upsertCurrent) throw new Error('No current academic session found');
+      if (!upsertCurrent)
+        throw new Error('No current term set. Please set a current term in academic settings.');
       const termRecord = await this.prisma.term.findFirst({
-        where: { academicSessionId: upsertCurrent.session.id, name: { equals: termName, mode: 'insensitive' }, deletedAt: null },
+        where: {
+          academicSessionId: upsertCurrent.session.id,
+          name: { equals: termName, mode: 'insensitive' },
+          deletedAt: null,
+        },
       });
       if (!termRecord) throw new Error(`Term "${termName}" not found in current academic session`);
-      term = { id: termRecord.id, name: termRecord.name, academicSessionId: termRecord.academicSessionId, isLocked: termRecord.isLocked };
+      term = {
+        id: termRecord.id,
+        name: termRecord.name,
+        academicSessionId: termRecord.academicSessionId,
+        isLocked: termRecord.isLocked,
+      };
     }
 
     // ── 3a. Check term lock ──
     if (term.isLocked) {
-      throw new ForbiddenException('Assessment scores for this term are locked and cannot be modified.');
+      throw new ForbiddenException(
+        'Assessment scores for this term are locked and cannot be modified.',
+      );
     }
 
     // ── 4. Resolve assessment template ──
     let template: any = null;
     try {
-      template = await this.templateService.findActiveTemplateForSchoolSession(schoolId, term.academicSessionId);
-    } catch { /* proceed without */ }
+      template = await this.templateService.findActiveTemplateForSchoolSession(
+        schoolId,
+        term.academicSessionId,
+      );
+    } catch {
+      /* proceed without */
+    }
 
     // ── 5. Separate updates-by-id vs upserts-by-student ──
     const updateByIdItems: typeof assessmentScores = [];
@@ -1728,11 +1824,17 @@ export class TeacherService {
         updateByIdItems.push(item);
       } else {
         if (!item.studentId) {
-          result.failed.push({ assessmentScore: item, error: 'studentId is required for new assessment scores' });
+          result.failed.push({
+            assessmentScore: item,
+            error: 'studentId is required for new assessment scores',
+          });
           continue;
         }
         if (!(item.assessmentName || assessmentName)) {
-          result.failed.push({ assessmentScore: item, error: 'assessmentName is required (provide at top level or per item)' });
+          result.failed.push({
+            assessmentScore: item,
+            error: 'assessmentName is required (provide at top level or per item)',
+          });
           continue;
         }
         upsertItems.push(item);
@@ -1742,25 +1844,44 @@ export class TeacherService {
     // ── 6. Process updates-by-id ──
     if (updateByIdItems.length > 0) {
       const existingAssessments = await this.prisma.classArmStudentAssessment.findMany({
-        where: { id: { in: updateByIdItems.map(i => i.id!) }, deletedAt: null },
+        where: { id: { in: updateByIdItems.map((i) => i.id!) }, deletedAt: null },
         include: {
           student: { include: { user: true } },
           classArmSubject: true,
         },
       });
-      const assessmentMap = new Map(existingAssessments.map(a => [a.id, a]));
+      const assessmentMap = new Map(existingAssessments.map((a) => [a.id, a]));
 
       for (const item of updateByIdItems) {
         try {
           const existing = assessmentMap.get(item.id!);
-          if (!existing) { result.failed.push({ assessmentScore: item, error: 'Assessment score not found' }); continue; }
-          if (existing.student.user.schoolId !== schoolId) { result.failed.push({ assessmentScore: item, error: 'Assessment score not found in your school' }); continue; }
+          if (!existing) {
+            result.failed.push({ assessmentScore: item, error: 'Assessment score not found' });
+            continue;
+          }
+          if (existing.student.user.schoolId !== schoolId) {
+            result.failed.push({
+              assessmentScore: item,
+              error: 'Assessment score not found in your school',
+            });
+            continue;
+          }
 
           // Verify authorization
           const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
-            where: { classArmSubjectId: existing.classArmSubjectId, teacherId: teacher.id, deletedAt: null },
+            where: {
+              classArmSubjectId: existing.classArmSubjectId,
+              teacherId: teacher.id,
+              deletedAt: null,
+            },
           });
-          if (!authorized) { result.failed.push({ assessmentScore: item, error: 'You are not authorized to modify this assessment score' }); continue; }
+          if (!authorized) {
+            result.failed.push({
+              assessmentScore: item,
+              error: 'You are not authorized to modify this assessment score',
+            });
+            continue;
+          }
 
           if (item.score === null) {
             await this.prisma.classArmStudentAssessment.update({
@@ -1768,11 +1889,16 @@ export class TeacherService {
               data: { deletedAt: new Date() },
             });
             result.success.push({
-              id: existing.id, name: existing.name, score: 0, isExam: existing.isExam,
+              id: existing.id,
+              name: existing.name,
+              score: 0,
+              isExam: existing.isExam,
               studentId: existing.student.id,
               studentName: `${existing.student.user.firstName} ${existing.student.user.lastName}`,
-              subjectName: subject.name, termName: term.name,
-              createdAt: existing.createdAt, updatedAt: new Date(),
+              subjectName: subject.name,
+              termName: term.name,
+              createdAt: existing.createdAt,
+              updatedAt: new Date(),
             } as any);
           } else {
             const updated = await this.prisma.classArmStudentAssessment.update({
@@ -1784,10 +1910,15 @@ export class TeacherService {
               },
             });
             result.success.push({
-              id: updated.id, name: updated.name, score: updated.score, isExam: updated.isExam,
+              id: updated.id,
+              name: updated.name,
+              score: updated.score,
+              isExam: updated.isExam,
               studentId: existing.student.id,
               studentName: `${existing.student.user.firstName} ${existing.student.user.lastName}`,
-              subjectName: subject.name, termName: term.name, updatedAt: updated.updatedAt,
+              subjectName: subject.name,
+              termName: term.name,
+              updatedAt: updated.updatedAt,
             } as any);
           }
         } catch (error) {
@@ -1798,44 +1929,48 @@ export class TeacherService {
 
     // ── 7. Process upserts-by-student ──
     if (upsertItems.length > 0) {
-      const studentIds = [...new Set(upsertItems.map(i => i.studentId!))];
+      const studentIds = [...new Set(upsertItems.map((i) => i.studentId!))];
 
       // Batch-fetch students
       const students = await this.prisma.student.findMany({
         where: { id: { in: studentIds }, user: { schoolId } },
         include: { user: true, classArmStudents: { where: { isActive: true } } },
       });
-      const studentMap = new Map(students.map(s => [s.id, s]));
+      const studentMap = new Map(students.map((s) => [s.id, s]));
 
       // Resolve ClassArmSubjects for authorization (batch)
-      const classArmIds = [...new Set(students.flatMap(s => s.classArmStudents.map(cas => cas.classArmId)))];
+      const classArmIds = [
+        ...new Set(students.flatMap((s) => s.classArmStudents.map((cas) => cas.classArmId))),
+      ];
       const classArmSubjects = await this.prisma.classArmSubject.findMany({
         where: { classArmId: { in: classArmIds }, subjectId: subject.id, deletedAt: null },
       });
-      const casMap = new Map(classArmSubjects.map(cas => [cas.classArmId, cas]));
+      const casMap = new Map(classArmSubjects.map((cas) => [cas.classArmId, cas]));
 
       // Verify teacher authorization per ClassArmSubject
-      const casIds = classArmSubjects.map(cas => cas.id);
+      const casIds = classArmSubjects.map((cas) => cas.id);
       const authorizedTeachers = await this.prisma.classArmSubjectTeacher.findMany({
         where: { classArmSubjectId: { in: casIds }, teacherId: teacher.id, deletedAt: null },
       });
-      const authorizedCasIds = new Set(authorizedTeachers.map(t => t.classArmSubjectId));
+      const authorizedCasIds = new Set(authorizedTeachers.map((t) => t.classArmSubjectId));
 
       // Batch-fetch existing assessments for these classArmSubjects + term
-      const existingScores = casIds.length > 0
-        ? await this.prisma.classArmStudentAssessment.findMany({
-            where: {
-              classArmSubjectId: { in: casIds },
-              studentId: { in: studentIds },
-              termId: term.id,
-              deletedAt: null,
-            },
-          })
-        : [];
+      const existingScores =
+        casIds.length > 0
+          ? await this.prisma.classArmStudentAssessment.findMany({
+              where: {
+                classArmSubjectId: { in: casIds },
+                studentId: { in: studentIds },
+                termId: term.id,
+                deletedAt: null,
+              },
+            })
+          : [];
       // Map: studentId -> assessmentName (lowercase) -> assessment
       const existingScoreMap = new Map<string, Map<string, any>>();
       for (const score of existingScores) {
-        if (!existingScoreMap.has(score.studentId)) existingScoreMap.set(score.studentId, new Map());
+        if (!existingScoreMap.has(score.studentId))
+          existingScoreMap.set(score.studentId, new Map());
         existingScoreMap.get(score.studentId)!.set(score.name.toLowerCase(), score);
       }
 
@@ -1843,21 +1978,49 @@ export class TeacherService {
         try {
           const itemAssessmentName = (item.assessmentName || assessmentName)!;
           const student = studentMap.get(item.studentId!);
-          if (!student) { result.failed.push({ assessmentScore: item, error: 'Student not found or not in your school' }); continue; }
+          if (!student) {
+            result.failed.push({
+              assessmentScore: item,
+              error: 'Student not found or not in your school',
+            });
+            continue;
+          }
 
           // Find ClassArmSubject for this student's class
           const studentClassArm = student.classArmStudents?.[0];
-          if (!studentClassArm) { result.failed.push({ assessmentScore: item, error: 'Student is not enrolled in any class' }); continue; }
+          if (!studentClassArm) {
+            result.failed.push({
+              assessmentScore: item,
+              error: 'Student is not enrolled in any class',
+            });
+            continue;
+          }
 
           const classArmSubject = casMap.get(studentClassArm.classArmId);
-          if (!classArmSubject) { result.failed.push({ assessmentScore: item, error: 'Subject not assigned to student\'s class' }); continue; }
-          if (!authorizedCasIds.has(classArmSubject.id)) { result.failed.push({ assessmentScore: item, error: 'You are not authorized to manage scores for this student' }); continue; }
+          if (!classArmSubject) {
+            result.failed.push({
+              assessmentScore: item,
+              error: "Subject not assigned to student's class",
+            });
+            continue;
+          }
+          if (!authorizedCasIds.has(classArmSubject.id)) {
+            result.failed.push({
+              assessmentScore: item,
+              error: 'You are not authorized to manage scores for this student',
+            });
+            continue;
+          }
 
           // Resolve assessment template entry
           let assessmentEntry: { id: string; maxScore: number; isExam: boolean } | undefined;
           if (template) {
-            const entry = this.templateService.getAssessmentEntryByName(template, itemAssessmentName);
-            if (entry) assessmentEntry = { id: entry.id, maxScore: entry.maxScore, isExam: entry.isExam };
+            const entry = this.templateService.getAssessmentEntryByName(
+              template,
+              itemAssessmentName,
+            );
+            if (entry)
+              assessmentEntry = { id: entry.id, maxScore: entry.maxScore, isExam: entry.isExam };
           }
           const isExam = item.isExam !== undefined ? item.isExam : assessmentEntry?.isExam || false;
 
@@ -1874,10 +2037,16 @@ export class TeacherService {
               });
               existingForStudent?.delete(itemAssessmentName.toLowerCase());
               result.success.push({
-                id: existingAssessment.id, name: existingAssessment.name, score: 0, isExam: existingAssessment.isExam,
-                studentId: student.id, studentName: `${student.user.firstName} ${student.user.lastName}`,
-                subjectName: subject.name, termName: term.name,
-                createdAt: existingAssessment.createdAt, updatedAt: new Date(),
+                id: existingAssessment.id,
+                name: existingAssessment.name,
+                score: 0,
+                isExam: existingAssessment.isExam,
+                studentId: student.id,
+                studentName: `${student.user.firstName} ${student.user.lastName}`,
+                subjectName: subject.name,
+                termName: term.name,
+                createdAt: existingAssessment.createdAt,
+                updatedAt: new Date(),
               });
             }
             continue;
@@ -1913,14 +2082,22 @@ export class TeacherService {
             });
             // Update local cache
             if (!existingScoreMap.has(student.id)) existingScoreMap.set(student.id, new Map());
-            existingScoreMap.get(student.id)!.set(itemAssessmentName.toLowerCase(), savedAssessment);
+            existingScoreMap
+              .get(student.id)!
+              .set(itemAssessmentName.toLowerCase(), savedAssessment);
           }
 
           result.success.push({
-            id: savedAssessment.id, name: savedAssessment.name, score: savedAssessment.score, isExam: savedAssessment.isExam,
-            studentId: student.id, studentName: `${student.user.firstName} ${student.user.lastName}`,
-            subjectName: subject.name, termName: term.name,
-            createdAt: savedAssessment.createdAt, updatedAt: savedAssessment.updatedAt,
+            id: savedAssessment.id,
+            name: savedAssessment.name,
+            score: savedAssessment.score,
+            isExam: savedAssessment.isExam,
+            studentId: student.id,
+            studentName: `${student.user.firstName} ${student.user.lastName}`,
+            subjectName: subject.name,
+            termName: term.name,
+            createdAt: savedAssessment.createdAt,
+            updatedAt: savedAssessment.updatedAt,
           });
         } catch (error) {
           result.failed.push({ assessmentScore: item, error: error.message || 'Operation failed' });
@@ -2439,7 +2616,12 @@ export class TeacherService {
   /**
    * Check if subject attendance has been taken for a class/subject on a specific date
    */
-  async checkSubjectAttendanceStatus(userId: string, classArmId: string, subjectId: string, date: string) {
+  async checkSubjectAttendanceStatus(
+    userId: string,
+    classArmId: string,
+    subjectId: string,
+    date: string,
+  ) {
     const teacher = await this.prisma.teacher.findFirst({
       where: { userId, deletedAt: null },
       include: { user: { include: { school: true } } },
@@ -2454,7 +2636,9 @@ export class TeacherService {
       where: { teacherId: teacher.id, deletedAt: null, classArmSubject: { classArmId, subjectId } },
     });
     if (!classArmTeacher && !subjectTeacher) {
-      throw new ForbiddenException('You are not authorized to check attendance for this subject and class');
+      throw new ForbiddenException(
+        'You are not authorized to check attendance for this subject and class',
+      );
     }
 
     // Parse date
@@ -2465,8 +2649,24 @@ export class TeacherService {
       const [year, month, day] = date.split('-').map(Number);
       attendanceDate = new Date(year, month - 1, day);
     }
-    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+    const startOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const endOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     const attendanceCount = await this.prisma.subjectAttendance.count({
       where: {
@@ -2489,7 +2689,12 @@ export class TeacherService {
   /**
    * Get existing subject attendance data for a class/subject on a specific date
    */
-  async getSubjectAttendanceData(userId: string, classArmId: string, subjectId: string, date: string) {
+  async getSubjectAttendanceData(
+    userId: string,
+    classArmId: string,
+    subjectId: string,
+    date: string,
+  ) {
     const teacher = await this.prisma.teacher.findFirst({
       where: { userId, deletedAt: null },
       include: { user: { include: { school: true } } },
@@ -2504,7 +2709,9 @@ export class TeacherService {
       where: { teacherId: teacher.id, deletedAt: null, classArmSubject: { classArmId, subjectId } },
     });
     if (!classArmTeacher && !subjectTeacher) {
-      throw new ForbiddenException('You are not authorized to view attendance for this subject and class');
+      throw new ForbiddenException(
+        'You are not authorized to view attendance for this subject and class',
+      );
     }
 
     // Parse date
@@ -2515,8 +2722,24 @@ export class TeacherService {
       const [year, month, day] = date.split('-').map(Number);
       attendanceDate = new Date(year, month - 1, day);
     }
-    const startOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate(), 23, 59, 59, 999);
+    const startOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const endOfDay = new Date(
+      attendanceDate.getFullYear(),
+      attendanceDate.getMonth(),
+      attendanceDate.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     // Get class arm info
     const classArm = await this.prisma.classArm.findFirst({
@@ -2569,7 +2792,8 @@ export class TeacherService {
     const lateCount = attendanceData.filter((record) => record.status === 'LATE').length;
     const excusedCount = attendanceData.filter((record) => record.status === 'EXCUSED').length;
     const totalStudents = attendanceData.length;
-    const attendancePercentage = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+    const attendancePercentage =
+      totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
 
     return {
       classArmId,
@@ -2682,9 +2906,7 @@ export class TeacherService {
     const attendanceData = students.map((student) => {
       const classArmStudent = student.classArmStudents[0];
       const attendanceRecord = classArmStudent
-        ? attendanceRecords.find(
-            (record) => record.classArmStudentId === classArmStudent.id,
-          )
+        ? attendanceRecords.find((record) => record.classArmStudentId === classArmStudent.id)
         : undefined;
       return {
         studentId: student.id,
@@ -2725,7 +2947,12 @@ export class TeacherService {
     return this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
   }
 
-  async downloadClassroomBroadsheet(userId: string, classArmId: string, termId?: string, isCumulative?: boolean): Promise<Buffer> {
+  async downloadClassroomBroadsheet(
+    userId: string,
+    classArmId: string,
+    termId?: string,
+    isCumulative?: boolean,
+  ): Promise<Buffer> {
     const { schoolId } = await this.verifyClassTeacher(userId, classArmId);
     const data = await this.classroomBroadsheetBuilder.buildBroadsheetData(schoolId, classArmId);
     return this.classroomBroadsheetBuilder.generateBroadsheetExcel(data, termId, isCumulative);
@@ -2744,7 +2971,9 @@ export class TeacherService {
       throw new NotFoundException('Teacher not found');
     }
 
-    const verifyCurrent = await this.currentTermService.getCurrentTermWithSession(teacher.user.schoolId);
+    const verifyCurrent = await this.currentTermService.getCurrentTermWithSession(
+      teacher.user.schoolId,
+    );
     const verifyCurrentSessionId = verifyCurrent?.session?.id;
 
     const classArm = await this.prisma.classArm.findFirst({

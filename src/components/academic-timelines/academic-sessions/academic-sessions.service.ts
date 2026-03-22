@@ -22,7 +22,7 @@ export class AcademicSessionsService extends BaseService {
    * - Creates the academic session and assessment structure template
    * - Creates terms for the session in the same transaction
    * - Does NOT automatically create class arms (must be done manually or during promotion)
-   * 
+   *
    * @param userId - The ID of the user creating the session
    * @param dto - The academic session data including terms array
    * @returns The created academic session
@@ -45,6 +45,7 @@ export class AcademicSessionsService extends BaseService {
     }
 
     // Add schoolId to the DTO and extract terms separately
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { terms, ...sessionData } = dto;
     const dataWithSchoolId = {
       ...sessionData,
@@ -71,8 +72,12 @@ export class AcademicSessionsService extends BaseService {
       // Create terms for the new session
       await this.createTermsForNewSessionInTransaction(tx, newSession.id, dto.terms);
 
-      // If marked as current, set the first term of this session as the school's current term
-      if (isCurrent) {
+      // Set current term if explicitly marked as current OR if school has no current term yet
+      const school = await tx.school.findUnique({
+        where: { id: user.schoolId },
+        select: { currentTermId: true },
+      });
+      if (isCurrent || !school?.currentTermId) {
         const firstTerm = await tx.term.findFirst({
           where: { academicSessionId: newSession.id },
           orderBy: { startDate: 'asc' },
@@ -117,8 +122,9 @@ export class AcademicSessionsService extends BaseService {
 
     // Compute isCurrent (session doesn't include terms, so check via term count)
     const currentTermId = await this.getCurrentTermIdForSchool(user.schoolId);
-    const isCurrent = currentTermId != null
-      && (await this.prisma.term.count({ where: { id: currentTermId, academicSessionId: id } })) > 0;
+    const isCurrent =
+      currentTermId != null &&
+      (await this.prisma.term.count({ where: { id: currentTermId, academicSessionId: id } })) > 0;
 
     return { ...academicSession, isCurrent };
   }
@@ -161,7 +167,7 @@ export class AcademicSessionsService extends BaseService {
 
     // Extract terms from the update data if present
     const { terms, ...sessionData } = data;
-    
+
     // Update the academic session (without terms)
     const updatedSession = await this.academicSessionsRepository.update({ id }, sessionData);
 
@@ -178,8 +184,9 @@ export class AcademicSessionsService extends BaseService {
       select: { schoolId: true },
     });
     const currentTermId = await this.getCurrentTermIdForSchool(user!.schoolId!);
-    const isCurrent = currentTermId != null
-      && (await this.prisma.term.count({ where: { id: currentTermId, academicSessionId: id } })) > 0;
+    const isCurrent =
+      currentTermId != null &&
+      (await this.prisma.term.count({ where: { id: currentTermId, academicSessionId: id } })) > 0;
 
     return { ...updatedSession, isCurrent };
   }
@@ -210,7 +217,8 @@ export class AcademicSessionsService extends BaseService {
       const hasStudents = classArms.some((classArm) => classArm.classArmStudents.length > 0);
       const hasTeacherAssignments = classArms.some(
         (classArm) =>
-          classArm.classArmSubjects.some((cas) => cas.teachers.length > 0) || classArm.classArmTeachers.length > 0,
+          classArm.classArmSubjects.some((cas) => cas.teachers.length > 0) ||
+          classArm.classArmTeachers.length > 0,
       );
 
       if (hasStudents) {
@@ -241,13 +249,13 @@ export class AcademicSessionsService extends BaseService {
     if (terms.length > 0) {
       // Check if any terms have associated data that would prevent deletion
       const termsWithData = await this.prisma.term.findMany({
-        where: { 
+        where: {
           academicSessionId: id,
           OR: [
             { assessments: { some: {} } },
             { studentAttendances: { some: {} } },
-            { paymentStructures: { some: {} } }
-          ]
+            { paymentStructures: { some: {} } },
+          ],
         },
       });
 
@@ -281,10 +289,10 @@ export class AcademicSessionsService extends BaseService {
 
     // Delete associated academic session calendar items first
     await this.prisma.academicSessionCalendarItem.deleteMany({
-      where: { 
+      where: {
         calendar: {
-          academicSessionId: id
-        }
+          academicSessionId: id,
+        },
       },
     });
 
@@ -309,10 +317,7 @@ export class AcademicSessionsService extends BaseService {
 
     await this.prisma.studentPromotion.deleteMany({
       where: {
-        OR: [
-          { fromAcademicSessionId: id },
-          { toAcademicSessionId: id }
-        ]
+        OR: [{ fromAcademicSessionId: id }, { toAcademicSessionId: id }],
       },
     });
 
@@ -352,6 +357,7 @@ export class AcademicSessionsService extends BaseService {
 
     // Return the session with only the current term in the terms array (for backward compat)
     const { academicSession } = school.currentTerm;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { terms, ...sessionData } = academicSession;
     return {
       ...sessionData,
@@ -372,12 +378,13 @@ export class AcademicSessionsService extends BaseService {
     sessions: AcademicSession[],
     currentTermId: string | null,
   ): AcademicSession[] {
-    return sessions.map(session => ({
+    return sessions.map((session) => ({
       ...session,
-      isCurrent: currentTermId != null
-        && Array.isArray(session.terms)
-        && session.terms.some(t => t.id === currentTermId),
-      terms: session.terms?.map(t => ({
+      isCurrent:
+        currentTermId != null &&
+        Array.isArray(session.terms) &&
+        session.terms.some((t) => t.id === currentTermId),
+      terms: session.terms?.map((t) => ({
         ...t,
         isCurrent: t.id === currentTermId,
       })),
@@ -543,5 +550,4 @@ export class AcademicSessionsService extends BaseService {
       throw error; // Re-throw to ensure transaction rollback
     }
   }
-
 }

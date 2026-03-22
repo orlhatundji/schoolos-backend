@@ -90,7 +90,9 @@ export class BffAdminSubjectService {
 
     // Calculate category breakdown using the new category relation
     const coreSubjects = subjects.filter((subject) => subject.category?.name === 'Core').length;
-    const generalSubjects = subjects.filter((subject) => subject.category?.name === 'General').length;
+    const generalSubjects = subjects.filter(
+      (subject) => subject.category?.name === 'General',
+    ).length;
     const vocationalSubjects = subjects.filter(
       (subject) => subject.category?.name === 'Vocational',
     ).length;
@@ -311,7 +313,9 @@ export class BffAdminSubjectService {
       where: { id: subjectId },
       data: {
         ...(updateSubjectDto.name && { name: updateSubjectDto.name }),
-        ...(updateSubjectDto.categoryId !== undefined && { categoryId: updateSubjectDto.categoryId }),
+        ...(updateSubjectDto.categoryId !== undefined && {
+          categoryId: updateSubjectDto.categoryId,
+        }),
         ...(updateSubjectDto.departmentId !== undefined && {
           departmentId: updateSubjectDto.departmentId,
         }),
@@ -374,9 +378,7 @@ export class BffAdminSubjectService {
     }
 
     // Check if subject has any assessments
-    const hasAssessments = subject.classArmSubjects.some(
-      (cas) => cas.assessments.length > 0,
-    );
+    const hasAssessments = subject.classArmSubjects.some((cas) => cas.assessments.length > 0);
 
     if (hasAssessments) {
       throw new BadRequestException(
@@ -416,7 +418,9 @@ export class BffAdminSubjectService {
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
     if (!current) {
-      throw new NotFoundException('No active academic session found');
+      throw new NotFoundException(
+        'No current term set. Please set a current term in academic settings.',
+      );
     }
 
     // Get subject with classArmSubjects and their teachers
@@ -474,12 +478,13 @@ export class BffAdminSubjectService {
     });
 
     // Check if subject has any assessment scores at all (for edit guard)
-    const hasAssessmentScores = await this.prisma.classArmStudentAssessment.count({
-      where: {
-        classArmSubject: { subjectId },
-        deletedAt: null,
-      },
-    }) > 0;
+    const hasAssessmentScores =
+      (await this.prisma.classArmStudentAssessment.count({
+        where: {
+          classArmSubject: { subjectId },
+          deletedAt: null,
+        },
+      })) > 0;
 
     return {
       subject: {
@@ -504,7 +509,9 @@ export class BffAdminSubjectService {
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
     if (!current) {
-      throw new NotFoundException('No active academic session found');
+      throw new NotFoundException(
+        'No current term set. Please set a current term in academic settings.',
+      );
     }
 
     const currentTerm = current.term;
@@ -528,7 +535,11 @@ export class BffAdminSubjectService {
           where: { isActive: true },
           include: {
             student: {
-              include: { user: { select: { firstName: true, lastName: true, avatarUrl: true, gender: true } } },
+              include: {
+                user: {
+                  select: { firstName: true, lastName: true, avatarUrl: true, gender: true },
+                },
+              },
             },
           },
         },
@@ -587,7 +598,10 @@ export class BffAdminSubjectService {
       };
     });
 
-    const totalMaxScore = sortedAssessments.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
+    const totalMaxScore = sortedAssessments.reduce(
+      (sum: number, a: any) => sum + (a.maxScore || 0),
+      0,
+    );
 
     // If we have a ClassArmSubject, fetch assessments directly
     if (classArmSubject) {
@@ -633,9 +647,8 @@ export class BffAdminSubjectService {
 
           const allScores = Array.from(assessmentsByName.values());
           student.totalScore = allScores.reduce((sum, a) => sum + a.score, 0);
-          const totalPercentage = totalMaxScore > 0
-            ? (student.totalScore / totalMaxScore) * 100
-            : 0;
+          const totalPercentage =
+            totalMaxScore > 0 ? (student.totalScore / totalMaxScore) * 100 : 0;
           student.averageScore = Math.round(totalPercentage * 100) / 100;
           student.grade = this.calculateGradeFromModel(totalPercentage, gradingModel?.model);
         }
@@ -644,18 +657,30 @@ export class BffAdminSubjectService {
 
     // Compute class stats
     const studentsWithScores = students.filter((s) => s.totalScore > 0);
-    const averageScore = studentsWithScores.length > 0
-      ? Math.round(studentsWithScores.reduce((sum, s) => sum + s.averageScore, 0) / studentsWithScores.length * 100) / 100
-      : 0;
-    const highestScore = studentsWithScores.length > 0
-      ? Math.max(...studentsWithScores.map((s) => s.averageScore))
-      : 0;
-    const lowestScore = studentsWithScores.length > 0
-      ? Math.min(...studentsWithScores.map((s) => s.averageScore))
-      : 0;
-    const passRate = students.length > 0
-      ? Math.round((studentsWithScores.filter((s) => s.averageScore >= 50).length / students.length) * 100 * 100) / 100
-      : 0;
+    const averageScore =
+      studentsWithScores.length > 0
+        ? Math.round(
+            (studentsWithScores.reduce((sum, s) => sum + s.averageScore, 0) /
+              studentsWithScores.length) *
+              100,
+          ) / 100
+        : 0;
+    const highestScore =
+      studentsWithScores.length > 0
+        ? Math.max(...studentsWithScores.map((s) => s.averageScore))
+        : 0;
+    const lowestScore =
+      studentsWithScores.length > 0
+        ? Math.min(...studentsWithScores.map((s) => s.averageScore))
+        : 0;
+    const passRate =
+      students.length > 0
+        ? Math.round(
+            (studentsWithScores.filter((s) => s.averageScore >= 50).length / students.length) *
+              100 *
+              100,
+          ) / 100
+        : 0;
 
     return {
       subject: { id: subject.id, name: subject.name },
@@ -667,7 +692,10 @@ export class BffAdminSubjectService {
       academicSession: { id: currentSession.id, name: currentSession.academicYear },
       currentTerm: { id: currentTerm.id, name: currentTerm.name },
       teacher: teacher?.teacher?.user
-        ? { id: teacher.teacherId, name: `${teacher.teacher.user.firstName} ${teacher.teacher.user.lastName}` }
+        ? {
+            id: teacher.teacherId,
+            name: `${teacher.teacher.user.firstName} ${teacher.teacher.user.lastName}`,
+          }
         : null,
       assessmentStructure: sortedAssessments.map((a: any) => ({
         id: a.id,
@@ -688,17 +716,15 @@ export class BffAdminSubjectService {
     };
   }
 
-  async generateBroadsheet(
-    userId: string,
-    subjectId: string,
-    classArmId: string,
-  ): Promise<Buffer> {
+  async generateBroadsheet(userId: string, subjectId: string, classArmId: string): Promise<Buffer> {
     const schoolId = await this.getUserSchoolId(userId);
 
     const currentData = await this.currentTermService.getCurrentSessionWithTerms(schoolId);
 
     if (!currentData) {
-      throw new NotFoundException('No active academic session found');
+      throw new NotFoundException(
+        'No current term set. Please set a current term in academic settings.',
+      );
     }
 
     const currentSession = currentData.session;
@@ -730,7 +756,10 @@ export class BffAdminSubjectService {
     if (!classArm) throw new NotFoundException('Class not found');
 
     // Get assessment structure for current term
-    const template = await this.templateService.findActiveTemplateForSchoolSession(schoolId, currentSession.id);
+    const template = await this.templateService.findActiveTemplateForSchoolSession(
+      schoolId,
+      currentSession.id,
+    );
     const assessmentTypes = ((template?.assessments as any[]) || [])
       .filter((a: any) => a.isActive !== false)
       .sort((a: any, b: any) => a.order - b.order);
@@ -817,9 +846,10 @@ export class BffAdminSubjectService {
           termScores.push(total);
         }
       }
-      row.average = termScores.length > 0
-        ? Math.round((termScores.reduce((a, b) => a + b, 0) / termScores.length) * 100) / 100
-        : 0;
+      row.average =
+        termScores.length > 0
+          ? Math.round((termScores.reduce((a, b) => a + b, 0) / termScores.length) * 100) / 100
+          : 0;
 
       studentRows.push(row);
     }
@@ -837,7 +867,10 @@ export class BffAdminSubjectService {
     }
 
     // Calculate total max score for percentage
-    const totalMaxScore = assessmentTypes.reduce((sum: number, a: any) => sum + (a.maxScore || 0), 0);
+    const totalMaxScore = assessmentTypes.reduce(
+      (sum: number, a: any) => sum + (a.maxScore || 0),
+      0,
+    );
 
     // Assign remarks based on grading model
     for (const row of studentRows) {
@@ -890,19 +923,14 @@ export class BffAdminSubjectService {
 
     // Add data rows
     studentRows.forEach((row, index) => {
-      const rowData: (string | number)[] = [
-        index + 1,
-        row.name,
-        row.studentNo,
-        row.gender,
-      ];
+      const rowData: (string | number)[] = [index + 1, row.name, row.studentNo, row.gender];
 
       for (const term of previousTerms) {
-        rowData.push(row.termTotals.get(term.id) ?? '-' as any);
+        rowData.push(row.termTotals.get(term.id) ?? ('-' as any));
       }
 
       for (const at of assessmentTypes) {
-        rowData.push(row.currentTermAssessments.get(at.name) ?? '-' as any);
+        rowData.push(row.currentTermAssessments.get(at.name) ?? ('-' as any));
       }
 
       rowData.push(row.currentTermTotal, row.average, row.rank, row.remarks);

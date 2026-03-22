@@ -136,7 +136,9 @@ export class StudentsService extends BaseService {
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
     if (!current) {
-      throw new BadRequestException('No current academic session found for this school');
+      throw new BadRequestException(
+        'No current term set. Please set a current term in academic settings.',
+      );
     }
 
     // Create ClassArmStudent relationship
@@ -205,7 +207,9 @@ export class StudentsService extends BaseService {
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
     if (!current) {
-      throw new BadRequestException('No current academic session found for this school');
+      throw new BadRequestException(
+        'No current term set. Please set a current term in academic settings.',
+      );
     }
 
     if (levelId || classArmId) {
@@ -414,10 +418,14 @@ export class StudentsService extends BaseService {
     // Handle classArmId - use ClassArmStudent service
     if (updateStudentDto.classArmId) {
       // Get current academic session
-      const current = await this.currentTermService.getCurrentTermWithSession(existingStudent.user.schoolId);
+      const current = await this.currentTermService.getCurrentTermWithSession(
+        existingStudent.user.schoolId,
+      );
 
       if (!current) {
-        throw new BadRequestException('No current academic session found for this school');
+        throw new BadRequestException(
+          'No current term set. Please set a current term in academic settings.',
+        );
       }
 
       // Transfer student to new class arm
@@ -475,7 +483,9 @@ export class StudentsService extends BaseService {
       updateStudentDto.medicalInformation &&
       Object.keys(updateStudentDto.medicalInformation).length > 0
     ) {
-      updateData.medicalInformation = JSON.parse(JSON.stringify(updateStudentDto.medicalInformation));
+      updateData.medicalInformation = JSON.parse(
+        JSON.stringify(updateStudentDto.medicalInformation),
+      );
     }
 
     // Only update if there's actual data to update

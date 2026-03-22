@@ -266,7 +266,9 @@ export class AdminClassroomService {
       const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
 
       if (!current) {
-        throw new BadRequestException('No current academic session found for this school');
+        throw new BadRequestException(
+          'No current term set. Please set a current term in academic settings.',
+        );
       }
 
       // Check if student is already a captain of another class in the current session
@@ -350,7 +352,7 @@ export class AdminClassroomService {
       await this.prisma.classArmTeacher.deleteMany({
         where: { classArmId: classroomId },
       });
-      
+
       // Create new ClassArmTeacher if a teacher was assigned
       if (updateClassroomDto.classTeacherId) {
         await this.prisma.classArmTeacher.create({

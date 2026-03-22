@@ -18,9 +18,10 @@ import { BffAdminTeacherService } from './services/bff-admin-teacher.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import { SharedServicesModule } from '../../../shared/shared-services.module';
+import { ResultCommentsModule } from '../../result-comments/result-comments.module';
 
 @Module({
-  imports: [PrismaModule, ActivityLogModule, UsersModule, RolesManagerModule, JwtAuthModule, SharedServicesModule],
+  imports: [PrismaModule, ActivityLogModule, UsersModule, RolesManagerModule, JwtAuthModule, SharedServicesModule, ResultCommentsModule],
   controllers: [BffAdminController],
   providers: [
     BffAdminService,

@@ -220,7 +220,7 @@ export class StudentController {
       );
 
       // Generate PDF with school's selected template
-      const templateId = resultsData.school.resultTemplateId || 'classic';
+      const templateId = resultsData.school.resultTemplateId || 'professional';
       const pdfBuffer = await this.pdfService.generateStudentResultPDF(resultsData, templateId);
 
       // Set response headers for PDF download

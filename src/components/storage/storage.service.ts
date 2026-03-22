@@ -6,9 +6,10 @@ import { randomUUID } from 'crypto';
 
 const ALLOWED_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-const FOLDER_CONFIG = {
+export const FOLDER_CONFIG = {
   avatars: { maxSize: 50 * 1024 },
   logos: { maxSize: 500 * 1024 },
+  signatures: { maxSize: 200 * 1024 },
 } as const;
 
 export type StorageFolder = keyof typeof FOLDER_CONFIG;

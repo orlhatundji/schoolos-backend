@@ -210,6 +210,22 @@ export class ClassroomBroadsheetBuilder {
       student.remarks = this.calculateGradeFromModel(student.overallAverage, gradingModel?.model);
     }
 
+    // 13. Attach result comments
+    const resultComments = await this.prisma.resultComment.findMany({
+      where: {
+        classArmId: classArmId,
+        termId: currentTermId,
+      },
+    });
+    const commentMap = new Map(resultComments.map((c) => [c.studentId, c]));
+    for (const student of students) {
+      const comment = commentMap.get(student.id);
+      if (comment) {
+        student.teacherComment = comment.teacherComment ?? undefined;
+        student.principalComment = comment.principalComment ?? undefined;
+      }
+    }
+
     return {
       schoolName: school?.name || '',
       classroom: {

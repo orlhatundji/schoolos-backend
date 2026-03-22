@@ -34,15 +34,26 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
   </svg>`;
 
   private static readonly DEFAULT_LOGO_DATA_URI =
-    'data:image/svg+xml;base64,' +
-    Buffer.from(PdfService.DEFAULT_LOGO_SVG).toString('base64');
+    'data:image/svg+xml;base64,' + Buffer.from(PdfService.DEFAULT_LOGO_SVG).toString('base64');
 
   static readonly TEMPLATE_INFO = [
     { id: 'classic', name: 'Classic', description: 'Dark header with blue accents' },
     { id: 'modern', name: 'Modern', description: 'Clean minimalist design with gradient header' },
-    { id: 'traditional', name: 'Traditional', description: 'Formal bordered design with serif fonts' },
-    { id: 'colorful', name: 'Colorful', description: 'Bright student-friendly design with rounded elements' },
-    { id: 'professional', name: 'Professional', description: 'Corporate formal style with subtle grey tones' },
+    {
+      id: 'traditional',
+      name: 'Traditional',
+      description: 'Formal bordered design with serif fonts',
+    },
+    {
+      id: 'colorful',
+      name: 'Colorful',
+      description: 'Bright student-friendly design with rounded elements',
+    },
+    {
+      id: 'professional',
+      name: 'Professional',
+      description: 'Corporate formal style with subtle grey tones',
+    },
   ];
 
   async onModuleInit() {
@@ -65,23 +76,37 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async ensureBrowser(): Promise<puppeteer.Browser> {
+    // Check if the existing browser is still usable.
+    // If it crashed or the connection dropped, relaunch it.
+    if (this.browser) {
+      try {
+        // A quick connectivity check — throws if the connection is dead
+        await this.browser.version();
+        return this.browser;
+      } catch {
+        this.logger.warn('Browser connection lost, relaunching...');
+        this.browser = null;
+      }
+    }
+
+    this.browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+    this.logger.log('Puppeteer browser relaunched successfully');
+    return this.browser;
+  }
+
   async generateStudentResultPDF(
     resultsData: StudentResultsData,
-    templateId: string = 'classic',
+    templateId: string = 'professional',
   ): Promise<Buffer> {
-    if (!this.browser) {
-      this.browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-      });
-    }
+    await this.ensureBrowser();
 
     const template = this.getTemplate(templateId);
 
-    const totalMaxScore = resultsData.assessmentStructures.reduce(
-      (sum, a) => sum + a.maxScore,
-      0,
-    );
+    const totalMaxScore = resultsData.assessmentStructures.reduce((sum, a) => sum + a.maxScore, 0);
 
     const logoSrc = resultsData.school.logoUrl || PdfService.DEFAULT_LOGO_DATA_URI;
 
@@ -164,8 +189,10 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
     Handlebars.registerHelper('gradeColor', (grade: string) => this.getGradeColor(grade));
 
-    Handlebars.registerHelper('performanceRemark', (grade: string, score: number, maxScore: number) =>
-      this.getPerformanceRemark(grade, score, maxScore),
+    Handlebars.registerHelper(
+      'performanceRemark',
+      (grade: string, score: number, maxScore: number) =>
+        this.getPerformanceRemark(grade, score, maxScore),
     );
 
     Handlebars.registerHelper('fixed', (num: number, decimals: number) =>
@@ -201,12 +228,18 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
   private getRemarkColor(remark: string): string {
     switch (remark) {
-      case 'Excellent': return '#27ae60';
-      case 'Very Good': return '#2ecc71';
-      case 'Good': return '#3498db';
-      case 'Fair': return '#f39c12';
-      case 'Poor': return '#e67e22';
-      default: return '#e74c3c';
+      case 'Excellent':
+        return '#27ae60';
+      case 'Very Good':
+        return '#2ecc71';
+      case 'Good':
+        return '#3498db';
+      case 'Fair':
+        return '#f39c12';
+      case 'Poor':
+        return '#e67e22';
+      default:
+        return '#e74c3c';
     }
   }
 
@@ -221,12 +254,18 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
   private getGradeColor(grade: string | undefined): string {
     switch (grade) {
-      case 'A': return '#27ae60';
-      case 'B': return '#2ecc71';
-      case 'C': return '#3498db';
-      case 'D': return '#f39c12';
-      case 'E': return '#e67e22';
-      default: return '#e74c3c';
+      case 'A':
+        return '#27ae60';
+      case 'B':
+        return '#2ecc71';
+      case 'C':
+        return '#3498db';
+      case 'D':
+        return '#f39c12';
+      case 'E':
+        return '#e67e22';
+      default:
+        return '#e74c3c';
     }
   }
 }

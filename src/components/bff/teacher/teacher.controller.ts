@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -15,7 +16,8 @@ import {
 import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-import { GetCurrentUserId } from '../../../common/decorators';
+import { GetCurrentUserId, GetCurrentUser } from '../../../common/decorators';
+import { UserType } from '@prisma/client';
 import { LogActivity } from '../../../common/decorators/log-activity.decorator';
 import { ActivityLogInterceptor } from '../../../common/interceptors/activity-log.interceptor';
 import { StrategyEnum } from '../../auth/strategies';
@@ -30,6 +32,8 @@ import {
   UpdateUserPreferencesDto,
   InitiateColorSchemePaymentDto,
 } from './dto';
+import { UpsertResultCommentDto, CreateCommentTemplateDto, UpdateCommentTemplateDto } from '../../result-comments/dto';
+import { ResultCommentsService } from '../../result-comments/result-comments.service';
 import {
   ClassDetailsResult,
   ClassStudentsResult,
@@ -51,7 +55,10 @@ import { TeacherDashboardSwagger } from './teacher.swagger';
 @ApiBearerAuth(StrategyEnum.JWT)
 @UseGuards(AccessTokenGuard)
 export class TeacherController {
-  constructor(private readonly teacherService: TeacherService) {}
+  constructor(
+    private readonly teacherService: TeacherService,
+    private readonly resultCommentsService: ResultCommentsService,
+  ) {}
 
   @Get('dashboard')
   @TeacherDashboardSwagger()
@@ -663,5 +670,112 @@ export class TeacherController {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     res.send(buffer);
+  }
+
+  // ─── Result Comment Endpoints ──────────────────────────
+
+  @Put('result-comment')
+  @ApiOperation({ summary: 'Add or update a teacher comment on a student result' })
+  @ApiResponse({ status: 200, description: 'Comment saved successfully' })
+  @ApiResponse({ status: 403, description: 'Term is locked' })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'UPSERT_RESULT_COMMENT',
+    entityType: 'RESULT_COMMENT',
+    description: 'Teacher added/updated a result comment',
+    category: 'TEACHER',
+  })
+  async upsertResultComment(
+    @GetCurrentUser() user: { sub: string; schoolId: string },
+    @Body() dto: UpsertResultCommentDto,
+  ) {
+    const result = await this.resultCommentsService.upsertComment(
+      dto,
+      user.sub,
+      UserType.TEACHER,
+      user.schoolId,
+    );
+    return { success: true, message: 'Comment saved successfully', data: result };
+  }
+
+  @Get('result-comments')
+  @ApiOperation({ summary: 'Get result comments for a class/term' })
+  @ApiQuery({ name: 'classArmId', required: true, type: String })
+  @ApiQuery({ name: 'termId', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'Comments retrieved successfully' })
+  async getResultComments(
+    @GetCurrentUser() user: { sub: string; schoolId: string },
+    @Query('classArmId') classArmId: string,
+    @Query('termId') termId?: string,
+  ) {
+    const data = await this.resultCommentsService.getCommentsByClassArm(classArmId, termId, user.schoolId);
+    return { success: true, message: 'Comments retrieved successfully', data };
+  }
+
+  // ─── Comment Template Endpoints ────────────────────────
+
+  @Get('comment-templates')
+  @ApiOperation({ summary: 'List teacher comment templates' })
+  @ApiQuery({ name: 'type', required: false, type: String, description: 'Filter by TEACHER or PRINCIPAL' })
+  @ApiResponse({ status: 200, description: 'Templates retrieved successfully' })
+  async getCommentTemplates(
+    @GetCurrentUser() user: { sub: string; schoolId: string },
+    @Query('type') type?: string,
+  ) {
+    const templateType = type === 'PRINCIPAL' ? 'PRINCIPAL' : 'TEACHER';
+    const data = await this.resultCommentsService.getCommentTemplates(user.schoolId, templateType as any);
+    return { success: true, message: 'Templates retrieved successfully', data };
+  }
+
+  @Post('comment-templates')
+  @ApiOperation({ summary: 'Create a comment template' })
+  @ApiResponse({ status: 201, description: 'Template created successfully' })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'CREATE_COMMENT_TEMPLATE',
+    entityType: 'COMMENT_TEMPLATE',
+    description: 'Teacher created a comment template',
+    category: 'TEACHER',
+  })
+  async createCommentTemplate(
+    @GetCurrentUser() user: { sub: string; schoolId: string },
+    @Body() dto: CreateCommentTemplateDto,
+  ) {
+    const data = await this.resultCommentsService.createCommentTemplate(
+      user.schoolId,
+      dto.content,
+      dto.type,
+      user.sub,
+    );
+    return { success: true, message: 'Template created successfully', data };
+  }
+
+  @Patch('comment-templates/:id')
+  @ApiOperation({ summary: 'Update a comment template' })
+  @ApiResponse({ status: 200, description: 'Template updated successfully' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async updateCommentTemplate(
+    @GetCurrentUser() user: { sub: string; schoolId: string },
+    @Param('id') templateId: string,
+    @Body() dto: UpdateCommentTemplateDto,
+  ) {
+    const data = await this.resultCommentsService.updateCommentTemplate(
+      templateId,
+      dto.content,
+      user.schoolId,
+    );
+    return { success: true, message: 'Template updated successfully', data };
+  }
+
+  @Delete('comment-templates/:id')
+  @ApiOperation({ summary: 'Delete a comment template' })
+  @ApiResponse({ status: 200, description: 'Template deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async deleteCommentTemplate(
+    @GetCurrentUser() user: { sub: string; schoolId: string },
+    @Param('id') templateId: string,
+  ) {
+    await this.resultCommentsService.deleteCommentTemplate(templateId, user.schoolId);
+    return { success: true, message: 'Template deleted successfully' };
   }
 }

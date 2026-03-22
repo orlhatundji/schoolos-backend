@@ -37,6 +37,7 @@ export interface TeacherProfile {
   qualification: string;
   joinDate: string;
   avatar?: string;
+  signatureUrl?: string;
   subjects: string[];
   classesAssigned: string[];
 }

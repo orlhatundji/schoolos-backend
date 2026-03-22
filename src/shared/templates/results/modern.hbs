@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; }
+  html, body { height: 100%; }
+  body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #1a1a2e; background: #fff; display: flex; flex-direction: column; min-height: 100vh; }
 
   .header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -28,7 +29,7 @@
     padding: 2px;
   }
 
-  .content { padding: 15px 20px; }
+  .content { padding: 15px 20px; flex: 1; display: flex; flex-direction: column; }
 
   .info-grid {
     display: grid; grid-template-columns: 1fr 1fr 1fr;
@@ -212,14 +213,37 @@
   </div>
   {{/if}}
 
+  <div style="flex:1; min-height:20px;"></div>
+
   <div class="bottom-section">
     <div class="remark-box">
       <div class="remark-title">Class Teacher's Remark</div>
-      <div class="remark-line"></div>
+      {{#if teacherComment}}<div class="remark-text" style="font-size:10px; color:#495057; padding:4px 0;">{{teacherComment}}</div>{{else}}<div class="remark-line"></div>{{/if}}
     </div>
     <div class="remark-box">
       <div class="remark-title">Principal's Remark</div>
-      <div class="remark-line"></div>
+      {{#if principalComment}}<div class="remark-text" style="font-size:10px; color:#495057; padding:4px 0;">{{principalComment}}</div>{{else}}<div class="remark-line"></div>{{/if}}
+    </div>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; gap:15px; margin-top:10px;">
+    <div style="flex:1; text-align:center;">
+      <div style="font-weight:bold; font-size:10px; margin-bottom:6px;">Teacher Signature:</div>
+      {{#if teacherSignatureUrl}}
+        <img src="{{teacherSignatureUrl}}" style="height:40px; object-fit:contain; margin:0 auto;" alt="Teacher Signature">
+      {{else}}
+        <div style="border-bottom:1px solid #ccc; height:40px;"></div>
+      {{/if}}
+      {{#if teacherName}}<div style="font-size:9px; color:#666; margin-top:4px;">{{teacherName}}</div>{{/if}}
+    </div>
+    <div style="flex:1; text-align:center;">
+      <div style="font-weight:bold; font-size:10px; margin-bottom:6px;">Principal Signature:</div>
+      {{#if principalSignatureUrl}}
+        <img src="{{principalSignatureUrl}}" style="height:40px; object-fit:contain; margin:0 auto;" alt="Principal Signature">
+      {{else}}
+        <div style="border-bottom:1px solid #ccc; height:40px;"></div>
+      {{/if}}
+      {{#if principalName}}<div style="font-size:9px; color:#666; margin-top:4px;">{{principalName}}</div>{{/if}}
     </div>
   </div>
 

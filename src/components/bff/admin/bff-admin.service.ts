@@ -1359,6 +1359,15 @@ export class BffAdminService {
     );
   }
 
+  async updatePrincipalSignature(userId: string, signatureUrl: string) {
+    const schoolId = await this.getUserSchoolId(userId);
+    return this.prisma.school.update({
+      where: { id: schoolId },
+      data: { principalSignatureUrl: signatureUrl },
+      select: { id: true, principalSignatureUrl: true },
+    });
+  }
+
   private async getUserSchoolId(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

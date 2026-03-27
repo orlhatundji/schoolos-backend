@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUUID,
   ValidateNested,
@@ -32,6 +33,7 @@ export class StudentAttendanceDto {
     required: false,
     example: 'Late due to traffic',
   })
+  @IsOptional()
   @IsString()
   remarks?: string;
 }

@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { UserType } from '@prisma/client';
-import { IsEnum, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { PasswordValidator } from '../../../../../utils/password';
+import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdatePasswordDto {
   @ApiProperty({
@@ -20,13 +19,10 @@ export class UpdatePasswordDto {
   @IsEnum(UserType)
   userType: UserType;
 
-  @MinLength(PasswordValidator.GetMinLength())
-  @MaxLength(PasswordValidator.GetMaxLength())
   @IsString()
-  @Matches(PasswordValidator.ValidationRegex, {
-    message: PasswordValidator.ValidationErrorMessage,
-  })
-  @ApiProperty({ description: PasswordValidator.ValidationErrorMessage })
+  @MinLength(6)
+  @MaxLength(40)
+  @ApiProperty({ description: 'New password (min 4 chars for students, stricter rules for staff)' })
   password: string;
 
   @IsString()

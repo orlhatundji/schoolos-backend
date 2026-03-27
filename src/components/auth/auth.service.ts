@@ -30,33 +30,47 @@ export class AuthService extends BaseService {
     super(AuthService.name);
   }
 
-  async loginStudent(dto: LoginStudentDto): Promise<{ tokens: AuthTokens; student: Student }> {
+  async loginStudent(dto: LoginStudentDto): Promise<
+    | { mustUpdatePassword: true }
+    | { mustUpdatePassword: false; tokens: AuthTokens; student: Student }
+  > {
     const { studentNo, password } = dto;
     const student = await this.studentService.getStudentByStudentNo(studentNo);
     if (!student) {
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
     }
 
-    const tokens: AuthTokens = await this._validate(password, student.user);
+    // Validate password before checking mustUpdatePassword so we don't
+    // reveal account existence to callers with wrong credentials.
+    const isValidPassword = await this.hasher.compare(password, student.user.password);
+    if (!isValidPassword) {
+      throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
+    }
 
     if (student.user.mustUpdatePassword) {
-      throw new UnauthorizedException('You must update your password before proceeding.');
+      return { mustUpdatePassword: true };
     }
+
+    const tokens: AuthTokens = await this._validate(password, student.user);
 
     // Update last login timestamp
     await this.userService.updateLastLoginAt(student.user.id);
 
-    return { tokens, student };
+    return { mustUpdatePassword: false, tokens, student };
   }
 
-  async login(dto: LoginDto): Promise<{
-    tokens: AuthTokens;
-    user?: User;
-    student?: Student;
-    teacher?: Teacher;
-    admin?: { id: string; adminNo: string; isSuper: boolean };
-    preferences?: any;
-  }> {
+  async login(dto: LoginDto): Promise<
+    | { mustUpdatePassword: true }
+    | {
+        mustUpdatePassword: false;
+        tokens: AuthTokens;
+        user?: User;
+        student?: Student;
+        teacher?: Teacher;
+        admin?: { id: string; adminNo: string; isSuper: boolean };
+        preferences?: any;
+      }
+  > {
     const { email, userNo, userType, password } = dto;
     let user: User | null = null;
     let student: Student | undefined;
@@ -89,11 +103,18 @@ export class AuthService extends BaseService {
       throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
     }
 
-    const tokens: AuthTokens = await this._validate(password, user);
+    // Validate password before checking mustUpdatePassword so we don't
+    // reveal account existence to callers with wrong credentials.
+    const isValidPassword = await this.hasher.compare(password, user.password);
+    if (!isValidPassword) {
+      throw new UnauthorizedException(AuthMessages.FAILURE.ACCESS_DENIED);
+    }
 
     if (user.mustUpdatePassword) {
-      throw new UnauthorizedException('You must update your password before proceeding.');
+      return { mustUpdatePassword: true };
     }
+
+    const tokens: AuthTokens = await this._validate(password, user);
 
     // Update last login timestamp
     await this.userService.updateLastLoginAt(user.id);
@@ -155,6 +176,7 @@ export class AuthService extends BaseService {
     }
 
     return {
+      mustUpdatePassword: false,
       tokens,
       user,
       student,

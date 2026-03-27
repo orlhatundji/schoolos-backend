@@ -55,6 +55,7 @@ export class TeacherService {
     if (!dashboardCurrent) {
       // Return empty data for new schools without academic sessions
       return {
+        teacherName: `${teacher.user.firstName} ${teacher.user.lastName}`,
         stats: {
           totalClasses: 0,
           totalStudents: 0,
@@ -112,6 +113,7 @@ export class TeacherService {
     const assessmentCounts = await this.getAssessmentCounts(teacher.id, currentSession.id);
 
     return {
+      teacherName: `${teacher.user.firstName} ${teacher.user.lastName}`,
       stats: {
         totalClasses: uniqueClasses.length,
         totalStudents,

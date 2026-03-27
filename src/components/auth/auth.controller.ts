@@ -18,7 +18,8 @@ export class AuthController {
   @ApiResponse({
     status: HttpStatus.OK,
     type: AuthResult,
-    description: 'User successfully authenticated. Supports both email-based login (for system admins) and userNo-based login (for students, teachers, and school admins).',
+    description:
+      'User successfully authenticated. Supports both email-based login (for system admins) and userNo-based login (for students, teachers, and school admins).',
     schema: {
       example: {
         status: 200,
@@ -46,8 +47,18 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: AuthMessages.FAILURE.ACCESS_DENIED,
   })
-  async login(@Body() loginDto: LoginDto): Promise<AuthResult> {
-    const { tokens, user, student, teacher, admin, preferences } = await this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto) {
+    const result = await this.authService.login(loginDto);
+
+    if (result.mustUpdatePassword === true) {
+      return {
+        status: HttpStatus.OK,
+        message: AuthMessages.SUCCESS.AUTHENTICATED,
+        data: { mustUpdatePassword: true },
+      };
+    }
+
+    const { tokens, user, student, teacher, admin, preferences } = result;
 
     return AuthResult.from({
       user,
@@ -106,8 +117,18 @@ export class AuthController {
       },
     },
   })
-  async loginStudent(@Body() loginDto: LoginStudentDto): Promise<AuthResult> {
-    const { tokens, student } = await this.authService.loginStudent(loginDto);
+  async loginStudent(@Body() loginDto: LoginStudentDto) {
+    const result = await this.authService.loginStudent(loginDto);
+
+    if (result.mustUpdatePassword === true) {
+      return {
+        status: HttpStatus.OK,
+        message: AuthMessages.SUCCESS.AUTHENTICATED,
+        data: { mustUpdatePassword: true },
+      };
+    }
+
+    const { tokens, student } = result;
 
     return AuthResult.from({
       student,

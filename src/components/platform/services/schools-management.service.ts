@@ -36,11 +36,15 @@ export class SchoolsManagementService {
         orderBy: { createdAt: 'desc' },
         include: {
           primaryAddress: true,
+          users: {
+            where: { lastLoginAt: { not: null } },
+            orderBy: { lastLoginAt: 'desc' },
+            take: 1,
+            select: { lastLoginAt: true },
+          },
           _count: {
             select: {
               users: true,
-              // students: true, // This relation doesn't exist in the current schema
-              // teachers: true, // This relation doesn't exist in the current schema
             },
           },
         },
@@ -48,8 +52,16 @@ export class SchoolsManagementService {
       this.prisma.school.count({ where }),
     ]);
 
+    const schoolsWithLastLogin = schools.map((school) => {
+      const { users, ...rest } = school;
+      return {
+        ...rest,
+        lastLoginAt: users[0]?.lastLoginAt || null,
+      };
+    });
+
     return {
-      schools,
+      schools: schoolsWithLastLogin,
       pagination: {
         page,
         limit,

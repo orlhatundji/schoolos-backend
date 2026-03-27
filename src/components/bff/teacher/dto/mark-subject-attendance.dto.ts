@@ -4,6 +4,7 @@ import {
   IsDateString,
   IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUUID,
   ValidateNested,
@@ -32,6 +33,7 @@ export class SubjectStudentAttendanceDto {
     required: false,
     example: 'Participated actively in class',
   })
+  @IsOptional()
   @IsString()
   remarks?: string;
 }

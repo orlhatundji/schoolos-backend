@@ -26,6 +26,8 @@ import { Encryptor } from '../../../../utils/encryptor';
 import { PasswordHasher } from '../../../../utils/hasher';
 import { TokenTypes } from '../refresh-token/types';
 import { PasswordGenerator } from '../../../../utils/password/password.generator';
+import { PasswordValidator } from '../../../../utils/password';
+import { BadRequestException } from '@nestjs/common';
 
 @Injectable()
 export class ResetPasswordService extends BaseService {
@@ -101,6 +103,14 @@ export class ResetPasswordService extends BaseService {
 
   async updatePassword(dto: UpdatePasswordDto) {
     const { password, userNo, userType, token } = dto;
+
+    // Enforce strict password rules for non-student users
+    if (userType !== UserType.STUDENT) {
+      if (!PasswordValidator.ValidationRegex.test(password)) {
+        throw new BadRequestException(PasswordValidator.ValidationErrorMessage);
+      }
+    }
+
     const user = await this._findUserByUserNo(userNo, userType);
 
     if (!user) {

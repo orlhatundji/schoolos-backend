@@ -855,7 +855,9 @@ async function main() {
     },
   });
 
-  console.log(`✅ Created assessment structure template with ${assessmentsWithIds.length} assessment types`);
+  console.log(
+    `✅ Created assessment structure template with ${assessmentsWithIds.length} assessment types`,
+  );
 
   console.log('Creating payment structures...');
   // Payment Structures

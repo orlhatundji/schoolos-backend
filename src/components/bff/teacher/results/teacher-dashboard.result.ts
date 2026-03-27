@@ -1,6 +1,8 @@
 import { TeacherDashboardData } from '../types';
 
 export class TeacherDashboardResult {
+  teacherName: string;
+
   stats: {
     totalClasses: number;
     totalStudents: number;
@@ -20,6 +22,7 @@ export class TeacherDashboardResult {
   };
 
   constructor(data: TeacherDashboardData) {
+    this.teacherName = data.teacherName;
     this.stats = data.stats;
     this.academicInfo = data.academicInfo;
   }

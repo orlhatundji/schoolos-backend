@@ -20,6 +20,7 @@ export interface AcademicInfo {
 
 // Core dashboard data - minimal and focused
 export interface TeacherDashboardData {
+  teacherName: string;
   stats: TeacherDashboardStats;
   academicInfo: AcademicInfo;
 }

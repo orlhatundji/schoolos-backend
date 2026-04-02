@@ -119,12 +119,20 @@ export class BffAdminTeacherService {
       const department = teacher.department?.name || 'Unassigned';
 
       // Get subjects taught
-      const subjects = teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name);
+      const subjects = teacher.classArmSubjectTeachers.map(
+        (cast) => cast.classArmSubject.subject.name,
+      );
 
-      // Get classes assigned
+      // Get classes assigned (deduplicated)
       const classesAssigned = [
-        ...teacher.classArmTeachers.map((cat) => cat.classArm.name),
-        ...teacher.classArmsAsTeacher.map((classArm) => classArm.name),
+        ...new Set([
+          ...teacher.classArmTeachers.map(
+            (cat) => `${cat.classArm.level.name} ${cat.classArm.name}`,
+          ),
+          ...teacher.classArmsAsTeacher.map(
+            (classArm) => `${classArm.level.name} ${classArm.name}`,
+          ),
+        ]),
       ];
 
       // Calculate experience (years since join date)
@@ -221,6 +229,11 @@ export class BffAdminTeacherService {
             classArmSubject: {
               include: {
                 subject: true,
+                classArm: {
+                  include: {
+                    level: true,
+                  },
+                },
               },
             },
           },
@@ -229,8 +242,9 @@ export class BffAdminTeacherService {
           include: {
             classArm: {
               include: {
+                level: true,
                 classArmStudents: {
-                  where: { isActive: true }
+                  where: { isActive: true },
                 },
               },
             },
@@ -238,8 +252,9 @@ export class BffAdminTeacherService {
         },
         classArmsAsTeacher: {
           include: {
+            level: true,
             classArmStudents: {
-              where: { isActive: true }
+              where: { isActive: true },
             },
           },
         },
@@ -253,13 +268,36 @@ export class BffAdminTeacherService {
     // Get department name
     const department = teacher.department?.name || 'Unassigned';
 
-    // Get subjects taught
-    const subjects = teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name);
+    // Get subjects taught — group by class arm
+    const subjectAssignmentMap = new Map<string, { className: string; subjects: string[] }>();
+    for (const cast of teacher.classArmSubjectTeachers) {
+      const classArm = cast.classArmSubject.classArm;
+      const className = `${classArm.level.name} ${classArm.name}`;
+      const subjectName = cast.classArmSubject.subject.name;
+      if (!subjectAssignmentMap.has(classArm.id)) {
+        subjectAssignmentMap.set(classArm.id, { className, subjects: [] });
+      }
+      const entry = subjectAssignmentMap.get(classArm.id)!;
+      if (!entry.subjects.includes(subjectName)) {
+        entry.subjects.push(subjectName);
+      }
+    }
+    const subjectAssignments = Array.from(subjectAssignmentMap.values()).map((entry) => ({
+      className: entry.className,
+      subjects: entry.subjects,
+    }));
 
-    // Get classes assigned
+    // Keep flat subjects list for backward compatibility
+    const subjects = [
+      ...new Set(teacher.classArmSubjectTeachers.map((cast) => cast.classArmSubject.subject.name)),
+    ];
+
+    // Get classes assigned (deduplicated)
     const classesAssigned = [
-      ...teacher.classArmTeachers.map((cat) => cat.classArm.name),
-      ...teacher.classArmsAsTeacher.map((classArm) => classArm.name),
+      ...new Set([
+        ...teacher.classArmTeachers.map((cat) => `${cat.classArm.level.name} ${cat.classArm.name}`),
+        ...teacher.classArmsAsTeacher.map((classArm) => `${classArm.level.name} ${classArm.name}`),
+      ]),
     ];
 
     // Calculate experience (years since join date)
@@ -324,6 +362,7 @@ export class BffAdminTeacherService {
       phone: teacher.user.phone || '',
       department,
       subjects,
+      subjectAssignments,
       employment,
       experience,
       qualification: teacher.qualification || 'Not specified',

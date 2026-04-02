@@ -171,6 +171,7 @@ export interface SingleTeacherDetails {
   phone: string;
   department: string;
   subjects: string[];
+  subjectAssignments: { className: string; subjects: string[] }[];
   employment: 'full-time' | 'part-time' | 'contract';
   experience: number;
   qualification: string;

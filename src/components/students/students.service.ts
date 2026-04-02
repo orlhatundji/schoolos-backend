@@ -454,11 +454,17 @@ export class StudentsService extends BaseService {
       updateData.admissionNo = updateStudentDto.admissionNo;
     }
 
-    // Handle avatarUrl - this should update the user, not the student
-    if (updateStudentDto.avatarUrl) {
-      await this.userService.update(existingStudent.userId, {
-        avatarUrl: updateStudentDto.avatarUrl,
-      });
+    // Handle user-level fields (name, gender, DOB, state of origin, avatar)
+    const userUpdate: Record<string, any> = {};
+    if (updateStudentDto.firstName) userUpdate.firstName = updateStudentDto.firstName;
+    if (updateStudentDto.lastName) userUpdate.lastName = updateStudentDto.lastName;
+    if (updateStudentDto.gender) userUpdate.gender = updateStudentDto.gender;
+    if (updateStudentDto.dateOfBirth) userUpdate.dateOfBirth = updateStudentDto.dateOfBirth;
+    if (updateStudentDto.stateOfOrigin) userUpdate.stateOfOrigin = updateStudentDto.stateOfOrigin;
+    if (updateStudentDto.avatarUrl) userUpdate.avatarUrl = updateStudentDto.avatarUrl;
+
+    if (Object.keys(userUpdate).length > 0) {
+      await this.userService.update(existingStudent.userId, userUpdate);
     }
 
     // Handle guardianInformation - store directly on student

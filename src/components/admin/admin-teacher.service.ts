@@ -73,8 +73,7 @@ export class AdminTeacherService {
 
     // Generate teacher number if not provided
     const teacherNo =
-      createTeacherDto.teacherId ||
-      (await this.generateTeacherNumber(user.schoolId, school.code));
+      createTeacherDto.teacherId || (await this.generateTeacherNumber(user.schoolId, school.code));
 
     // Generate password if not provided, then hash
     const plainTextPassword = createTeacherDto.password || this.passwordGenerator.generate();
@@ -340,15 +339,17 @@ export class AdminTeacherService {
         user: true,
         department: true,
         classArmSubjectTeachers: {
-          where: targetSession ? {
-            deletedAt: null,
-            classArmSubject: {
-              classArm: {
-                academicSessionId: targetSession.id,
+          where: targetSession
+            ? {
                 deletedAt: null,
-              },
-            },
-          } : undefined,
+                classArmSubject: {
+                  classArm: {
+                    academicSessionId: targetSession.id,
+                    deletedAt: null,
+                  },
+                },
+              }
+            : undefined,
           include: {
             classArmSubject: {
               include: {
@@ -359,14 +360,16 @@ export class AdminTeacherService {
           },
         },
         classArmTeachers: {
-          where: targetSession ? {
-            deletedAt: null,
-            classArm: {
-              academicSessionId: targetSession.id,
-              deletedAt: null,
-            },
-          } : undefined,
-          include: { 
+          where: targetSession
+            ? {
+                deletedAt: null,
+                classArm: {
+                  academicSessionId: targetSession.id,
+                  deletedAt: null,
+                },
+              }
+            : undefined,
+          include: {
             classArm: {
               include: {
                 level: true,
@@ -375,10 +378,12 @@ export class AdminTeacherService {
           },
         },
         classArmsAsTeacher: {
-          where: targetSession ? {
-            academicSessionId: targetSession.id,
-            deletedAt: null,
-          } : undefined,
+          where: targetSession
+            ? {
+                academicSessionId: targetSession.id,
+                deletedAt: null,
+              }
+            : undefined,
           include: {
             level: true,
           },
@@ -508,141 +513,94 @@ export class AdminTeacherService {
 
     // Update in transaction
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        // Update user
-        const userUpdateData: any = {};
-        if (updateTeacherDto.firstName) userUpdateData.firstName = updateTeacherDto.firstName;
-        if (updateTeacherDto.lastName) userUpdateData.lastName = updateTeacherDto.lastName;
-        if (updateTeacherDto.email) userUpdateData.email = updateTeacherDto.email;
-        if (updateTeacherDto.phone) userUpdateData.phone = updateTeacherDto.phone;
-        if (updateTeacherDto.gender) userUpdateData.gender = updateTeacherDto.gender;
-        if (updateTeacherDto.stateOfOrigin)
-          userUpdateData.stateOfOrigin = updateTeacherDto.stateOfOrigin;
-        if (updateTeacherDto.addressId) userUpdateData.addressId = updateTeacherDto.addressId;
-        if (updateTeacherDto.avatarUrl) userUpdateData.avatarUrl = updateTeacherDto.avatarUrl;
-        if (updateTeacherDto.dateOfBirth)
-          userUpdateData.dateOfBirth = new Date(updateTeacherDto.dateOfBirth);
-        if (updateTeacherDto.password) {
-          userUpdateData.password = await this.passwordHasher.hash(updateTeacherDto.password);
-        }
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          // Update user
+          const userUpdateData: any = {};
 
-        if (Object.keys(userUpdateData).length > 0) {
-          await tx.user.update({
-            where: { id: existingTeacher.userId },
-            data: userUpdateData,
-          });
-        }
+          if (updateTeacherDto.firstName) userUpdateData.firstName = updateTeacherDto.firstName;
+          if (updateTeacherDto.lastName) userUpdateData.lastName = updateTeacherDto.lastName;
+          if (updateTeacherDto.email) userUpdateData.email = updateTeacherDto.email;
+          if (updateTeacherDto.phone) userUpdateData.phone = updateTeacherDto.phone;
+          if (updateTeacherDto.gender) userUpdateData.gender = updateTeacherDto.gender;
+          if (updateTeacherDto.stateOfOrigin)
+            userUpdateData.stateOfOrigin = updateTeacherDto.stateOfOrigin;
+          if (updateTeacherDto.addressId) userUpdateData.addressId = updateTeacherDto.addressId;
+          if (updateTeacherDto.avatarUrl) userUpdateData.avatarUrl = updateTeacherDto.avatarUrl;
+          if (updateTeacherDto.dateOfBirth)
+            userUpdateData.dateOfBirth = new Date(updateTeacherDto.dateOfBirth);
+          if (updateTeacherDto.password) {
+            userUpdateData.password = await this.passwordHasher.hash(updateTeacherDto.password);
+          }
 
-        // Update teacher
-        const teacherUpdateData: any = {};
-        if (updateTeacherDto.departmentId)
-          teacherUpdateData.departmentId = updateTeacherDto.departmentId;
-        if (updateTeacherDto.status) teacherUpdateData.status = updateTeacherDto.status;
-        if (updateTeacherDto.employmentType)
-          teacherUpdateData.employmentType = updateTeacherDto.employmentType;
-        if (updateTeacherDto.qualification)
-          teacherUpdateData.qualification = updateTeacherDto.qualification;
-        if (updateTeacherDto.joinDate)
-          teacherUpdateData.joinDate = new Date(updateTeacherDto.joinDate);
+          if (Object.keys(userUpdateData).length > 0) {
+            await tx.user.update({
+              where: { id: existingTeacher.userId },
+              data: userUpdateData,
+            });
+          }
 
-        if (Object.keys(teacherUpdateData).length > 0) {
-          await tx.teacher.update({
-            where: { id: teacherId },
-            data: teacherUpdateData,
-          });
-        }
+          // Update teacher
+          const teacherUpdateData: any = {};
+          if (updateTeacherDto.departmentId)
+            teacherUpdateData.departmentId = updateTeacherDto.departmentId;
+          if (updateTeacherDto.status) teacherUpdateData.status = updateTeacherDto.status;
+          if (updateTeacherDto.employmentType)
+            teacherUpdateData.employmentType = updateTeacherDto.employmentType;
+          if (updateTeacherDto.qualification)
+            teacherUpdateData.qualification = updateTeacherDto.qualification;
+          if (updateTeacherDto.joinDate)
+            teacherUpdateData.joinDate = new Date(updateTeacherDto.joinDate);
 
-        // Handle new per-classarm subject assignments if provided
-        if (updateTeacherDto.subjectAssignments !== undefined) {
-          // Delete all existing subject assignments for this teacher
-          await tx.classArmSubjectTeacher.deleteMany({
-            where: { teacherId },
-          });
+          if (Object.keys(teacherUpdateData).length > 0) {
+            await tx.teacher.update({
+              where: { id: teacherId },
+              data: teacherUpdateData,
+            });
+          }
 
-          // Create new assignments based on specific classArm-subject combinations
-          for (const assignment of updateTeacherDto.subjectAssignments) {
-            // Validate subject exists and belongs to the school
-            const subject = await tx.subject.findFirst({
-              where: {
-                id: assignment.subjectId,
-                schoolId: user.schoolId,
-              },
+          // Handle new per-classarm subject assignments if provided
+          if (updateTeacherDto.subjectAssignments !== undefined) {
+            // Delete all existing subject assignments for this teacher
+            await tx.classArmSubjectTeacher.deleteMany({
+              where: { teacherId },
             });
 
-            if (!subject) {
-              throw new BadRequestException(
-                `Subject with ID ${assignment.subjectId} not found or does not belong to this school`,
-              );
-            }
-
-            // Validate all class arms exist and belong to the school
-            const classArms = await tx.classArm.findMany({
-              where: {
-                id: { in: assignment.classArmIds },
-                schoolId: user.schoolId,
-              },
-            });
-
-            if (classArms.length !== assignment.classArmIds.length) {
-              throw new BadRequestException(
-                'One or more class arms not found or do not belong to this school',
-              );
-            }
-
-            // Upsert ClassArmSubject and create teacher assignments
-            for (const classArmId of assignment.classArmIds) {
-              const classArmSubject = await tx.classArmSubject.upsert({
-                where: { classArmId_subjectId: { classArmId, subjectId: assignment.subjectId } },
-                create: { classArmId, subjectId: assignment.subjectId },
-                update: {},
-              });
-              await tx.classArmSubjectTeacher.create({
-                data: {
-                  classArmSubjectId: classArmSubject.id,
-                  teacherId,
+            // Create new assignments based on specific classArm-subject combinations
+            for (const assignment of updateTeacherDto.subjectAssignments) {
+              // Validate subject exists and belongs to the school
+              const subject = await tx.subject.findFirst({
+                where: {
+                  id: assignment.subjectId,
+                  schoolId: user.schoolId,
                 },
               });
-            }
-          }
-        }
-        // Legacy: Update subjects if provided (assigns to all class arms)
-        else if (updateTeacherDto.subjectIds !== undefined) {
-          // Delete all existing subject assignments for this teacher
-          await tx.classArmSubjectTeacher.deleteMany({
-            where: { teacherId },
-          });
 
-          // If subjectIds array is provided and not empty, create new assignments
-          if (updateTeacherDto.subjectIds.length > 0) {
-            // Validate that all subjects exist and belong to the school
-            const subjects = await tx.subject.findMany({
-              where: {
-                id: { in: updateTeacherDto.subjectIds },
-                schoolId: user.schoolId,
-              },
-            });
+              if (!subject) {
+                throw new BadRequestException(
+                  `Subject with ID ${assignment.subjectId} not found or does not belong to this school`,
+                );
+              }
 
-            if (subjects.length !== updateTeacherDto.subjectIds.length) {
-              throw new BadRequestException(
-                'One or more subjects not found or do not belong to this school',
-              );
-            }
+              // Validate all class arms exist and belong to the school
+              const classArms = await tx.classArm.findMany({
+                where: {
+                  id: { in: assignment.classArmIds },
+                  schoolId: user.schoolId,
+                },
+              });
 
-            // Get class arms for the school
-            const classArms = await tx.classArm.findMany({
-              where: { schoolId: user.schoolId },
-            });
+              if (classArms.length !== assignment.classArmIds.length) {
+                throw new BadRequestException(
+                  'One or more class arms not found or do not belong to this school',
+                );
+              }
 
-            if (classArms.length === 0) {
-              throw new BadRequestException('No class arms found for this school');
-            }
-
-            // Upsert ClassArmSubject and create teacher assignments
-            for (const classArm of classArms) {
-              for (const subjectId of updateTeacherDto.subjectIds) {
+              // Upsert ClassArmSubject and create teacher assignments
+              for (const classArmId of assignment.classArmIds) {
                 const classArmSubject = await tx.classArmSubject.upsert({
-                  where: { classArmId_subjectId: { classArmId: classArm.id, subjectId } },
-                  create: { classArmId: classArm.id, subjectId },
+                  where: { classArmId_subjectId: { classArmId, subjectId: assignment.subjectId } },
+                  create: { classArmId, subjectId: assignment.subjectId },
                   update: {},
                 });
                 await tx.classArmSubjectTeacher.create({
@@ -654,24 +612,75 @@ export class AdminTeacherService {
               }
             }
           }
-        }
+          // Legacy: Update subjects if provided (assigns to all class arms)
+          else if (updateTeacherDto.subjectIds !== undefined) {
+            // Delete all existing subject assignments for this teacher
+            await tx.classArmSubjectTeacher.deleteMany({
+              where: { teacherId },
+            });
 
-        // Return updated teacher
-        return tx.teacher.findUnique({
-          where: { id: teacherId },
-          include: {
-            user: true,
-            department: true,
-            classArmSubjectTeachers: {
-              include: { classArmSubject: { include: { subject: true, classArm: true } } },
+            // If subjectIds array is provided and not empty, create new assignments
+            if (updateTeacherDto.subjectIds.length > 0) {
+              // Validate that all subjects exist and belong to the school
+              const subjects = await tx.subject.findMany({
+                where: {
+                  id: { in: updateTeacherDto.subjectIds },
+                  schoolId: user.schoolId,
+                },
+              });
+
+              if (subjects.length !== updateTeacherDto.subjectIds.length) {
+                throw new BadRequestException(
+                  'One or more subjects not found or do not belong to this school',
+                );
+              }
+
+              // Get class arms for the school
+              const classArms = await tx.classArm.findMany({
+                where: { schoolId: user.schoolId },
+              });
+
+              if (classArms.length === 0) {
+                throw new BadRequestException('No class arms found for this school');
+              }
+
+              // Upsert ClassArmSubject and create teacher assignments
+              for (const classArm of classArms) {
+                for (const subjectId of updateTeacherDto.subjectIds) {
+                  const classArmSubject = await tx.classArmSubject.upsert({
+                    where: { classArmId_subjectId: { classArmId: classArm.id, subjectId } },
+                    create: { classArmId: classArm.id, subjectId },
+                    update: {},
+                  });
+                  await tx.classArmSubjectTeacher.create({
+                    data: {
+                      classArmSubjectId: classArmSubject.id,
+                      teacherId,
+                    },
+                  });
+                }
+              }
+            }
+          }
+
+          // Return updated teacher
+          return tx.teacher.findUnique({
+            where: { id: teacherId },
+            include: {
+              user: true,
+              department: true,
+              classArmSubjectTeachers: {
+                include: { classArmSubject: { include: { subject: true, classArm: true } } },
+              },
+              classArmTeachers: {
+                include: { classArm: true },
+              },
+              classArmsAsTeacher: true,
             },
-            classArmTeachers: {
-              include: { classArm: true },
-            },
-            classArmsAsTeacher: true,
-          },
-        });
-      });
+          });
+        },
+        { timeout: 30000 },
+      );
 
       return this.mapTeacherToResult(result!);
     } catch (error) {
@@ -686,7 +695,6 @@ export class AdminTeacherService {
       throw error;
     }
   }
-
 
   async getTeacherStats(userId: string): Promise<TeacherStatsResult> {
     // Get user's school ID
@@ -775,7 +783,8 @@ export class AdminTeacherService {
   }
 
   private mapTeacherToResult(teacher: any): TeacherResult {
-    const subjects = teacher.classArmSubjectTeachers?.map((cast: any) => cast.classArmSubject.subject.name) || [];
+    const subjects =
+      teacher.classArmSubjectTeachers?.map((cast: any) => cast.classArmSubject.subject.name) || [];
     const assignedClasses = [
       ...(teacher.classArmTeachers?.map((cat: any) => cat.classArm.name) || []),
       ...(teacher.classArmsAsTeacher?.map((classArm: any) => classArm.name) || []),
@@ -846,15 +855,18 @@ export class AdminTeacherService {
     });
 
     // Group assignments by subject
-    const subjectMap = new Map<string, {
-      subjectId: string;
-      subjectName: string;
-      classArms: Array<{
-        id: string;
-        name: string;
-        level: string;
-      }>;
-    }>();
+    const subjectMap = new Map<
+      string,
+      {
+        subjectId: string;
+        subjectName: string;
+        classArms: Array<{
+          id: string;
+          name: string;
+          level: string;
+        }>;
+      }
+    >();
 
     for (const assignment of assignments) {
       const { subject, classArm } = assignment.classArmSubject;

@@ -1,9 +1,48 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsUUID, IsDate, IsString, ValidateNested, ValidateIf } from 'class-validator';
+import {
+  IsOptional,
+  IsUUID,
+  IsDate,
+  IsString,
+  IsEnum,
+  IsDateString,
+  ValidateNested,
+  ValidateIf,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { Gender } from '@prisma/client';
 import { GuardianInfoDto, MedicalInfoDto, AddressDto } from './create-student.dto';
 
 export class UpdateStudentDto {
+  // --- User-level fields ---
+
+  @ApiProperty({ required: false, description: 'First name' })
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @ApiProperty({ required: false, description: 'Last name' })
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @ApiProperty({ required: false, description: 'Gender' })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiProperty({ required: false, description: 'Date of birth (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsDateString()
+  dateOfBirth?: string;
+
+  @ApiProperty({ required: false, description: 'State of origin' })
+  @IsOptional()
+  @IsString()
+  stateOfOrigin?: string;
+
+  // --- Student-level fields ---
+
   @ApiProperty({ required: false, description: 'Class arm ID' })
   @IsOptional()
   @IsUUID()

@@ -33,7 +33,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       response.status = response.statusCode;
       delete response.statusCode;
     } else {
-      response = { status: httpStatus };
+      response = {
+        status: httpStatus,
+        message: exception.message || 'Internal server error',
+      };
     }
 
     const responseBody = {

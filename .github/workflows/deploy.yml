@@ -160,7 +160,7 @@ jobs:
           fi
 
           # Navigate to app directory
-          cd /home/bitnami/schos-backend
+          cd /home/bitnami/schoolos-backend
 
           # Pull latest changes from staging branch
           git pull origin staging

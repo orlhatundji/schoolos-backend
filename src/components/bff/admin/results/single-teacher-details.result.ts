@@ -52,6 +52,9 @@ export class SingleTeacherDetailsResult {
   @ApiProperty({ description: 'Subjects taught by the teacher', type: [String] })
   subjects: string[];
 
+  @ApiProperty({ description: 'Subject assignments grouped by class arm' })
+  subjectAssignments: { className: string; subjects: string[] }[];
+
   @ApiProperty({ description: 'Employment type', enum: ['full-time', 'part-time', 'contract'] })
   employment: 'full-time' | 'part-time' | 'contract';
 
@@ -109,6 +112,7 @@ export class SingleTeacherDetailsResult {
     this.phone = data.phone;
     this.department = data.department;
     this.subjects = data.subjects;
+    this.subjectAssignments = data.subjectAssignments;
     this.employment = data.employment;
     this.experience = data.experience;
     this.qualification = data.qualification;

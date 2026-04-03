@@ -69,6 +69,9 @@ export class SchoolConfigDto {
   @ApiProperty({ description: 'School logo URL', required: false })
   logoUrl?: string;
 
+  @ApiProperty({ description: 'Principal signature image URL', required: false })
+  principalSignatureUrl?: string;
+
   @ApiProperty({ description: 'School motto', required: false })
   motto?: string;
 
@@ -96,7 +99,11 @@ export class SchoolConfigDto {
   @ApiProperty({ description: 'School color scheme', required: false })
   colorScheme?: string;
 
-  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'] })
+  @ApiProperty({
+    description: 'Result template ID',
+    required: false,
+    enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'],
+  })
   resultTemplateId?: string;
 
   @ApiProperty({ description: 'School address', type: SchoolAddressDto, required: false })

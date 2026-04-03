@@ -46,6 +46,7 @@ export class SettingsService {
       schoolName: school.name,
       schoolCode: school.code,
       logoUrl: school.logoUrl,
+      principalSignatureUrl: school.principalSignatureUrl,
       motto: school.motto || '',
       principalName: school.principalName || '',
       principalEmail: school.principalEmail || '',

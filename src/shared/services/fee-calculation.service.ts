@@ -21,7 +21,7 @@ export class FeeCalculationService {
    * We reverse-calculate so that after Paystack takes its fee,
    * the school still receives the original fee amount.
    */
-  calculateStudentTotal(feeAmount: number, platformRate = 0.01): FeeBreakdown {
+  calculateStudentTotal(feeAmount: number, platformRate = 0.03): FeeBreakdown {
     const platformFee = Math.ceil(feeAmount * platformRate);
     const baseAmount = feeAmount + platformFee;
 

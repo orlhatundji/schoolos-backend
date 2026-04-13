@@ -86,11 +86,19 @@ export class BankAccountService extends BaseService {
         });
       } else {
         // Create new Paystack subaccount
+        const contactEmail = school.email || school.adminUser.email;
         const subaccount = await this.paystackService.createSubaccount(
           school.name,
           dto.bankCode,
           dto.accountNumber,
           0, // We use transaction_charge per payment, not percentage
+          contactEmail
+            ? {
+                email: contactEmail,
+                name: `${school.adminUser.firstName} ${school.adminUser.lastName}`,
+                phone: school.phone || school.adminUser.phone,
+              }
+            : undefined,
         );
         subaccountCode = subaccount.subaccount_code;
       }
@@ -121,11 +129,19 @@ export class BankAccountService extends BaseService {
     }
 
     // Create new account + Paystack subaccount
+    const contactEmail = school.email || school.adminUser.email;
     const subaccount = await this.paystackService.createSubaccount(
       school.name,
       dto.bankCode,
       dto.accountNumber,
       0,
+      contactEmail
+        ? {
+            email: contactEmail,
+            name: `${school.adminUser.firstName} ${school.adminUser.lastName}`,
+            phone: school.phone || school.adminUser.phone,
+          }
+        : undefined,
     );
 
     const bankAccount = await this.prisma.schoolBankAccount.create({
@@ -157,7 +173,14 @@ export class BankAccountService extends BaseService {
   private async getSchoolForUser(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { schoolId: true, type: true },
+      select: {
+        schoolId: true,
+        type: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+      },
     });
 
     if (!user?.schoolId) {
@@ -176,6 +199,6 @@ export class BankAccountService extends BaseService {
       throw new NotFoundException('School not found');
     }
 
-    return school;
+    return { ...school, adminUser: user };
   }
 }

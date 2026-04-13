@@ -151,7 +151,7 @@ export class PaystackService {
 
       if (paymentRequest.subaccount) {
         payload.subaccount = paymentRequest.subaccount;
-        payload.bearer = 'account'; // School (subaccount) bears nothing extra; platform gets transaction_charge
+        payload.bearer = 'subaccount'; // Subaccount bears Paystack fee (already included in studentTotal); platform gets full transaction_charge
       }
 
       if (paymentRequest.transaction_charge !== undefined) {
@@ -278,14 +278,27 @@ export class PaystackService {
     bankCode: string,
     accountNumber: string,
     percentageCharge: number = 0,
+    contactInfo?: { email: string; name?: string; phone?: string },
   ): Promise<PaystackSubaccount> {
     try {
-      const response = await this.paystackClient.post('/subaccount', {
+      const payload: Record<string, any> = {
         business_name: businessName,
         settlement_bank: bankCode,
         account_number: accountNumber,
         percentage_charge: percentageCharge,
-      });
+      };
+
+      if (contactInfo?.email) {
+        payload.primary_contact_email = contactInfo.email;
+      }
+      if (contactInfo?.name) {
+        payload.primary_contact_name = contactInfo.name;
+      }
+      if (contactInfo?.phone) {
+        payload.primary_contact_phone = contactInfo.phone;
+      }
+
+      const response = await this.paystackClient.post('/subaccount', payload);
       if (!response.data.status) {
         throw new BadRequestException(response.data.message || 'Failed to create subaccount');
       }

@@ -51,6 +51,19 @@ export class AuthService extends BaseService {
       return { mustUpdatePassword: true };
     }
 
+    // Block login when the student's school has a pending deletion request.
+    if (student.user.schoolId) {
+      const school = await this.prisma.school.findUnique({
+        where: { id: student.user.schoolId },
+        select: { deletionRequestedAt: true },
+      });
+      if (school?.deletionRequestedAt) {
+        throw new UnauthorizedException(
+          "We can't log you in right now. Please contact your school admin.",
+        );
+      }
+    }
+
     const tokens: AuthTokens = await this._validate(password, student.user);
 
     // Update last login timestamp
@@ -69,6 +82,8 @@ export class AuthService extends BaseService {
         teacher?: Teacher;
         admin?: { id: string; adminNo: string; isSuper: boolean };
         preferences?: any;
+        /** Non-null if the user's school has a pending deletion request. Informs the portal to redirect the super-admin to the cancel page. */
+        schoolDeletionRequestedAt?: Date | null;
       }
   > {
     const { email, userNo, userType, password } = dto;
@@ -112,6 +127,25 @@ export class AuthService extends BaseService {
 
     if (user.mustUpdatePassword) {
       return { mustUpdatePassword: true };
+    }
+
+    // Block non-super-admins from logging in while their school has a pending
+    // deletion request. The super-admin is still allowed in so they can
+    // cancel the request during the 30-day reconsideration window.
+    let schoolDeletionRequestedAt: Date | null = null;
+    if (user.schoolId && user.type !== UserType.SYSTEM_ADMIN) {
+      const school = await this.prisma.school.findUnique({
+        where: { id: user.schoolId },
+        select: { deletionRequestedAt: true },
+      });
+      if (school?.deletionRequestedAt) {
+        if (user.type !== UserType.SUPER_ADMIN) {
+          throw new UnauthorizedException(
+            "We can't log you in right now. Please contact your school admin.",
+          );
+        }
+        schoolDeletionRequestedAt = school.deletionRequestedAt;
+      }
     }
 
     const tokens: AuthTokens = await this._validate(password, user);
@@ -183,6 +217,7 @@ export class AuthService extends BaseService {
       teacher,
       admin,
       preferences,
+      schoolDeletionRequestedAt,
     };
   }
 

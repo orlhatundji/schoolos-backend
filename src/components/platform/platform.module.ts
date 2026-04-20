@@ -10,16 +10,18 @@ import { UsersModule } from '../users/users.module';
 import { CounterModule } from '../../common/counter/counter.module';
 import { PlatformController } from './platform.controller';
 import { PlatformService } from './platform.service';
+import { SchoolDeletionController } from './school-deletion.controller';
 import { AnalyticsService } from './services/analytics.service';
 import { ComplaintsService } from './services/complaints.service';
 import { PlatformBootstrapService } from './services/platform-bootstrap.service';
 import { ReportsService } from './services/reports.service';
+import { SchoolDeletionService } from './services/school-deletion.service';
 import { SchoolsManagementService } from './services/schools-management.service';
 import { SignupApprovalService } from './services/signup-approval.service';
 
 @Module({
   imports: [PrismaModule, UsersModule, MailModule, AuthModule, CounterModule],
-  controllers: [PlatformController],
+  controllers: [PlatformController, SchoolDeletionController],
   providers: [
     PlatformService,
     PlatformBootstrapService,
@@ -28,6 +30,7 @@ import { SignupApprovalService } from './services/signup-approval.service';
     ComplaintsService,
     AnalyticsService,
     ReportsService,
+    SchoolDeletionService,
     Encryptor,
     PasswordGenerator,
     PasswordHasher,
@@ -39,6 +42,7 @@ import { SignupApprovalService } from './services/signup-approval.service';
     ComplaintsService,
     AnalyticsService,
     ReportsService,
+    SchoolDeletionService,
   ],
 })
 export class PlatformModule {}

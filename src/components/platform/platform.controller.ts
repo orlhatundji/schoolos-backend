@@ -19,12 +19,15 @@ import { AnalyticsQueryDto } from './dto/analytics-query.dto';
 import { ApproveSignupDto } from './dto/approve-signup.dto';
 import { AssignComplaintDto } from './dto/assign-complaint.dto';
 import { ComplaintsQueryDto } from './dto/complaints-query.dto';
+import { DeletionRequestsQueryDto } from './dto/deletion-requests-query.dto';
+import { RejectSchoolDeletionDto } from './dto/reject-school-deletion.dto';
 import { RejectSignupDto } from './dto/reject-signup.dto';
 import { UpdateComplaintStatusDto } from './dto/update-complaint-status.dto';
 import { PlatformService } from './platform.service';
 import { AnalyticsService } from './services/analytics.service';
 import { ComplaintsService } from './services/complaints.service';
 import { ReportsService } from './services/reports.service';
+import { SchoolDeletionService } from './services/school-deletion.service';
 import { SchoolsManagementService } from './services/schools-management.service';
 import { SignupApprovalService } from './services/signup-approval.service';
 
@@ -40,6 +43,7 @@ export class PlatformController {
     private readonly complaintsService: ComplaintsService,
     private readonly analyticsService: AnalyticsService,
     private readonly reportsService: ReportsService,
+    private readonly schoolDeletionService: SchoolDeletionService,
   ) {}
 
   // Dashboard
@@ -216,5 +220,40 @@ export class PlatformController {
   @ApiResponse({ status: HttpStatus.OK, description: 'Complaints aging report' })
   getComplaintsReport() {
     return this.reportsService.getComplaintsReport();
+  }
+
+  // ─── School deletion requests ─────────────────────────────────────────────
+
+  @Get('deletion-requests')
+  @ApiResponse({ status: HttpStatus.OK, description: 'List of school deletion requests' })
+  listDeletionRequests(@Query() query: DeletionRequestsQueryDto) {
+    return this.schoolDeletionService.list(query);
+  }
+
+  @Get('deletion-requests/:id')
+  @ApiResponse({ status: HttpStatus.OK, description: 'School deletion request detail' })
+  getDeletionRequest(@Param('id') id: string) {
+    return this.schoolDeletionService.getOne(id);
+  }
+
+  @Post('deletion-requests/:id/execute')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({ status: HttpStatus.OK, description: 'Deletion request executed' })
+  executeDeletionRequest(
+    @Param('id') id: string,
+    @GetCurrentUserId() userId: string,
+  ) {
+    return this.schoolDeletionService.executeRequest(id, userId);
+  }
+
+  @Post('deletion-requests/:id/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiResponse({ status: HttpStatus.OK, description: 'Deletion request rejected' })
+  rejectDeletionRequest(
+    @Param('id') id: string,
+    @Body() dto: RejectSchoolDeletionDto,
+    @GetCurrentUserId() userId: string,
+  ) {
+    return this.schoolDeletionService.rejectRequest(id, dto, userId);
   }
 }

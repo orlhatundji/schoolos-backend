@@ -103,8 +103,57 @@ model School {
   bankAccount                  SchoolBankAccount?
   platformTransactions         PlatformTransaction[]
   commentTemplates             CommentTemplate[]
+  /// Non-null when the school's super-admin has requested deletion and it
+  /// has not yet been cancelled or executed. Used as a fast check on login.
+  deletionRequestedAt          DateTime?
+  deletionRequests             SchoolDeletionRequest[]
 
   @@map("schools")
+}
+
+/// *
+/// * SchoolDeletionRequest
+/// * ---------------------
+/// * Records a super-admin's request to delete their school's account. Only one
+/// * request may be PENDING per school at a time (enforced in service). After
+/// * the 30-day reconsideration window the platform admin may execute it
+/// * manually — no automatic deletion takes place.
+model SchoolDeletionRequest {
+  id               String                       @id @default(uuid())
+  schoolId         String
+  requestedById    String
+  reason           String
+  status           SchoolDeletionRequestStatus  @default(PENDING)
+  requestedAt      DateTime                     @default(now())
+  /// The earliest date the platform admin may execute the request
+  /// (requestedAt + 30 days). Informational — not auto-enforced server-side.
+  reviewableAt     DateTime
+  cancelledAt      DateTime?
+  cancelledById    String?
+  cancellationNote String?
+  executedAt       DateTime?
+  executedById     String?
+  rejectedAt       DateTime?
+  rejectedById     String?
+  rejectionReason  String?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  school           School                       @relation(fields: [schoolId], references: [id])
+  requestedBy      User                         @relation("SchoolDeletionRequestedBy", fields: [requestedById], references: [id])
+  cancelledBy      User?                        @relation("SchoolDeletionCancelledBy", fields: [cancelledById], references: [id])
+  executedBy       SystemAdmin?                 @relation("SchoolDeletionExecutedBy", fields: [executedById], references: [id])
+  rejectedBy       SystemAdmin?                 @relation("SchoolDeletionRejectedBy", fields: [rejectedById], references: [id])
+
+  @@index([schoolId, status])
+  @@index([status])
+  @@map("school_deletion_requests")
+}
+
+enum SchoolDeletionRequestStatus {
+  PENDING
+  CANCELLED
+  EXECUTED
+  REJECTED
 }
 
 /// *
@@ -359,6 +408,8 @@ model User {
   teacherResultComments   ResultComment[]      @relation("TeacherCommentBy")
   principalResultComments ResultComment[]      @relation("PrincipalCommentBy")
   commentTemplatesCreated CommentTemplate[]    @relation("CommentTemplateCreatedBy")
+  schoolDeletionsRequested SchoolDeletionRequest[] @relation("SchoolDeletionRequestedBy")
+  schoolDeletionsCancelled SchoolDeletionRequest[] @relation("SchoolDeletionCancelledBy")
 
   @@map("users")
 }
@@ -422,6 +473,8 @@ model SystemAdmin {
   assignedComplaints Complaint[]           @relation("ComplaintAssignee")
   signupRequests     SchoolSignupRequest[]
   user               User                  @relation(fields: [userId], references: [id])
+  deletionsExecuted  SchoolDeletionRequest[] @relation("SchoolDeletionExecutedBy")
+  deletionsRejected  SchoolDeletionRequest[] @relation("SchoolDeletionRejectedBy")
 
   @@map("system_admins")
 }

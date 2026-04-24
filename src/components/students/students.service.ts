@@ -503,8 +503,43 @@ export class StudentsService extends BaseService {
     return existingStudent;
   }
 
-  remove(id: string) {
-    return this.studentsRepository.delete({ id });
+  async remove(userId: string, studentId: string) {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    if (!actor?.schoolId) {
+      throw new BadRequestException('User not associated with a school');
+    }
+
+    const existing = await this.prisma.rawPrisma.student.findFirst({
+      where: { id: studentId, user: { schoolId: actor.schoolId } },
+      select: { id: true, userId: true, deletedAt: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Student not found');
+    }
+    if (existing.deletedAt) {
+      return { id: existing.id, alreadyDeleted: true, deletedAt: existing.deletedAt };
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.student.update({
+        where: { id: studentId },
+        data: { deletedAt: now },
+      }),
+      this.prisma.user.update({
+        where: { id: existing.userId },
+        data: { deletedAt: now },
+      }),
+      this.prisma.classArmStudent.updateMany({
+        where: { studentId, isActive: true },
+        data: { isActive: false, leftAt: now, deletedAt: now },
+      }),
+    ]);
+
+    return { id: studentId, deletedAt: now };
   }
 
   async getStudentOverview(schoolId: string) {

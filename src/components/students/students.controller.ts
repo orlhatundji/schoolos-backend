@@ -12,17 +12,13 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiQuery,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
+import { GetCurrentUserId } from '../../common/decorators';
+import { SuperAdminGuard } from '../../common/guards';
 import { StrategyEnum } from '../auth/strategies';
+import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
 import { CheckPolicies, PoliciesGuard } from '../roles-manager';
-import { UserMessages } from '../users/results';
 import {
   CreateStudentDto,
   StudentQueryDto,
@@ -400,13 +396,21 @@ export class StudentsController {
   }
 
   @Delete(':id')
+  @UseGuards(AccessTokenGuard, SuperAdminGuard)
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Delete student',
+    description: 'Soft-delete student (super admin only)',
   })
-  @CheckPolicies(new ManageStudentPolicyHandler())
-  remove(@Param('id') id: string) {
-    return this.studentsService.remove(id);
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Only super admins can delete students',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Student not found',
+  })
+  remove(@GetCurrentUserId() userId: string, @Param('id') id: string) {
+    return this.studentsService.remove(userId, id);
   }
 
   // Class arm promotion endpoints

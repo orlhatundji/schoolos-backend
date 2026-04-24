@@ -7,7 +7,7 @@ import { getNextUserEntityNoFormatted } from '../../src/utils/misc';
 const prisma = new PrismaClient();
 const faker = new Faker();
 const hasher = new PasswordHasher();
-const counterService = new CounterService(prisma);
+const counterService = new CounterService(prisma as any);
 
 export async function generateSchool() {
   return prisma.school.create({
@@ -236,10 +236,7 @@ export async function generateClassArmTeacher(teacherId: string, classArmId: str
   });
 }
 
-export async function generateClassArmSubjectTeacher(
-  teacherId: string,
-  classArmSubjectId: string,
-) {
+export async function generateClassArmSubjectTeacher(teacherId: string, classArmSubjectId: string) {
   return prisma.classArmSubjectTeacher.create({
     data: {
       teacher: { connect: { id: teacherId } },

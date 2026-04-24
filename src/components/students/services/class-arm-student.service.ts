@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -149,13 +149,15 @@ export class ClassArmStudentService {
     academicSessionId: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
-      // Deactivate current enrollment
+      // Deactivate any currently active enrollment in this session. When the
+      // student has no active enrollment (e.g. was just removed from class)
+      // and fromClassArmId is '', this updates nothing — which is fine.
       await tx.classArmStudent.updateMany({
         where: {
           studentId,
-          classArmId: fromClassArmId,
           academicSessionId,
           isActive: true,
+          NOT: { classArmId: toClassArmId },
         },
         data: {
           isActive: false,
@@ -163,9 +165,25 @@ export class ClassArmStudentService {
         },
       });
 
-      // Create new enrollment
-      return tx.classArmStudent.create({
-        data: {
+      // Upsert the target enrollment. A historical row with
+      // (studentId, toClassArmId, academicSessionId) may exist — possibly
+      // soft-deleted if the student was previously removed from this class.
+      // Reactivate it instead of failing on the unique constraint.
+      return tx.classArmStudent.upsert({
+        where: {
+          studentId_classArmId_academicSessionId: {
+            studentId,
+            classArmId: toClassArmId,
+            academicSessionId,
+          },
+        },
+        update: {
+          isActive: true,
+          leftAt: null,
+          deletedAt: null,
+          enrolledAt: new Date(),
+        },
+        create: {
           studentId,
           classArmId: toClassArmId,
           academicSessionId,
@@ -552,5 +570,19 @@ export class ClassArmStudentService {
       skippedCount: alreadyInTargetClassIds.length,
       skippedStudents: alreadyInTargetClassIds,
     };
+  }
+
+  async removeStudentFromClassArm(studentId: string, classArmId: string) {
+    const enrollment = await this.prisma.classArmStudent.findFirst({
+      where: { studentId, classArmId, isActive: true },
+    });
+    if (!enrollment) {
+      throw new NotFoundException('No active enrollment found for student in this class');
+    }
+    const now = new Date();
+    return this.prisma.classArmStudent.update({
+      where: { id: enrollment.id },
+      data: { isActive: false, leftAt: now, deletedAt: now },
+    });
   }
 }

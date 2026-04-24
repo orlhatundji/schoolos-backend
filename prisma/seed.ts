@@ -15,8 +15,8 @@ import {
 
 const prisma = new PrismaClient();
 const passwordHasher = new PasswordHasher();
-const counterService = new CounterService(prisma);
-const activityLogService = new ActivityLogService(prisma);
+const counterService = new CounterService(prisma as any);
+const activityLogService = new ActivityLogService(prisma as any);
 
 // Helper function to log seed activities
 async function logSeedActivity(

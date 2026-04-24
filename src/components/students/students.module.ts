@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
+import { ClassArmStudentsController } from './class-arm-students.controller';
 import { UsersModule } from '../users/users.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { StudentsRepository } from './students.repository';
@@ -12,6 +13,7 @@ import { CounterModule } from '../../common/counter';
 import { PasswordGenerator } from '../../utils/password/password.generator';
 import { PasswordHasher } from '../../utils/hasher/hasher';
 import { ActivityLogService } from '../../common/services/activity-log.service';
+import { Encryptor } from '../../utils/encryptor';
 import { MailQueueModule } from '../../utils/mail-queue/mail-queue.module';
 import {
   BulkUploadController,
@@ -34,7 +36,7 @@ import { SharedServicesModule } from '../../shared/shared-services.module';
       name: 'student-import',
     }),
   ],
-  controllers: [StudentsController, BulkUploadController],
+  controllers: [StudentsController, ClassArmStudentsController, BulkUploadController],
   providers: [
     StudentsService,
     StudentsRepository,
@@ -45,6 +47,7 @@ import { SharedServicesModule } from '../../shared/shared-services.module';
     BulkUploadService,
     TemplateService,
     StudentImportProcessor,
+    Encryptor,
   ],
   exports: [StudentsService, BulkUploadService, ClassArmStudentService],
 })

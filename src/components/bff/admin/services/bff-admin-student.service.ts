@@ -165,7 +165,7 @@ export class BffAdminStudentService {
           : 0;
 
       // Calculate attendance rate
-      const allAttendances = student.classArmStudents.flatMap(cas => cas.studentAttendances);
+      const allAttendances = student.classArmStudents.flatMap((cas) => cas.studentAttendances);
       const presentCount = allAttendances.filter(
         (attendance) => attendance.status === 'PRESENT',
       ).length;
@@ -177,13 +177,14 @@ export class BffAdminStudentService {
       const isPresent = Math.random() > 0.1; // 90% chance of being present
 
       // Get guardian info - fall back to inline fields on student
-      const guardianName = student.guardian
-        ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : (student.guardianFirstName || student.guardianLastName)
+      const guardianName =
+        student.guardianFirstName || student.guardianLastName
           ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
-          : 'N/A';
+          : student.guardian
+            ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+            : 'N/A';
 
-      const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
+      const guardianPhone = student.guardianPhone || student.guardian?.user?.phone || null;
 
       return {
         id: student.id,
@@ -195,7 +196,7 @@ export class BffAdminStudentService {
         stateOfOrigin: student.user.stateOfOrigin || 'N/A',
         guardianName,
         guardianPhone,
-        guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
+        guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
         telephone: student.user.phone,
         className:
           student.classArmStudents?.[0]?.classArm &&
@@ -306,7 +307,7 @@ export class BffAdminStudentService {
         : 0;
 
     // Calculate attendance rate
-    const allAttendances = student.classArmStudents.flatMap(cas => cas.studentAttendances);
+    const allAttendances = student.classArmStudents.flatMap((cas) => cas.studentAttendances);
     const presentCount = allAttendances.filter(
       (attendance) => attendance.status === 'PRESENT',
     ).length;
@@ -318,13 +319,14 @@ export class BffAdminStudentService {
     const isPresent = Math.random() > 0.1; // 90% chance of being present
 
     // Get guardian info - fall back to inline fields on student
-    const guardianName = student.guardian
-      ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-      : (student.guardianFirstName || student.guardianLastName)
+    const guardianName =
+      student.guardianFirstName || student.guardianLastName
         ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
-        : 'N/A';
+        : student.guardian
+          ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+          : 'N/A';
 
-    const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
+    const guardianPhone = student.guardianPhone || student.guardian?.user?.phone || null;
 
     return {
       id: student.id,
@@ -336,10 +338,14 @@ export class BffAdminStudentService {
       stateOfOrigin: student.user.stateOfOrigin || 'N/A',
       guardianName,
       guardianPhone,
-      guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
+      guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
       telephone: student.user.phone,
-      className: student.classArmStudents?.[0]?.classArm ? student.classArmStudents[0].classArm.name : 'N/A',
-      classLevel: student.classArmStudents?.[0]?.classArm?.level ? student.classArmStudents[0].classArm.level.name : 'N/A',
+      className: student.classArmStudents?.[0]?.classArm
+        ? student.classArmStudents[0].classArm.name
+        : 'N/A',
+      classLevel: student.classArmStudents?.[0]?.classArm?.level
+        ? student.classArmStudents[0].classArm.level.name
+        : 'N/A',
       averageGrade: Math.round(averageGrade * 100) / 100,
       isPresent,
       attendanceRate: Math.round(attendanceRate * 100) / 100,
@@ -450,7 +456,9 @@ export class BffAdminStudentService {
     // This is a simplified calculation - you might want to adjust based on your logic
     const graduatedStudents = students.filter((student) => {
       // Assuming final year is the highest level
-      const levels = students.map((s) => s.classArmStudents?.[0]?.classArm?.level?.name).filter(Boolean);
+      const levels = students
+        .map((s) => s.classArmStudents?.[0]?.classArm?.level?.name)
+        .filter(Boolean);
       const maxLevel = Math.max(
         ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
       );
@@ -586,7 +594,9 @@ export class BffAdminStudentService {
     // This is a simplified calculation - you might want to adjust based on your logic
     const graduatedStudents = students.filter((student) => {
       // Assuming final year is the highest level
-      const levels = students.map((s) => s.classArmStudents?.[0]?.classArm?.level?.name).filter(Boolean);
+      const levels = students
+        .map((s) => s.classArmStudents?.[0]?.classArm?.level?.name)
+        .filter(Boolean);
       const maxLevel = Math.max(
         ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
       );
@@ -623,7 +633,7 @@ export class BffAdminStudentService {
           : 0;
 
       // Calculate attendance rate
-      const allAttendances = student.classArmStudents.flatMap(cas => cas.studentAttendances);
+      const allAttendances = student.classArmStudents.flatMap((cas) => cas.studentAttendances);
       const presentCount = allAttendances.filter(
         (attendance) => attendance.status === 'PRESENT',
       ).length;
@@ -635,13 +645,14 @@ export class BffAdminStudentService {
       const isPresent = Math.random() > 0.1; // 90% chance of being present
 
       // Get guardian info - fall back to inline fields on student
-      const guardianName = student.guardian
-        ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-        : (student.guardianFirstName || student.guardianLastName)
+      const guardianName =
+        student.guardianFirstName || student.guardianLastName
           ? `${student.guardianFirstName || ''} ${student.guardianLastName || ''}`.trim()
-          : 'N/A';
+          : student.guardian
+            ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+            : 'N/A';
 
-      const guardianPhone = student.guardian?.user.phone || student.guardianPhone || null;
+      const guardianPhone = student.guardianPhone || student.guardian?.user?.phone || null;
 
       return {
         id: student.id,
@@ -653,7 +664,7 @@ export class BffAdminStudentService {
         stateOfOrigin: student.user.stateOfOrigin || 'N/A',
         guardianName,
         guardianPhone,
-        guardianEmail: student.guardian?.user.email || student.guardianEmail || null,
+        guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
         telephone: student.user.phone,
         className:
           student.classArmStudents?.[0]?.classArm &&

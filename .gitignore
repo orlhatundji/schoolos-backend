@@ -71,3 +71,4 @@ test-seed-state.js
 verify-refs.js
 seed-minimal.ts
 *.md
+settings.local.json

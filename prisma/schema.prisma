@@ -107,6 +107,9 @@ model School {
   /// has not yet been cancelled or executed. Used as a fast check on login.
   deletionRequestedAt          DateTime?
   deletionRequests             SchoolDeletionRequest[]
+  questions                    Question[]
+  quizzes                      Quiz[]
+  quizScoreAggregations        QuizScoreAggregation[]
 
   @@map("schools")
 }
@@ -119,12 +122,12 @@ model School {
 /// * the 30-day reconsideration window the platform admin may execute it
 /// * manually — no automatic deletion takes place.
 model SchoolDeletionRequest {
-  id               String                       @id @default(uuid())
+  id               String                      @id @default(uuid())
   schoolId         String
   requestedById    String
   reason           String
-  status           SchoolDeletionRequestStatus  @default(PENDING)
-  requestedAt      DateTime                     @default(now())
+  status           SchoolDeletionRequestStatus @default(PENDING)
+  requestedAt      DateTime                    @default(now())
   /// The earliest date the platform admin may execute the request
   /// (requestedAt + 30 days). Informational — not auto-enforced server-side.
   reviewableAt     DateTime
@@ -136,13 +139,13 @@ model SchoolDeletionRequest {
   rejectedAt       DateTime?
   rejectedById     String?
   rejectionReason  String?
-  createdAt        DateTime                     @default(now())
-  updatedAt        DateTime                     @updatedAt
-  school           School                       @relation(fields: [schoolId], references: [id])
-  requestedBy      User                         @relation("SchoolDeletionRequestedBy", fields: [requestedById], references: [id])
-  cancelledBy      User?                        @relation("SchoolDeletionCancelledBy", fields: [cancelledById], references: [id])
-  executedBy       SystemAdmin?                 @relation("SchoolDeletionExecutedBy", fields: [executedById], references: [id])
-  rejectedBy       SystemAdmin?                 @relation("SchoolDeletionRejectedBy", fields: [rejectedById], references: [id])
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  school           School                      @relation(fields: [schoolId], references: [id])
+  requestedBy      User                        @relation("SchoolDeletionRequestedBy", fields: [requestedById], references: [id])
+  cancelledBy      User?                       @relation("SchoolDeletionCancelledBy", fields: [cancelledById], references: [id])
+  executedBy       SystemAdmin?                @relation("SchoolDeletionExecutedBy", fields: [executedById], references: [id])
+  rejectedBy       SystemAdmin?                @relation("SchoolDeletionRejectedBy", fields: [rejectedById], references: [id])
 
   @@index([schoolId, status])
   @@index([status])
@@ -162,16 +165,16 @@ enum SchoolDeletionRequestStatus {
 /// * Stores academic promotion settings for each school, including core subjects,
 /// * minimum requirements, and attendance criteria for student promotion.
 model AcademicPromotionSettings {
-  id                     String   @id @default(uuid())
-  schoolId               String   @unique
-  coreSubjects           String[] // Array of subject names that must be passed
-  totalSubjectsPassed    Int      // Minimum number of subjects to pass
-  totalAverage           Int      // Minimum overall average required
-  useAttendance          Boolean  @default(true) // Whether to include attendance criteria
-  minimumAttendanceRate  Int      // Minimum attendance rate (if attendance is enabled)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-  school                 School   @relation(fields: [schoolId], references: [id])
+  id                    String   @id @default(uuid())
+  schoolId              String   @unique
+  coreSubjects          String[] // Array of subject names that must be passed
+  totalSubjectsPassed   Int // Minimum number of subjects to pass
+  totalAverage          Int // Minimum overall average required
+  useAttendance         Boolean  @default(true) // Whether to include attendance criteria
+  minimumAttendanceRate Int // Minimum attendance rate (if attendance is enabled)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  school                School   @relation(fields: [schoolId], references: [id])
 
   @@map("academic_promotion_settings")
 }
@@ -251,22 +254,26 @@ model AcademicSessionCalendarItem {
 /// * Terms divide the academic session into manageable periods for teaching, assessment, and reporting.
 /// * Each term is linked to an academic session and has its own set of subjects, attendance, and assessments.
 model Term {
-  id                 String              @id @default(uuid())
-  name               String
-  academicSessionId  String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  deletedAt          DateTime?
-  isLocked           Boolean             @default(false)
-  endDate            DateTime
-  startDate          DateTime
-  paymentStructures  PaymentStructure[]
-  assessments        ClassArmStudentAssessment[]
-  studentAttendances StudentAttendance[]
-  subjectAttendances SubjectAttendance[]
-  resultComments     ResultComment[]
-  academicSession    AcademicSession            @relation(fields: [academicSessionId], references: [id])
-  schoolsAsCurrent   School[]                   @relation("SchoolCurrentTerm")
+  id                    String                      @id @default(uuid())
+  name                  String
+  academicSessionId     String
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  deletedAt             DateTime?
+  isLocked              Boolean                     @default(false)
+  endDate               DateTime
+  startDate             DateTime
+  paymentStructures     PaymentStructure[]
+  assessments           ClassArmStudentAssessment[]
+  studentAttendances    StudentAttendance[]
+  subjectAttendances    SubjectAttendance[]
+  resultComments        ResultComment[]
+  academicSession       AcademicSession             @relation(fields: [academicSessionId], references: [id])
+  schoolsAsCurrent      School[]                    @relation("SchoolCurrentTerm")
+  questionsByDefault    Question[]                  @relation("QuestionDefaultTerm")
+  quizzesByDefault      Quiz[]                      @relation("QuizDefaultTerm")
+  quizAssignments       QuizAssignment[]
+  quizScoreAggregations QuizScoreAggregation[]
 
   @@map("terms")
 }
@@ -293,6 +300,8 @@ model Level {
   paymentStructures PaymentStructure[]
   promotionsFrom    StudentPromotion[] @relation("PromotionFromLevel")
   promotionsTo      StudentPromotion[] @relation("PromotionToLevel")
+  questions         Question[]
+  quizzes           Quiz[]
 
   @@unique([code, schoolId])
   @@map("levels")
@@ -332,32 +341,32 @@ model Department {
 /// * Class arms group students for teaching, attendance, and administrative purposes.
 /// * They are also linked to teachers and subjects for classroom management.
 model ClassArm {
-  id                      String                   @id @default(uuid())
-  name                    String
-  academicSessionId       String
-  levelId                 String
-  departmentId            String?
-  schoolId                String
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  deletedAt               DateTime?
-  captainId               String?                  @unique
-  classTeacherId          String?
-  location                String?
-  slug                    String
-  classArmStudents        ClassArmStudent[]
-  classArmSubjects        ClassArmSubject[]
-  classArmTeachers        ClassArmTeacher[]
-  academicSession         AcademicSession          @relation(fields: [academicSessionId], references: [id])
-  captain                 Student?                 @relation("ClassArmCaptain", fields: [captainId], references: [id])
-  classTeacher            Teacher?                 @relation("ClassArmTeacher", fields: [classTeacherId], references: [id])
-  department              Department?              @relation(fields: [departmentId], references: [id])
-  level                   Level                    @relation(fields: [levelId], references: [id])
-  school                  School                   @relation(fields: [schoolId], references: [id])
-  paymentStructures       PaymentStructure[]
-  promotionsFrom          StudentPromotion[]       @relation("PromotionFromClassArm")
-  promotionsTo            StudentPromotion[]       @relation("PromotionToClassArm")
-  resultComments          ResultComment[]
+  id                String             @id @default(uuid())
+  name              String
+  academicSessionId String
+  levelId           String
+  departmentId      String?
+  schoolId          String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?
+  captainId         String?            @unique
+  classTeacherId    String?
+  location          String?
+  slug              String
+  classArmStudents  ClassArmStudent[]
+  classArmSubjects  ClassArmSubject[]
+  classArmTeachers  ClassArmTeacher[]
+  academicSession   AcademicSession    @relation(fields: [academicSessionId], references: [id])
+  captain           Student?           @relation("ClassArmCaptain", fields: [captainId], references: [id])
+  classTeacher      Teacher?           @relation("ClassArmTeacher", fields: [classTeacherId], references: [id])
+  department        Department?        @relation(fields: [departmentId], references: [id])
+  level             Level              @relation(fields: [levelId], references: [id])
+  school            School             @relation(fields: [schoolId], references: [id])
+  paymentStructures PaymentStructure[]
+  promotionsFrom    StudentPromotion[] @relation("PromotionFromClassArm")
+  promotionsTo      StudentPromotion[] @relation("PromotionToClassArm")
+  resultComments    ResultComment[]
 
   @@unique([slug, schoolId])
   @@unique([name, levelId, academicSessionId, schoolId], name: "unique_class_arm_per_level_session")
@@ -371,45 +380,47 @@ model ClassArm {
 /// * Stores authentication and profile information, and links to the specific role entity (student, teacher, etc.).
 /// * This model is central for access control, personalization, and communication.
 model User {
-  id                  String               @id @default(uuid())
-  type                UserType
-  email               String?
-  phone               String?
-  password            String
-  phoneVerified       Boolean              @default(false)
-  emailVerified       Boolean              @default(false)
-  firstName           String
-  lastName            String
-  addressId           String?
-  avatarUrl           String?
-  dateOfBirth         DateTime?
-  schoolId            String?
-  mustUpdatePassword  Boolean              @default(false)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  deletedAt           DateTime?
-  gender              Gender
-  stateOfOrigin       String?
-  lastLoginAt         DateTime?
-  admin               Admin?
-  bulkImportJobs      BulkImportJob[]
-  colorSchemePayments ColorSchemePayment[]
-  complaintComments   ComplaintComment[]   @relation("ComplaintCommentAuthor")
-  complaintsReported  Complaint[]          @relation("ComplaintReporter")
-  guardian            Guardian?
-  student             Student?
-  systemAdmin         SystemAdmin?
-  teacher             Teacher?
-  activities              UserActivity[]
-  preferences             UserPreferences?
-  tokens                  UserToken[]
-  address                 Address?             @relation(fields: [addressId], references: [id])
-  school                  School?              @relation(fields: [schoolId], references: [id])
-  teacherResultComments   ResultComment[]      @relation("TeacherCommentBy")
-  principalResultComments ResultComment[]      @relation("PrincipalCommentBy")
-  commentTemplatesCreated CommentTemplate[]    @relation("CommentTemplateCreatedBy")
+  id                       String                  @id @default(uuid())
+  type                     UserType
+  email                    String?
+  phone                    String?
+  password                 String
+  phoneVerified            Boolean                 @default(false)
+  emailVerified            Boolean                 @default(false)
+  firstName                String
+  lastName                 String
+  addressId                String?
+  avatarUrl                String?
+  dateOfBirth              DateTime?
+  schoolId                 String?
+  mustUpdatePassword       Boolean                 @default(false)
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  deletedAt                DateTime?
+  gender                   Gender
+  stateOfOrigin            String?
+  lastLoginAt              DateTime?
+  admin                    Admin?
+  bulkImportJobs           BulkImportJob[]
+  colorSchemePayments      ColorSchemePayment[]
+  complaintComments        ComplaintComment[]      @relation("ComplaintCommentAuthor")
+  complaintsReported       Complaint[]             @relation("ComplaintReporter")
+  guardian                 Guardian?
+  student                  Student?
+  systemAdmin              SystemAdmin?
+  teacher                  Teacher?
+  activities               UserActivity[]
+  preferences              UserPreferences?
+  tokens                   UserToken[]
+  address                  Address?                @relation(fields: [addressId], references: [id])
+  school                   School?                 @relation(fields: [schoolId], references: [id])
+  teacherResultComments    ResultComment[]         @relation("TeacherCommentBy")
+  principalResultComments  ResultComment[]         @relation("PrincipalCommentBy")
+  commentTemplatesCreated  CommentTemplate[]       @relation("CommentTemplateCreatedBy")
   schoolDeletionsRequested SchoolDeletionRequest[] @relation("SchoolDeletionRequestedBy")
   schoolDeletionsCancelled SchoolDeletionRequest[] @relation("SchoolDeletionCancelledBy")
+  authoredQuestions        Question[]              @relation("QuestionAuthor")
+  authoredQuizzes          Quiz[]                  @relation("QuizAuthor")
 
   @@map("users")
 }
@@ -464,15 +475,15 @@ model Admin {
 /// * manage school signup requests, and oversee the entire system.
 /// * This is different from school admins who manage individual schools.
 model SystemAdmin {
-  id                 String                @id @default(uuid())
-  userId             String                @unique
+  id                 String                  @id @default(uuid())
+  userId             String                  @unique
   role               String
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
   deletedAt          DateTime?
-  assignedComplaints Complaint[]           @relation("ComplaintAssignee")
+  assignedComplaints Complaint[]             @relation("ComplaintAssignee")
   signupRequests     SchoolSignupRequest[]
-  user               User                  @relation(fields: [userId], references: [id])
+  user               User                    @relation(fields: [userId], references: [id])
   deletionsExecuted  SchoolDeletionRequest[] @relation("SchoolDeletionExecutedBy")
   deletionsRejected  SchoolDeletionRequest[] @relation("SchoolDeletionRejectedBy")
 
@@ -486,24 +497,27 @@ model SystemAdmin {
 /// * Stores personal and professional information, and links teachers to the subjects and class arms they teach.
 /// * Teachers may also have administrative roles (e.g., HOD, class teacher).
 model Teacher {
-  id                      String                   @id @default(uuid())
-  userId                  String                   @unique
-  teacherNo               String                   @unique
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  deletedAt               DateTime?
-  employmentType          EmploymentType           @default(FULL_TIME)
-  joinDate                DateTime                 @default(now())
-  qualification           String?
-  signatureUrl            String?
-  status                  TeacherStatus            @default(ACTIVE)
-  departmentId            String?
-  classArmSubjectTeachers ClassArmSubjectTeacher[]
-  classArmTeachers        ClassArmTeacher[]
-  classArmsAsTeacher      ClassArm[]               @relation("ClassArmTeacher")
-  hod                     Hod?
-  department              Department?              @relation(fields: [departmentId], references: [id])
-  user                    User                     @relation(fields: [userId], references: [id])
+  id                        String                   @id @default(uuid())
+  userId                    String                   @unique
+  teacherNo                 String                   @unique
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  deletedAt                 DateTime?
+  employmentType            EmploymentType           @default(FULL_TIME)
+  joinDate                  DateTime                 @default(now())
+  qualification             String?
+  signatureUrl              String?
+  status                    TeacherStatus            @default(ACTIVE)
+  departmentId              String?
+  classArmSubjectTeachers   ClassArmSubjectTeacher[]
+  classArmTeachers          ClassArmTeacher[]
+  classArmsAsTeacher        ClassArm[]               @relation("ClassArmTeacher")
+  hod                       Hod?
+  department                Department?              @relation(fields: [departmentId], references: [id])
+  user                      User                     @relation(fields: [userId], references: [id])
+  quizAssignments           QuizAssignment[]         @relation("QuizAssignmentAssignedBy")
+  grantedQuizOverrides      QuizAttemptOverride[]    @relation("QuizOverrideGrantedBy")
+  finalizedQuizAggregations QuizScoreAggregation[]   @relation("QuizAggregationFinalizedBy")
 
   @@map("teachers")
 }
@@ -533,33 +547,35 @@ model Guardian {
 /// * Stores personal, academic, and administrative information about each student.
 /// * Students are linked to class arms, guardians, and have records for attendance, assessments, and curriculum progress.
 model Student {
-  id                    String                 @id @default(uuid())
-  userId                String                 @unique
-  studentNo             String                 @unique
-  admissionDate         DateTime
-  admissionNo           String?                @unique
-  guardianId            String?
-  guardianFirstName     String?
-  guardianLastName      String?
-  guardianEmail         String?
-  guardianPhone         String?
-  address               Json?
-  medicalInformation    Json?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  deletedAt             DateTime?
-  status                StudentStatus          @default(ACTIVE)
-  assessments           ClassArmStudentAssessment[]
-  classArmStudents      ClassArmStudent[]
-  classArmAsCaptain     ClassArm?                   @relation("ClassArmCaptain")
-  prefect               Prefect?
-  studentPayments       StudentPayment[]
-  promotedFrom          StudentPromotion[]          @relation("PromotedStudent")
-  promotions            StudentPromotion[]
-  statusHistory         StudentStatusHistory[]
-  resultComments        ResultComment[]
-  guardian              Guardian?                   @relation(fields: [guardianId], references: [id])
-  user                  User                        @relation(fields: [userId], references: [id])
+  id                   String                      @id @default(uuid())
+  userId               String                      @unique
+  studentNo            String                      @unique
+  admissionDate        DateTime
+  admissionNo          String?                     @unique
+  guardianId           String?
+  guardianFirstName    String?
+  guardianLastName     String?
+  guardianEmail        String?
+  guardianPhone        String?
+  address              Json?
+  medicalInformation   Json?
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  deletedAt            DateTime?
+  status               StudentStatus               @default(ACTIVE)
+  assessments          ClassArmStudentAssessment[]
+  classArmStudents     ClassArmStudent[]
+  classArmAsCaptain    ClassArm?                   @relation("ClassArmCaptain")
+  prefect              Prefect?
+  studentPayments      StudentPayment[]
+  promotedFrom         StudentPromotion[]          @relation("PromotedStudent")
+  promotions           StudentPromotion[]
+  statusHistory        StudentStatusHistory[]
+  resultComments       ResultComment[]
+  guardian             Guardian?                   @relation(fields: [guardianId], references: [id])
+  user                 User                        @relation(fields: [userId], references: [id])
+  quizAttempts         QuizAttempt[]
+  quizAttemptOverrides QuizAttemptOverride[]
 
   @@map("students")
 }
@@ -585,10 +601,10 @@ model ClassArmStudent {
   updatedAt          DateTime            @updatedAt
   deletedAt          DateTime?
   academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
-  classArm            ClassArm             @relation(fields: [classArmId], references: [id], onDelete: Cascade)
-  student             Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentAttendances  StudentAttendance[]
-  subjectAttendances  SubjectAttendance[]
+  classArm           ClassArm            @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  student            Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentAttendances StudentAttendance[]
+  subjectAttendances SubjectAttendance[]
 
   @@unique([studentId, classArmId, academicSessionId])
   @@index([studentId])
@@ -629,19 +645,21 @@ model StudentStatusHistory {
 /// * Subjects are linked to departments and schools, and are taught by teachers to students in various class arms.
 /// * This entity is central to curriculum planning and academic reporting.
 model Subject {
-  id                      String                   @id @default(uuid())
-  name                    String
-  schoolId                String
-  departmentId            String?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  deletedAt               DateTime?
-  categoryId              String?
-  classArmSubjects        ClassArmSubject[]
-  subjectAttendances      SubjectAttendance[]
-  category                Category?         @relation(fields: [categoryId], references: [id])
-  department              Department?       @relation(fields: [departmentId], references: [id])
-  school                  School            @relation(fields: [schoolId], references: [id])
+  id                 String              @id @default(uuid())
+  name               String
+  schoolId           String
+  departmentId       String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+  categoryId         String?
+  classArmSubjects   ClassArmSubject[]
+  subjectAttendances SubjectAttendance[]
+  category           Category?           @relation(fields: [categoryId], references: [id])
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  school             School              @relation(fields: [schoolId], references: [id])
+  questions          Question[]
+  quizzes            Quiz[]
 
   @@map("subjects")
 }
@@ -653,16 +671,18 @@ model Subject {
 /// * This is a first-class entity that exists independently of teacher assignments.
 /// * A class arm can take a subject even without a teacher assigned.
 model ClassArmSubject {
-  id          String                      @id @default(uuid())
-  classArmId  String
-  subjectId   String
-  createdAt   DateTime                    @default(now())
-  updatedAt   DateTime                    @updatedAt
-  deletedAt   DateTime?
-  classArm    ClassArm                    @relation(fields: [classArmId], references: [id])
-  subject     Subject                     @relation(fields: [subjectId], references: [id])
-  teachers    ClassArmSubjectTeacher[]
-  assessments ClassArmStudentAssessment[]
+  id                    String                      @id @default(uuid())
+  classArmId            String
+  subjectId             String
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  deletedAt             DateTime?
+  classArm              ClassArm                    @relation(fields: [classArmId], references: [id])
+  subject               Subject                     @relation(fields: [subjectId], references: [id])
+  teachers              ClassArmSubjectTeacher[]
+  assessments           ClassArmStudentAssessment[]
+  quizAssignments       QuizAssignment[]
+  quizScoreAggregations QuizScoreAggregation[]
 
   @@unique([classArmId, subjectId])
   @@map("class_arm_subjects")
@@ -700,7 +720,6 @@ model AssessmentStructureTemplate {
   @@index([isGlobalDefault])
   @@map("assessment_structure_templates")
 }
-
 
 /// *
 /// * ClassArmStudentAssessment
@@ -798,9 +817,9 @@ model SubjectAttendance {
   updatedAt         DateTime         @updatedAt
   deletedAt         DateTime?
 
-  classArmStudent   ClassArmStudent  @relation(fields: [classArmStudentId], references: [id], onDelete: Cascade)
-  term              Term             @relation(fields: [termId], references: [id])
-  subject           Subject          @relation(fields: [subjectId], references: [id])
+  classArmStudent ClassArmStudent @relation(fields: [classArmStudentId], references: [id], onDelete: Cascade)
+  term            Term            @relation(fields: [termId], references: [id])
+  subject         Subject         @relation(fields: [subjectId], references: [id])
 
   @@unique([classArmStudentId, date, subjectId])
   @@map("subject_attendances")
@@ -911,11 +930,11 @@ model Counter {
 /// * Used to generate and track unique numbers for platform-level entities (e.g., school codes).
 /// * Unlike Counter which is scoped to a school, this is for global/platform-wide sequences.
 model GlobalCounter {
-  id        String    @id @default(uuid())
-  entity    String    @unique
-  current   Int       @default(0)
-  updatedAt DateTime  @updatedAt
-  createdAt DateTime  @default(now())
+  id        String   @id @default(uuid())
+  entity    String   @unique
+  current   Int      @default(0)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 
   @@map("global_counters")
 }
@@ -991,24 +1010,24 @@ model PaymentStructure {
 /// * Links payment structures to individual students, creating specific payment obligations.
 /// * This allows for tracking individual student payment status and history.
 model StudentPayment {
-  id                 String           @id @default(uuid())
-  studentId          String
-  paymentStructureId String
-  amount             Decimal          @db.Decimal(10, 2)
-  currency           String           @default("NGN")
-  status             PaymentStatus    @default(PENDING)
-  dueDate            DateTime
-  paidAmount         Decimal          @default(0) @db.Decimal(10, 2)
-  paidAt             DateTime?
-  notes              String?
-  waivedBy           String?
-  waivedAt           DateTime?
-  waiverReason       String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  deletedAt          DateTime?
-  paymentStructure     PaymentStructure  @relation(fields: [paymentStructureId], references: [id])
-  student              Student           @relation(fields: [studentId], references: [id])
+  id                   String                @id @default(uuid())
+  studentId            String
+  paymentStructureId   String
+  amount               Decimal               @db.Decimal(10, 2)
+  currency             String                @default("NGN")
+  status               PaymentStatus         @default(PENDING)
+  dueDate              DateTime
+  paidAmount           Decimal               @default(0) @db.Decimal(10, 2)
+  paidAt               DateTime?
+  notes                String?
+  waivedBy             String?
+  waivedAt             DateTime?
+  waiverReason         String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  paymentStructure     PaymentStructure      @relation(fields: [paymentStructureId], references: [id])
+  student              Student               @relation(fields: [studentId], references: [id])
   platformTransactions PlatformTransaction[]
 
   @@index([studentId])
@@ -1294,7 +1313,6 @@ model LevelProgression {
   @@map("level_progressions")
 }
 
-
 /// *
 /// * SchoolBankAccount
 /// * ------------------
@@ -1565,4 +1583,547 @@ model CommentTemplate {
 
   @@index([schoolId, type])
   @@map("comment_templates")
+}
+
+// =============================================================================
+// QUIZ / ASSESSMENT SYSTEM
+// =============================================================================
+//
+// Adds a first-class question bank, reusable quizzes, live assignments to
+// classes (open-window or sync-start), per-student attempts with auto-grading,
+// and a separate quiz gradebook that can be aggregated into the existing
+// AssessmentStructureTemplate slots (Test 1, Exam, etc.).
+//
+// Topic and PopularExam are schos-managed canonical taxonomies; Question and
+// Quiz can be either SCHOS_CURATED (system-wide, no schoolId) or
+// TEACHER_AUTHORED (scoped to a school).
+
+/// *
+/// * Topic
+/// * -----
+/// * Canonical curriculum topic, schos-managed (e.g. "Newton's Laws of Motion").
+/// * Self-referential for subtopics (Mechanics > Kinematics > Projectile Motion).
+/// * Tagged by canonical subject + level so schools' subjects can match by name+code.
+model Topic {
+  id                   String    @id @default(uuid())
+  name                 String
+  slug                 String    @unique
+  description          String?
+  parentTopicId        String?
+  order                Int       @default(0)
+  canonicalSubjectName String
+  canonicalLevelCode   String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  parentTopic  Topic?          @relation("TopicSubtopics", fields: [parentTopicId], references: [id])
+  childTopics  Topic[]         @relation("TopicSubtopics")
+  questionTags QuestionTopic[]
+  quizTags     QuizTopic[]
+
+  @@index([canonicalSubjectName, canonicalLevelCode])
+  @@index([parentTopicId])
+  @@map("topics")
+}
+
+/// *
+/// * PopularExam
+/// * -----------
+/// * schos-managed reference list of standardized exams (WAEC, NECO, JAMB, etc.).
+/// * Teachers tick which past exams a question is sourced from, with year.
+model PopularExam {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  name        String
+  country     String?
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  questionTags QuestionPopularExam[]
+
+  @@map("popular_exams")
+}
+
+/// *
+/// * Question
+/// * --------
+/// * First-class, reusable question. Owned either by a teacher (TEACHER_AUTHORED,
+/// * scoped to schoolId) or by schos (SCHOS_CURATED, schoolId is null).
+/// * Reusable across many quizzes via QuizQuestion. Edits to questions referenced
+/// * by a published quiz bump `version` (immutable history).
+model Question {
+  id                String              @id @default(uuid())
+  ownerType         QuestionOwnerType
+  schoolId          String?
+  authorUserId      String
+  subjectId         String?
+  levelId           String?
+  defaultTermId     String?
+  type              QuestionType
+  prompt            Json
+  promptPlainText   String              @db.Text
+  mediaUrls         String[]
+  explanation       Json?
+  weight            Decimal             @default(1.0) @db.Decimal(10, 2)
+  difficulty        QuestionDifficulty?
+  status            QuestionStatus      @default(DRAFT)
+  version           Int                 @default(1)
+  sourceQuestionId  String?
+  config            Json?
+  partialCreditMode PartialCreditMode?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  deletedAt         DateTime?
+
+  school         School?               @relation(fields: [schoolId], references: [id])
+  authorUser     User                  @relation("QuestionAuthor", fields: [authorUserId], references: [id])
+  subject        Subject?              @relation(fields: [subjectId], references: [id])
+  level          Level?                @relation(fields: [levelId], references: [id])
+  defaultTerm    Term?                 @relation("QuestionDefaultTerm", fields: [defaultTermId], references: [id])
+  sourceQuestion Question?             @relation("QuestionLineage", fields: [sourceQuestionId], references: [id])
+  clones         Question[]            @relation("QuestionLineage")
+  options        QuestionOption[]
+  topics         QuestionTopic[]
+  popularExams   QuestionPopularExam[]
+  quizUses       QuizQuestion[]
+  responses      QuestionResponse[]
+
+  @@index([schoolId, authorUserId, status])
+  @@index([subjectId, levelId])
+  @@index([ownerType, status])
+  @@map("questions")
+}
+
+/// *
+/// * QuestionOption
+/// * --------------
+/// * Choice for MCQ_SINGLE / MCQ_MULTI questions. Label is TipTap JSON so options
+/// * can also contain math/images.
+model QuestionOption {
+  id             String    @id @default(uuid())
+  questionId     String
+  order          Int
+  label          Json
+  labelPlainText String    @db.Text
+  isCorrect      Boolean   @default(false)
+  mediaUrl       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, order])
+  @@index([questionId])
+  @@map("question_options")
+}
+
+/// *
+/// * QuestionTopic
+/// * -------------
+/// * Many-to-many tag from a question to one or more curriculum topics.
+model QuestionTopic {
+  questionId String
+  topicId    String
+  createdAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  topic    Topic    @relation(fields: [topicId], references: [id])
+
+  @@id([questionId, topicId])
+  @@index([topicId])
+  @@map("question_topics")
+}
+
+/// *
+/// * QuestionPopularExam
+/// * -------------------
+/// * Many-to-many tag from a question to past-exam sources, with year + reference.
+model QuestionPopularExam {
+  id             String   @id @default(uuid())
+  questionId     String
+  popularExamId  String
+  examYear       Int?
+  paperReference String?
+  createdAt      DateTime @default(now())
+
+  question    Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  popularExam PopularExam @relation(fields: [popularExamId], references: [id])
+
+  @@unique([questionId, popularExamId, examYear])
+  @@index([popularExamId, examYear])
+  @@map("question_popular_exams")
+}
+
+/// *
+/// * Quiz
+/// * ----
+/// * Composition of questions with shared metadata + delivery settings.
+/// * SCHOS_CURATED quizzes (schoolId null) are visible to all schools and can be
+/// * cloned. TEACHER_AUTHORED quizzes are private to the owning school.
+/// * Edits to a published quiz bump `version`; a QuizAssignment snapshots the
+/// * version it was assigned with so historical attempts stay consistent.
+model Quiz {
+  id               String              @id @default(uuid())
+  ownerType        QuizOwnerType
+  schoolId         String?
+  authorUserId     String
+  title            String
+  description      String?
+  instructions     String?             @db.Text
+  subjectId        String?
+  levelId          String?
+  defaultTermId    String?
+  status           QuizStatus          @default(DRAFT)
+  estimatedMinutes Int?
+  passMarkPercent  Decimal?            @db.Decimal(5, 2)
+  difficulty       QuestionDifficulty?
+  defaultSettings  Json?
+  sourceQuizId     String?
+  version          Int                 @default(1)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  deletedAt        DateTime?
+
+  school      School?          @relation(fields: [schoolId], references: [id])
+  authorUser  User             @relation("QuizAuthor", fields: [authorUserId], references: [id])
+  subject     Subject?         @relation(fields: [subjectId], references: [id])
+  level       Level?           @relation(fields: [levelId], references: [id])
+  defaultTerm Term?            @relation("QuizDefaultTerm", fields: [defaultTermId], references: [id])
+  sourceQuiz  Quiz?            @relation("QuizLineage", fields: [sourceQuizId], references: [id])
+  clones      Quiz[]           @relation("QuizLineage")
+  questions   QuizQuestion[]
+  topics      QuizTopic[]
+  assignments QuizAssignment[]
+
+  @@index([schoolId, authorUserId, status])
+  @@index([subjectId, levelId])
+  @@index([ownerType, status])
+  @@map("quizzes")
+}
+
+/// *
+/// * QuizQuestion
+/// * ------------
+/// * Junction Quiz <-> Question with ordering and optional per-quiz weight override.
+/// * weightOverride: null means use Question.weight. The QuestionResponse snapshot
+/// * stores the resolved weight at attempt start.
+model QuizQuestion {
+  quizId         String
+  questionId     String
+  order          Int
+  weightOverride Decimal? @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  quiz     Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@id([quizId, questionId])
+  @@unique([quizId, order])
+  @@index([questionId])
+  @@map("quiz_questions")
+}
+
+/// *
+/// * QuizTopic
+/// * ---------
+/// * Many-to-many tag from a quiz to one or more curriculum topics
+/// * (in addition to per-question topics).
+model QuizTopic {
+  quizId    String
+  topicId   String
+  createdAt DateTime @default(now())
+
+  quiz  Quiz  @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topicId], references: [id])
+
+  @@id([quizId, topicId])
+  @@index([topicId])
+  @@map("quiz_topics")
+}
+
+/// *
+/// * QuizAssignment
+/// * --------------
+/// * A teacher schedules a quiz for a specific class arm subject + term.
+/// * mode: OPEN_WINDOW = students start anytime in [windowOpensAt, windowClosesAt],
+/// * each gets durationMinutes from their start. SYNC_START = everyone starts at
+/// * windowOpensAt (within syncGracePeriodSeconds); shared dueAt.
+/// * Result-visibility settings can override the quiz defaults; if
+/// * showResultsImmediately is false, teacher must call release-results.
+model QuizAssignment {
+  id                     String               @id @default(uuid())
+  quizId                 String
+  quizVersion            Int
+  classArmSubjectId      String
+  termId                 String
+  assignedByTeacherId    String
+  mode                   QuizDeliveryMode
+  windowOpensAt          DateTime
+  windowClosesAt         DateTime
+  durationMinutes        Int
+  syncGracePeriodSeconds Int?                 @default(60)
+  maxAttempts            Int                  @default(1)
+  showResultsImmediately Boolean?
+  showCorrectAnswers     Boolean?
+  resultsReleasedAt      DateTime?
+  status                 QuizAssignmentStatus @default(SCHEDULED)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  deletedAt              DateTime?
+
+  quiz              Quiz                       @relation(fields: [quizId], references: [id])
+  classArmSubject   ClassArmSubject            @relation(fields: [classArmSubjectId], references: [id])
+  term              Term                       @relation(fields: [termId], references: [id])
+  assignedByTeacher Teacher                    @relation("QuizAssignmentAssignedBy", fields: [assignedByTeacherId], references: [id])
+  attempts          QuizAttempt[]
+  overrides         QuizAttemptOverride[]
+  aggregationItems  QuizScoreAggregationItem[]
+
+  @@index([classArmSubjectId, termId, status])
+  @@index([windowOpensAt, windowClosesAt])
+  @@index([quizId])
+  @@map("quiz_assignments")
+}
+
+/// *
+/// * QuizAttemptOverride
+/// * -------------------
+/// * Per-student exception: teacher grants extra attempts, extra time, or extends
+/// * the window for a specific student (e.g. due to a network outage).
+/// * Reason is required for audit.
+model QuizAttemptOverride {
+  id                 String           @id @default(uuid())
+  quizAssignmentId   String
+  studentId          String
+  grantedByTeacherId String
+  type               QuizOverrideType
+  extraAttempts      Int?
+  extraMinutes       Int?
+  newWindowClosesAt  DateTime?
+  reason             String           @db.Text
+  createdAt          DateTime         @default(now())
+
+  quizAssignment   QuizAssignment @relation(fields: [quizAssignmentId], references: [id], onDelete: Cascade)
+  student          Student        @relation(fields: [studentId], references: [id])
+  grantedByTeacher Teacher        @relation("QuizOverrideGrantedBy", fields: [grantedByTeacherId], references: [id])
+
+  @@index([quizAssignmentId, studentId])
+  @@index([studentId])
+  @@map("quiz_attempt_overrides")
+}
+
+/// *
+/// * QuizAttempt
+/// * -----------
+/// * One row per student per attempt. dueAt is computed server-side at start as
+/// * min(windowClosesAt, startedAt + durationMinutes) + any active EXTRA_TIME
+/// * overrides. status transitions: IN_PROGRESS -> SUBMITTED -> GRADING -> GRADED.
+model QuizAttempt {
+  id                   String            @id @default(uuid())
+  quizAssignmentId     String
+  studentId            String
+  attemptNumber        Int               @default(1)
+  startedAt            DateTime          @default(now())
+  dueAt                DateTime
+  submittedAt          DateTime?
+  autoSubmitted        Boolean           @default(false)
+  status               QuizAttemptStatus @default(IN_PROGRESS)
+  totalScore           Decimal?          @db.Decimal(10, 2)
+  maxScore             Decimal           @db.Decimal(10, 2)
+  percentage           Decimal?          @db.Decimal(5, 2)
+  pageVisibilityEvents Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  quizAssignment QuizAssignment     @relation(fields: [quizAssignmentId], references: [id])
+  student        Student            @relation(fields: [studentId], references: [id])
+  responses      QuestionResponse[]
+
+  @@unique([quizAssignmentId, studentId, attemptNumber])
+  @@index([quizAssignmentId, status])
+  @@index([studentId, status])
+  @@index([dueAt, status])
+  @@map("quiz_attempts")
+}
+
+/// *
+/// * QuestionResponse
+/// * ----------------
+/// * One row per question per attempt. weight is snapshotted from
+/// * QuizQuestion.weightOverride ?? Question.weight at attempt start so later
+/// * edits don't affect graded scores. responseJson shape depends on type:
+/// *   MCQ_SINGLE  : { selectedOptionId: string }
+/// *   MCQ_MULTI   : { selectedOptionIds: string[] }
+/// *   TRUE_FALSE  : { value: boolean }
+/// *   NUMERIC     : { value: number, unit?: string }
+/// *   SHORT_ANSWER: { text: string }
+model QuestionResponse {
+  id            String   @id @default(uuid())
+  attemptId     String
+  questionId    String
+  responseJson  Json?
+  weight        Decimal  @db.Decimal(10, 2)
+  pointsAwarded Decimal? @db.Decimal(10, 2)
+  isCorrect     Boolean?
+  autoGraded    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@map("question_responses")
+}
+
+/// *
+/// * QuizScoreAggregation
+/// * --------------------
+/// * Maps N quiz assignments to one slot in AssessmentStructureTemplate.
+/// * Example: Quiz 1 + Quiz 2 + Quiz 3 -> "Test 1" via AVERAGE rescaled to /15.
+/// * On finalize, a job upserts ClassArmStudentAssessment rows so the score flows
+/// * through to existing results & broadsheet UIs unchanged.
+/// * missingAttemptPolicy decides how to treat students who didn't submit:
+/// * TREAT_AS_ZERO (default) or EXCLUDE_FROM_DENOMINATOR.
+model QuizScoreAggregation {
+  id                        String                @id @default(uuid())
+  schoolId                  String
+  classArmSubjectId         String
+  termId                    String
+  assessmentTemplateEntryId String
+  name                      String
+  aggregationMethod         AggregationMethod
+  bestOfN                   Int?
+  rescaleToMaxScore         Int
+  missingAttemptPolicy      MissingAttemptPolicy  @default(TREAT_AS_ZERO)
+  status                    QuizAggregationStatus @default(DRAFT)
+  finalizedAt               DateTime?
+  finalizedByTeacherId      String?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  deletedAt                 DateTime?
+
+  school             School                     @relation(fields: [schoolId], references: [id])
+  classArmSubject    ClassArmSubject            @relation(fields: [classArmSubjectId], references: [id])
+  term               Term                       @relation(fields: [termId], references: [id])
+  finalizedByTeacher Teacher?                   @relation("QuizAggregationFinalizedBy", fields: [finalizedByTeacherId], references: [id])
+  items              QuizScoreAggregationItem[]
+
+  @@index([schoolId, classArmSubjectId, termId])
+  @@index([assessmentTemplateEntryId])
+  @@map("quiz_score_aggregations")
+}
+
+/// *
+/// * QuizScoreAggregationItem
+/// * ------------------------
+/// * Junction QuizScoreAggregation <-> QuizAssignment with optional weight
+/// * (used by AggregationMethod = WEIGHTED).
+model QuizScoreAggregationItem {
+  id               String   @id @default(uuid())
+  aggregationId    String
+  quizAssignmentId String
+  weight           Decimal  @default(1.0) @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+
+  aggregation    QuizScoreAggregation @relation(fields: [aggregationId], references: [id], onDelete: Cascade)
+  quizAssignment QuizAssignment       @relation(fields: [quizAssignmentId], references: [id])
+
+  @@unique([aggregationId, quizAssignmentId])
+  @@index([quizAssignmentId])
+  @@map("quiz_score_aggregation_items")
+}
+
+// -----------------------------------------------------------------------------
+// Quiz / Assessment enums
+// -----------------------------------------------------------------------------
+
+enum QuestionOwnerType {
+  SCHOS_CURATED
+  TEACHER_AUTHORED
+}
+
+enum QuizOwnerType {
+  SCHOS_CURATED
+  TEACHER_AUTHORED
+}
+
+enum QuestionType {
+  MCQ_SINGLE
+  MCQ_MULTI
+  TRUE_FALSE
+  NUMERIC
+  SHORT_ANSWER
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PartialCreditMode {
+  NONE
+  PROPORTIONAL
+}
+
+enum QuizDeliveryMode {
+  OPEN_WINDOW
+  SYNC_START
+}
+
+enum QuizAssignmentStatus {
+  SCHEDULED
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum QuizOverrideType {
+  RETRY
+  EXTEND_WINDOW
+  EXTRA_TIME
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADING
+  GRADED
+}
+
+enum AggregationMethod {
+  SUM
+  AVERAGE
+  WEIGHTED
+  BEST_OF_N
+}
+
+enum MissingAttemptPolicy {
+  TREAT_AS_ZERO
+  EXCLUDE_FROM_DENOMINATOR
+}
+
+enum QuizAggregationStatus {
+  DRAFT
+  FINALIZED
 }

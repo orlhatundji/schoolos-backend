@@ -42,11 +42,12 @@ export class StudentDashboardResult {
       recentActivities: [
         {
           id: 'activity_001',
-          type: 'ASSESSMENT',
-          title: 'Mathematics Test 1',
-          description: 'Scored 85/100',
+          type: 'PAYMENT',
+          title: 'Payment Completed',
+          description: 'Payment of ₦50,000 completed successfully',
           date: '2024-10-15T10:00:00.000Z',
-          subjectName: 'Mathematics',
+          amount: 50000,
+          currency: 'NGN',
         },
       ],
       upcomingEvents: [

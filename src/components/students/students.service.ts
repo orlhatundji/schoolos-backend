@@ -467,7 +467,9 @@ export class StudentsService extends BaseService {
       await this.userService.update(existingStudent.userId, userUpdate);
     }
 
-    // Handle guardianInformation - store directly on student
+    // Guardian info is stored on Student.guardian* (denormalized) which the BFF
+    // reads as the source of truth. The Guardian.User relation is set at create
+    // time and not written through here; revisit when the guardian portal lands.
     if (
       updateStudentDto.guardianInformation &&
       Object.keys(updateStudentDto.guardianInformation).length > 0

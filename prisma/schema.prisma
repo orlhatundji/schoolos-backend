@@ -1656,28 +1656,31 @@ model PopularExam {
 /// * Reusable across many quizzes via QuizQuestion. Edits to questions referenced
 /// * by a published quiz bump `version` (immutable history).
 model Question {
-  id                String              @id @default(uuid())
-  ownerType         QuestionOwnerType
-  schoolId          String?
-  authorUserId      String
-  subjectId         String?
-  levelId           String?
-  defaultTermId     String?
-  type              QuestionType
-  prompt            Json
-  promptPlainText   String              @db.Text
-  mediaUrls         String[]
-  explanation       Json?
-  weight            Decimal             @default(1.0) @db.Decimal(10, 2)
-  difficulty        QuestionDifficulty?
-  status            QuestionStatus      @default(DRAFT)
-  version           Int                 @default(1)
-  sourceQuestionId  String?
-  config            Json?
-  partialCreditMode PartialCreditMode?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  deletedAt         DateTime?
+  id                   String              @id @default(uuid())
+  ownerType            QuestionOwnerType
+  schoolId             String?
+  authorUserId         String
+  subjectId            String?
+  levelId              String?
+  defaultTermId        String?
+  canonicalSubjectName String?
+  canonicalLevelCode   String?
+  canonicalTermName    String?
+  type                 QuestionType
+  prompt               Json
+  promptPlainText      String              @db.Text
+  mediaUrls            String[]
+  explanation          Json?
+  weight               Decimal             @default(1.0) @db.Decimal(10, 2)
+  difficulty           QuestionDifficulty?
+  status               QuestionStatus      @default(DRAFT)
+  version              Int                 @default(1)
+  sourceQuestionId     String?
+  config               Json?
+  partialCreditMode    PartialCreditMode?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
 
   school         School?               @relation(fields: [schoolId], references: [id])
   authorUser     User                  @relation("QuestionAuthor", fields: [authorUserId], references: [id])
@@ -1695,6 +1698,7 @@ model Question {
   @@index([schoolId, authorUserId, status])
   @@index([subjectId, levelId])
   @@index([ownerType, status])
+  @@index([canonicalSubjectName, canonicalLevelCode])
   @@map("questions")
 }
 
@@ -1768,26 +1772,29 @@ model QuestionPopularExam {
 /// * Edits to a published quiz bump `version`; a QuizAssignment snapshots the
 /// * version it was assigned with so historical attempts stay consistent.
 model Quiz {
-  id               String              @id @default(uuid())
-  ownerType        QuizOwnerType
-  schoolId         String?
-  authorUserId     String
-  title            String
-  description      String?
-  instructions     String?             @db.Text
-  subjectId        String?
-  levelId          String?
-  defaultTermId    String?
-  status           QuizStatus          @default(DRAFT)
-  estimatedMinutes Int?
-  passMarkPercent  Decimal?            @db.Decimal(5, 2)
-  difficulty       QuestionDifficulty?
-  defaultSettings  Json?
-  sourceQuizId     String?
-  version          Int                 @default(1)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  deletedAt        DateTime?
+  id                   String              @id @default(uuid())
+  ownerType            QuizOwnerType
+  schoolId             String?
+  authorUserId         String
+  title                String
+  description          String?
+  instructions         String?             @db.Text
+  subjectId            String?
+  levelId              String?
+  defaultTermId        String?
+  canonicalSubjectName String?
+  canonicalLevelCode   String?
+  canonicalTermName    String?
+  status               QuizStatus          @default(DRAFT)
+  estimatedMinutes     Int?
+  passMarkPercent      Decimal?            @db.Decimal(5, 2)
+  difficulty           QuestionDifficulty?
+  defaultSettings      Json?
+  sourceQuizId         String?
+  version              Int                 @default(1)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
 
   school      School?          @relation(fields: [schoolId], references: [id])
   authorUser  User             @relation("QuizAuthor", fields: [authorUserId], references: [id])
@@ -1803,6 +1810,7 @@ model Quiz {
   @@index([schoolId, authorUserId, status])
   @@index([subjectId, levelId])
   @@index([ownerType, status])
+  @@index([canonicalSubjectName, canonicalLevelCode])
   @@map("quizzes")
 }
 

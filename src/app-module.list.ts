@@ -18,6 +18,7 @@ import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
 import { PaymentsModule } from './components/payments/payments.module';
 import { PlatformModule } from './components/platform/platform.module';
+import { PopularExamsModule } from './components/popular-exams/popular-exams.module';
 import { ResultCommentsModule } from './components/result-comments/result-comments.module';
 import { StorageModule } from './components/storage/storage.module';
 import { RolesManagerModule } from './components/roles-manager';
@@ -25,6 +26,7 @@ import { SchoolsModule } from './components/schools/schools.module';
 import { SettingsModule } from './components/settings/settings.module';
 import { StudentsModule } from './components/students/students.module';
 import { SubjectsModule } from './components/subjects/subjects.module';
+import { TopicsModule } from './components/topics/topics.module';
 import { UsersModule } from './components/users/users.module';
 import getConfiguration from './config/configuration';
 import { getEnvFileName } from './config/get-env';
@@ -76,6 +78,8 @@ export const AppModuleList = [
   AssessmentStructuresModule,
   PaymentsModule,
   PlatformModule,
+  PopularExamsModule,
   ResultCommentsModule,
   StorageModule,
+  TopicsModule,
 ];

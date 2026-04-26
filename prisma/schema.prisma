@@ -966,6 +966,7 @@ model PaymentStructure {
   levelId           String?
   classArmId        String?
   dueDate           DateTime?
+  requiredForResult Boolean          @default(false)
   isActive          Boolean          @default(true)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt

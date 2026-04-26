@@ -5,6 +5,7 @@ import { GetCurrentUserId } from '../../../common/decorators/get-current-user-id
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
 import { CheckPolicies } from '../../roles-manager/policies/check-policies.decorator';
 import { PoliciesGuard } from '../../roles-manager/policies/policies.guard';
+import { RequestPaymentDto } from './dto/request-payment.dto';
 import { UpdateStudentPaymentDto } from './dto/update-student-payment.dto';
 import { StudentPaymentsService } from './student-payments.service';
 
@@ -88,6 +89,21 @@ export class StudentPaymentsController {
     @Body() updateStudentPaymentDto: UpdateStudentPaymentDto,
   ) {
     return this.studentPaymentsService.updateStudentPayment(userId, id, updateStudentPaymentDto);
+  }
+
+  @Post('request')
+  @CheckPolicies()
+  @ApiOperation({ summary: 'Request a payment from a specific student' })
+  @ApiResponse({ status: 201, description: 'Payment requested successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request or duplicate payment' })
+  @ApiResponse({ status: 404, description: 'Student or payment structure not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  requestPayment(
+    @GetCurrentUserId() userId: string,
+    @Body() requestPaymentDto: RequestPaymentDto,
+  ) {
+    return this.studentPaymentsService.requestPayment(userId, requestPaymentDto);
   }
 
   @Post(':id/mark-paid')

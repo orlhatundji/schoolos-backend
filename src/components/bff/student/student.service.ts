@@ -281,6 +281,37 @@ export class StudentService extends BaseService {
       throw new Error('Student not found');
     }
 
+    // Check for unpaid payments that are required for result access
+    const blockingPayments = await this.prisma.studentPayment.findMany({
+      where: {
+        studentId: student.id,
+        deletedAt: null,
+        status: { notIn: ['PAID', 'WAIVED'] },
+        paymentStructure: {
+          requiredForResult: true,
+          deletedAt: null,
+        },
+      },
+      include: {
+        paymentStructure: {
+          select: { name: true },
+        },
+      },
+    });
+
+    if (blockingPayments.length > 0) {
+      throw new ForbiddenException({
+        blocked: true,
+        message: 'Your results are unavailable due to outstanding payments',
+        outstandingPayments: blockingPayments.map((p) => ({
+          name: p.paymentStructure.name,
+          amount: Number(p.amount),
+          currency: p.currency,
+          dueDate: p.dueDate,
+        })),
+      });
+    }
+
     // Fetch school details for the report card header
     const school = await this.prisma.school.findUnique({
       where: { id: student.user.schoolId },

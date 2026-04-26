@@ -224,45 +224,56 @@ export class QuizAggregationsService {
     const finalizedAt = new Date();
     let upsertedRows = 0;
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const row of computed.rows) {
-        await tx.classArmStudentAssessment.upsert({
-          where: {
-            classArmSubjectId_studentId_termId_name: {
+    // Batch upserts in chunks so a single class with hundreds of students
+    // doesn't hold one giant transaction. Upserts are idempotent on the
+    // composite unique key, so re-finalizing after a partial failure
+    // safely picks up where it left off.
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < computed.rows.length; i += BATCH_SIZE) {
+      const batch = computed.rows.slice(i, i + BATCH_SIZE);
+      await this.prisma.$transaction(async (tx) => {
+        for (const row of batch) {
+          await tx.classArmStudentAssessment.upsert({
+            where: {
+              classArmSubjectId_studentId_termId_name: {
+                classArmSubjectId: agg.classArmSubjectId,
+                studentId: row.studentId,
+                termId: agg.termId,
+                name: slot.name,
+              },
+            },
+            create: {
               classArmSubjectId: agg.classArmSubjectId,
               studentId: row.studentId,
               termId: agg.termId,
               name: slot.name,
+              score: row.rescaledScore,
+              maxScore: agg.rescaleToMaxScore,
+              isExam: slot.isExam,
+              assessmentTypeId: slot.id,
             },
-          },
-          create: {
-            classArmSubjectId: agg.classArmSubjectId,
-            studentId: row.studentId,
-            termId: agg.termId,
-            name: slot.name,
-            score: row.rescaledScore,
-            maxScore: agg.rescaleToMaxScore,
-            isExam: slot.isExam,
-            assessmentTypeId: slot.id,
-          },
-          update: {
-            score: row.rescaledScore,
-            maxScore: agg.rescaleToMaxScore,
-            isExam: slot.isExam,
-            assessmentTypeId: slot.id,
-          },
-        });
-        upsertedRows += 1;
-      }
-
-      await tx.quizScoreAggregation.update({
-        where: { id },
-        data: {
-          status: QuizAggregationStatus.FINALIZED,
-          finalizedAt,
-          finalizedByTeacherId: teacher.id,
-        },
+            update: {
+              score: row.rescaledScore,
+              maxScore: agg.rescaleToMaxScore,
+              isExam: slot.isExam,
+              assessmentTypeId: slot.id,
+            },
+          });
+          upsertedRows += 1;
+        }
       });
+    }
+
+    // Mark FINALIZED only after all student rows are written. If the loop
+    // above threw partway, the aggregation stays DRAFT — re-finalizing will
+    // re-upsert (idempotent) and only flip status when the full sweep succeeds.
+    await this.prisma.quizScoreAggregation.update({
+      where: { id },
+      data: {
+        status: QuizAggregationStatus.FINALIZED,
+        finalizedAt,
+        finalizedByTeacherId: teacher.id,
+      },
     });
 
     return { upsertedRows, finalizedAt };
@@ -452,6 +463,45 @@ export class QuizAggregationsService {
       }
     }
 
+    // Build a per-assignment expectedMaxScore map for SUM aggregation. Source of
+    // truth is any peer attempt's maxScore (deterministic across students for a
+    // given assignment, since maxScore is snapshotted at attempt-start from the
+    // pinned quizVersion). Fallback: query the assignment's quiz questions.
+    const expectedMaxScoreByAssignment = new Map<string, number>();
+    for (const a of attempts) {
+      if (!expectedMaxScoreByAssignment.has(a.quizAssignmentId)) {
+        expectedMaxScoreByAssignment.set(
+          a.quizAssignmentId,
+          Number(a.maxScore.toString()),
+        );
+      }
+    }
+    const assignmentsNeedingFallback = itemAssignmentIds.filter(
+      (id) => !expectedMaxScoreByAssignment.has(id),
+    );
+    if (assignmentsNeedingFallback.length > 0) {
+      const fallbackAssignments = await this.prisma.quizAssignment.findMany({
+        where: { id: { in: assignmentsNeedingFallback } },
+        select: {
+          id: true,
+          quiz: {
+            select: {
+              questions: {
+                select: { weightOverride: true, question: { select: { weight: true } } },
+              },
+            },
+          },
+        },
+      });
+      for (const a of fallbackAssignments) {
+        const sum = a.quiz.questions.reduce((acc, q) => {
+          const w = q.weightOverride ?? q.question.weight;
+          return acc + Number(w.toString());
+        }, 0);
+        expectedMaxScoreByAssignment.set(a.id, sum);
+      }
+    }
+
     const aggregation = agg;
 
     const rows = enrollments.map((e) => {
@@ -459,6 +509,7 @@ export class QuizAggregationsService {
         const a = best.get(bestKey(e.studentId, item.quizAssignmentId));
         return {
           weight: Number(item.weight.toString()),
+          expectedMaxScore: expectedMaxScoreByAssignment.get(item.quizAssignmentId) ?? 0,
           attempt: a
             ? {
                 percentage: Number(a.percentage?.toString() ?? 0),

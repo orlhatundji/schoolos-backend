@@ -4,6 +4,13 @@ export interface ItemAttemptInput {
   /** Item weight (used by WEIGHTED). */
   weight: number;
   /**
+   * Quiz's deterministic max score (sum of question weights at attempt-start time).
+   * Used by SUM when the student has no attempt — must reflect what they would
+   * have lost. Caller derives from any peer attempt, or from quiz questions if
+   * no peer attempt exists. Falls back to 0 only when truly unknowable.
+   */
+  expectedMaxScore: number;
+  /**
    * The student's GRADED attempt for this item, or null if missing.
    * percentage is in [0, 100]; totalScore / maxScore are decimal numbers.
    */
@@ -94,7 +101,10 @@ export function computeForStudent(
       break;
     }
     case AggregationMethod.SUM: {
-      // mass-weighted by maxScore: sum totalScores across participating items / sum maxScores
+      // mass-weighted by maxScore: sum totalScores / sum maxScores.
+      // Missing + TREAT_AS_ZERO contributes the quiz's full expectedMaxScore
+      // to the denominator (zero earned, full possible) — matching the
+      // intuitive "missed quiz = scored 0/total" semantics.
       let totalScore = 0;
       let totalMax = 0;
       for (const item of items) {
@@ -102,7 +112,7 @@ export function computeForStudent(
           totalScore += item.attempt.totalScore;
           totalMax += item.attempt.maxScore;
         } else if (missingPolicy === MissingAttemptPolicy.TREAT_AS_ZERO) {
-          totalMax += 1; // a maxScore of 0 would skew; treat missing as a 1-point miss
+          totalMax += item.expectedMaxScore;
         }
       }
       computedPercentage = totalMax > 0 ? (totalScore / totalMax) * 100 : 0;

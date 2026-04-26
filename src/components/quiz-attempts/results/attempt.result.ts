@@ -144,6 +144,11 @@ export class AttemptResult {
       'Computed: true if results may be shown to the student now (showResultsImmediately or resultsReleasedAt set).',
   })
   resultsVisible: boolean;
+  @ApiProperty({
+    description:
+      'Computed: true if correct-answer flags should be revealed in review mode. Mirrors backend redaction.',
+  })
+  showCorrectAnswers: boolean;
   @ApiProperty({ type: [StudentQuestionResult] }) questions: StudentQuestionResult[];
   @ApiProperty({ type: [StudentResponseResult] }) responses: StudentResponseResult[];
 
@@ -161,6 +166,7 @@ export class AttemptResult {
     this.totalScore = attempt.totalScore !== null ? attempt.totalScore.toString() : null;
     this.percentage = attempt.percentage !== null ? attempt.percentage.toString() : null;
     this.resultsVisible = ctx.resultsVisible;
+    this.showCorrectAnswers = ctx.resultsVisible && ctx.showCorrectAnswers;
 
     // Display order: respect QuizQuestion.order (joined via question.quizUses where quizId matches).
     const sorted = [...attempt.responses].sort((a, b) => {

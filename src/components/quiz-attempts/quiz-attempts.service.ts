@@ -268,15 +268,57 @@ export class QuizAttemptsService {
   // ---------- helpers used by processor / cron ----------
 
   /** Used by AUTO_SUBMIT_TICK processor to find expired in-progress attempts. */
-  async findExpiredInProgressAttempts(now: Date, limit = 100) {
+  /**
+   * Returns expired IN_PROGRESS attempts for the auto-submit tick, but only
+   * those whose dueAt is within the recovery window (default 24h). Older
+   * stuck attempts are handled by `forceSubmitAncientStuckAttempts` so we
+   * don't loop on a permanently broken attempt forever.
+   */
+  async findExpiredInProgressAttempts(now: Date, limit = 100, recoveryWindowMs = 24 * 60 * 60 * 1000) {
+    const cutoff = new Date(now.getTime() - recoveryWindowMs);
     return this.prisma.quizAttempt.findMany({
       where: {
         status: QuizAttemptStatus.IN_PROGRESS,
-        dueAt: { lt: now },
+        dueAt: { lt: now, gte: cutoff },
       },
       select: { id: true },
       take: limit,
     });
+  }
+
+  /**
+   * Force-submits attempts whose dueAt is older than the recovery window and
+   * are still IN_PROGRESS — typically because earlier auto-submit attempts
+   * raised a permanent error. Bypasses the queued grading path and writes
+   * the status directly so the attempt no longer pollutes the tick.
+   */
+  async forceSubmitAncientStuckAttempts(now: Date, recoveryWindowMs = 24 * 60 * 60 * 1000, limit = 50) {
+    const cutoff = new Date(now.getTime() - recoveryWindowMs);
+    const ancient = await this.prisma.quizAttempt.findMany({
+      where: { status: QuizAttemptStatus.IN_PROGRESS, dueAt: { lt: cutoff } },
+      select: { id: true },
+      take: limit,
+    });
+    for (const { id } of ancient) {
+      try {
+        await this.prisma.quizAttempt.update({
+          where: { id },
+          data: {
+            status: QuizAttemptStatus.SUBMITTED,
+            submittedAt: now,
+            autoSubmitted: true,
+          },
+        });
+        // Best-effort grading kick — failures here don't requeue.
+        await this.queue.enqueueGradeAttempt(id).catch((err) => {
+          this.logger.error(`Force-submit grading enqueue failed for ${id}`, err);
+        });
+        this.logger.warn(`Force-submitted stale attempt ${id} (dueAt > ${recoveryWindowMs}ms ago)`);
+      } catch (err) {
+        this.logger.error(`Force-submit failed for ${id}`, err);
+      }
+    }
+    return ancient.length;
   }
 
   async autoSubmitExpired(attemptId: string) {
@@ -350,13 +392,25 @@ export class QuizAttemptsService {
     });
     try {
       await this.queue.enqueueGradeAttempt(attemptId);
-    } catch (err) {
+    } catch (queueErr) {
       // Queue down? Fall back to inline grading so the student still gets a result.
       this.logger.error(
         `Failed to enqueue grading for attempt ${attemptId}; grading inline`,
-        err,
+        queueErr,
       );
-      await this.grading.gradeAttempt(attemptId);
+      try {
+        await this.grading.gradeAttempt(attemptId);
+      } catch (gradeErr) {
+        // Both paths failed. Attempt is SUBMITTED but never graded — mark it
+        // so it gets picked up by a future tick or a manual retry rather than
+        // being silently stuck without grading data.
+        this.logger.error(
+          `Inline grading also failed for attempt ${attemptId}; leaving in SUBMITTED for retry`,
+          gradeErr,
+        );
+        // Defensive re-enqueue attempt — best-effort, swallowed if queue still down.
+        await this.queue.enqueueGradeAttempt(attemptId).catch(() => undefined);
+      }
     }
   }
 

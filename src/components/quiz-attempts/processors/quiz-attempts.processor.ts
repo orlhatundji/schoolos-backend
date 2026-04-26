@@ -41,14 +41,22 @@ export class QuizAttemptsProcessor extends WorkerHost {
   private async handleAutoSubmitTick() {
     const now = new Date();
     const expired = await this.attempts.findExpiredInProgressAttempts(now, 100);
-    if (expired.length === 0) return;
-    this.logger.log(`Auto-submitting ${expired.length} expired attempts`);
-    for (const { id } of expired) {
-      try {
-        await this.attempts.autoSubmitExpired(id);
-      } catch (err) {
-        this.logger.error(`Auto-submit failed for ${id}`, err);
+    if (expired.length > 0) {
+      this.logger.log(`Auto-submitting ${expired.length} expired attempts`);
+      for (const { id } of expired) {
+        try {
+          await this.attempts.autoSubmitExpired(id);
+        } catch (err) {
+          this.logger.error(`Auto-submit failed for ${id} (will retry next tick)`, err);
+        }
       }
+    }
+    // Sweep stale attempts whose dueAt is past the recovery window — these
+    // have likely failed normal auto-submit repeatedly and need a force flip
+    // so they stop polluting the tick.
+    const ancientCount = await this.attempts.forceSubmitAncientStuckAttempts(now);
+    if (ancientCount > 0) {
+      this.logger.warn(`Force-submitted ${ancientCount} stale attempts past recovery window`);
     }
   }
 }

@@ -66,7 +66,9 @@ export function gradeResponse(
       if (
         !cfg ||
         typeof cfg.correctAnswer !== 'number' ||
+        !Number.isFinite(cfg.correctAnswer) ||
         typeof cfg.tolerance !== 'number' ||
+        !Number.isFinite(cfg.tolerance) ||
         cfg.tolerance < 0
       ) {
         return 0;

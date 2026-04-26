@@ -20,6 +20,7 @@ import { PaymentsModule } from './components/payments/payments.module';
 import { PlatformModule } from './components/platform/platform.module';
 import { PopularExamsModule } from './components/popular-exams/popular-exams.module';
 import { QuestionsModule } from './components/questions/questions.module';
+import { QuizAssignmentsModule } from './components/quiz-assignments/quiz-assignments.module';
 import { QuizzesModule } from './components/quizzes/quizzes.module';
 import { ResultCommentsModule } from './components/result-comments/result-comments.module';
 import { StorageModule } from './components/storage/storage.module';
@@ -82,6 +83,7 @@ export const AppModuleList = [
   PlatformModule,
   PopularExamsModule,
   QuestionsModule,
+  QuizAssignmentsModule,
   QuizzesModule,
   ResultCommentsModule,
   StorageModule,

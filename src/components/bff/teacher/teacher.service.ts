@@ -216,6 +216,7 @@ export class TeacherService {
     // Return classes where the teacher teaches specific subjects
     return teacher.classArmSubjectTeachers.map((cast) => ({
       id: cast.classArmSubject.classArm.id,
+      classArmSubjectId: cast.classArmSubject.id,
       name: cast.classArmSubject.classArm.name,
       level: cast.classArmSubject.classArm.level.name,
       subject: cast.classArmSubject.subject.name,

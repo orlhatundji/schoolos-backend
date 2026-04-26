@@ -1628,6 +1628,62 @@ model Topic {
 }
 
 /// *
+/// * CanonicalSubject
+/// * ----------------
+/// * schos-managed list of subject names for cross-school discoverability.
+/// * Used for tagging curated content (Question.canonicalSubjectName,
+/// * Quiz.canonicalSubjectName, Topic.canonicalSubjectName) by name. School-
+/// * scoped Subject records map to one of these by name (case-insensitive).
+model CanonicalSubject {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@map("canonical_subjects")
+}
+
+/// *
+/// * CanonicalLevel
+/// * --------------
+/// * schos-managed list of level / grade codes (PRY1-PRY6, JSS1-SSS3, GRADE_1-12,
+/// * A_LEVEL, O_LEVEL, etc). `group` clusters them for filtered dropdowns.
+model CanonicalLevel {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  group     String
+  order     Int
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([group, order])
+  @@map("canonical_levels")
+}
+
+/// *
+/// * CanonicalTerm
+/// * -------------
+/// * schos-managed list of term names (First Term, Second Term, Third Term).
+model CanonicalTerm {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  order     Int
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("canonical_terms")
+}
+
+/// *
 /// * PopularExam
 /// * -----------
 /// * schos-managed reference list of standardized exams (WAEC, NECO, JAMB, etc.).
@@ -1752,7 +1808,7 @@ model QuestionPopularExam {
   questionId     String
   popularExamId  String
   examYear       Int?
-  paperReference String?
+  questionNumber String?
   createdAt      DateTime @default(now())
 
   question    Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)

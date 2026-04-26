@@ -20,9 +20,9 @@ export class QuestionPopularExamTagDto {
 
   @ApiProperty({
     required: false,
-    description: 'Free-text paper / question reference (e.g. "Paper 2 Q14")',
+    description: 'Question number from the source paper (e.g. "14", "Q14a", "P2-Q14")',
   })
   @IsOptional()
   @IsString()
-  paperReference?: string;
+  questionNumber?: string;
 }

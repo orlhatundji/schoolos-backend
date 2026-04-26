@@ -366,7 +366,7 @@ export class QuestionsService {
             questionId: q.id,
             popularExamId: p.popularExamId,
             examYear: p.examYear,
-            paperReference: p.paperReference,
+            questionNumber: p.questionNumber,
           })),
         });
       }
@@ -618,7 +618,7 @@ export class QuestionsService {
         questionId,
         popularExamId: t.popularExamId,
         examYear: t.examYear ?? null,
-        paperReference: t.paperReference ?? null,
+        questionNumber: t.questionNumber ?? null,
       })),
     });
   }

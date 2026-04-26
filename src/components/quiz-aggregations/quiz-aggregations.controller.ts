@@ -16,11 +16,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GetCurrentUserId } from '../../common/decorators';
 import { StrategyEnum } from '../auth/strategies';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
-import {
-  AggregationQueryDto,
-  CreateAggregationDto,
-  UpdateAggregationDto,
-} from './dto';
+import { AggregationQueryDto, CreateAggregationDto, UpdateAggregationDto } from './dto';
 import { QuizAggregationsService } from './quiz-aggregations.service';
 import {
   CreateAggregationSwagger,

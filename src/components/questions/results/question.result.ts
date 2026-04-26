@@ -56,7 +56,7 @@ export class QuestionPopularExamTagResult {
   @ApiProperty() code: string;
   @ApiProperty() name: string;
   @ApiProperty({ required: false, nullable: true }) examYear: number | null;
-  @ApiProperty({ required: false, nullable: true }) paperReference: string | null;
+  @ApiProperty({ required: false, nullable: true }) questionNumber: string | null;
 
   constructor(t: QuestionPopularExam & { popularExam: PopularExam }) {
     this.id = t.id;
@@ -64,7 +64,7 @@ export class QuestionPopularExamTagResult {
     this.code = t.popularExam.code;
     this.name = t.popularExam.name;
     this.examYear = t.examYear;
-    this.paperReference = t.paperReference;
+    this.questionNumber = t.questionNumber;
   }
 }
 
@@ -91,7 +91,11 @@ export class QuestionResult {
   @ApiProperty({ enum: QuestionStatus }) status: QuestionStatus;
   @ApiProperty() version: number;
   @ApiProperty({ required: false, nullable: true }) sourceQuestionId: string | null;
-  @ApiProperty({ required: false, nullable: true, description: 'Type-specific config (see CreateQuestionDto)' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Type-specific config (see CreateQuestionDto)',
+  })
   config: unknown;
   @ApiProperty({ enum: PartialCreditMode, required: false, nullable: true })
   partialCreditMode: PartialCreditMode | null;

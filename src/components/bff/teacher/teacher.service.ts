@@ -166,12 +166,20 @@ export class TeacherService {
     levels: { id: string; code: string; name: string }[];
     terms: { id: string; name: string }[];
     currentTermId: string | null;
+    currentAcademicSessionId: string | null;
   }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { schoolId: true },
     });
-    if (!user?.schoolId) return { subjects: [], levels: [], terms: [], currentTermId: null };
+    if (!user?.schoolId)
+      return {
+        subjects: [],
+        levels: [],
+        terms: [],
+        currentTermId: null,
+        currentAcademicSessionId: null,
+      };
 
     const schoolId = user.schoolId;
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
@@ -206,6 +214,7 @@ export class TeacherService {
       levels,
       terms: terms.map(({ id, name }) => ({ id, name })),
       currentTermId: school?.currentTermId ?? null,
+      currentAcademicSessionId: sessionId,
     };
   }
 

@@ -156,6 +156,59 @@ export class TeacherService {
     }));
   }
 
+  /**
+   * Returns the teacher's school's curriculum metadata for authoring dropdowns:
+   * subjects + levels + the current-session's terms. All scoped to the teacher's
+   * own school. Used by question / quiz authoring forms.
+   */
+  async getTeacherCurriculum(userId: string): Promise<{
+    subjects: { id: string; name: string }[];
+    levels: { id: string; code: string; name: string }[];
+    terms: { id: string; name: string }[];
+    currentTermId: string | null;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+    if (!user?.schoolId) return { subjects: [], levels: [], terms: [], currentTermId: null };
+
+    const schoolId = user.schoolId;
+    const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
+    const sessionId = current?.session.id ?? null;
+
+    const [subjects, levels, terms, school] = await Promise.all([
+      this.prisma.subject.findMany({
+        where: { schoolId, deletedAt: null },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.level.findMany({
+        where: { schoolId, deletedAt: null },
+        select: { id: true, code: true, name: true },
+        orderBy: { order: 'asc' },
+      }),
+      sessionId
+        ? this.prisma.term.findMany({
+            where: { academicSessionId: sessionId, deletedAt: null },
+            select: { id: true, name: true, startDate: true },
+            orderBy: { startDate: 'asc' },
+          })
+        : Promise.resolve([]),
+      this.prisma.school.findUnique({
+        where: { id: schoolId },
+        select: { currentTermId: true },
+      }),
+    ]);
+
+    return {
+      subjects,
+      levels,
+      terms: terms.map(({ id, name }) => ({ id, name })),
+      currentTermId: school?.currentTermId ?? null,
+    };
+  }
+
   // Get teacher's subject assignments (classes where teacher teaches specific subjects)
   async getTeacherSubjectAssignments(userId: string): Promise<TeacherClassInfo[]> {
     const teacher = await this.getTeacherWithRelations(userId);

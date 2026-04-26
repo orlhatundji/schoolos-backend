@@ -20,6 +20,7 @@ import { PaymentsModule } from './components/payments/payments.module';
 import { PlatformModule } from './components/platform/platform.module';
 import { PopularExamsModule } from './components/popular-exams/popular-exams.module';
 import { QuestionsModule } from './components/questions/questions.module';
+import { QuizzesModule } from './components/quizzes/quizzes.module';
 import { ResultCommentsModule } from './components/result-comments/result-comments.module';
 import { StorageModule } from './components/storage/storage.module';
 import { RolesManagerModule } from './components/roles-manager';
@@ -81,6 +82,7 @@ export const AppModuleList = [
   PlatformModule,
   PopularExamsModule,
   QuestionsModule,
+  QuizzesModule,
   ResultCommentsModule,
   StorageModule,
   TopicsModule,

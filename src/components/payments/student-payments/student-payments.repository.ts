@@ -153,11 +153,11 @@ export class StudentPaymentsRepository {
         ...(data.paidAmount !== undefined && { paidAmount: data.paidAmount }),
         ...(data.status && { status: data.status }),
         ...(data.paidAt !== undefined && { paidAt: data.paidAt ? new Date(data.paidAt) : null }),
-        ...(data.waivedBy && { waivedBy: data.waivedBy }),
+        ...(data.waivedBy !== undefined && { waivedBy: data.waivedBy }),
         ...(data.waivedAt !== undefined && {
           waivedAt: data.waivedAt ? new Date(data.waivedAt) : null,
         }),
-        ...(data.waiverReason && { waiverReason: data.waiverReason }),
+        ...(data.waiverReason !== undefined && { waiverReason: data.waiverReason }),
       },
       include: {
         student: {

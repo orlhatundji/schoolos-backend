@@ -54,6 +54,11 @@ export class CreatePaymentStructureDto {
   @IsDateString()
   dueDate?: string;
 
+  @ApiProperty({ description: 'Whether this payment must be settled before the student can view results', default: false })
+  @IsOptional()
+  @IsBoolean()
+  requiredForResult?: boolean;
+
   @ApiProperty({ description: 'Whether the payment structure is active', default: true })
   @IsOptional()
   @IsBoolean()

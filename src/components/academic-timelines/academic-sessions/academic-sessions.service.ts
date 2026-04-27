@@ -511,7 +511,7 @@ export class AcademicSessionsService extends BaseService {
         },
       });
     } catch (error) {
-      console.error('Error creating assessment structure template for new session:', error);
+      this.logger.error('Error creating assessment structure template for new session:', error);
       // Don't throw error to avoid breaking session creation
     }
   }
@@ -546,7 +546,7 @@ export class AcademicSessionsService extends BaseService {
         });
       }
     } catch (error) {
-      console.error('❌ Error creating terms for new session:', error);
+      this.logger.error('Error creating terms for new session:', error);
       throw error; // Re-throw to ensure transaction rollback
     }
   }

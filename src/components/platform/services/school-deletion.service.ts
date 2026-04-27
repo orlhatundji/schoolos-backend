@@ -5,14 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Prisma,
-  SchoolDeletionRequestStatus,
-  UserType,
-} from '@prisma/client';
+import { Prisma, SchoolDeletionRequestStatus, UserType } from '@prisma/client';
 
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MailService } from '../../../utils/mail/mail.service';
+import { BaseService } from '../../../common/base-service';
 import { CancelSchoolDeletionDto } from '../dto/cancel-school-deletion.dto';
 import { DeletionRequestsQueryDto } from '../dto/deletion-requests-query.dto';
 import { RejectSchoolDeletionDto } from '../dto/reject-school-deletion.dto';
@@ -68,12 +65,14 @@ const REQUEST_LIST_INCLUDE = {
 } satisfies Prisma.SchoolDeletionRequestInclude;
 
 @Injectable()
-export class SchoolDeletionService {
+export class SchoolDeletionService extends BaseService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    super(SchoolDeletionService.name);
+  }
 
   // ───────────────────────────── super-admin side ─────────────────────────────
 
@@ -123,9 +122,7 @@ export class SchoolDeletionService {
     const { user, school } = await this.loadSuperAdminContext(userId);
 
     if (school.deletionRequestedAt) {
-      throw new BadRequestException(
-        'A deletion request is already pending for this school',
-      );
+      throw new BadRequestException('A deletion request is already pending for this school');
     }
 
     const requestedAt = new Date();
@@ -154,8 +151,7 @@ export class SchoolDeletionService {
 
     await this.sendRequestedEmail(request).catch((err) => {
       // Don't fail the request if email delivery blips — log and move on.
-      // eslint-disable-next-line no-console
-      console.error('Failed to send school deletion email', err);
+      this.logger.error('Failed to send school deletion email', err);
     });
 
     return {
@@ -164,10 +160,7 @@ export class SchoolDeletionService {
     };
   }
 
-  async cancelForCurrentSchool(
-    userId: string,
-    dto: CancelSchoolDeletionDto,
-  ) {
+  async cancelForCurrentSchool(userId: string, dto: CancelSchoolDeletionDto) {
     const { user, school } = await this.loadSuperAdminContext(userId);
 
     const pending = await this.prisma.schoolDeletionRequest.findFirst({
@@ -198,8 +191,7 @@ export class SchoolDeletionService {
     });
 
     await this.sendCancelledEmail(updated).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('Failed to send deletion-cancelled email', err);
+      this.logger.error('Failed to send deletion-cancelled email', err);
     });
 
     return updated;
@@ -302,18 +294,13 @@ export class SchoolDeletionService {
     });
 
     await this.sendExecutedEmail(updated).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error('Failed to send deletion-executed email', err);
+      this.logger.error('Failed to send deletion-executed email', err);
     });
 
     return updated;
   }
 
-  async rejectRequest(
-    id: string,
-    dto: RejectSchoolDeletionDto,
-    actingSystemAdminUserId: string,
-  ) {
+  async rejectRequest(id: string, dto: RejectSchoolDeletionDto, actingSystemAdminUserId: string) {
     const admin = await this.prisma.systemAdmin.findUnique({
       where: { userId: actingSystemAdminUserId },
     });

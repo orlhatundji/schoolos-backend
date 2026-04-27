@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
+import { BaseService } from '../base-service';
 
 export interface ActivityLogData {
   userId: string;
@@ -31,8 +32,10 @@ export interface ActivityLogQuery {
 }
 
 @Injectable()
-export class ActivityLogService {
-  constructor(private readonly prisma: PrismaService) {}
+export class ActivityLogService extends BaseService {
+  constructor(private readonly prisma: PrismaService) {
+    super(ActivityLogService.name);
+  }
 
   /**
    * Log a user activity
@@ -88,7 +91,7 @@ export class ActivityLogService {
       };
     } catch (error) {
       // Don't let logging errors break the main application
-      console.error('Failed to log activity:', error);
+      this.logger.error('Failed to log activity:', error);
       return null;
     }
   }

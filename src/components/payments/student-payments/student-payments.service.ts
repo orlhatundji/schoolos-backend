@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PaystackService } from '../../../shared/services/paystack.service';
+import { RequestPaymentDto } from './dto/request-payment.dto';
 import { UpdateStudentPaymentDto } from './dto/update-student-payment.dto';
 import { StudentPaymentsRepository } from './student-payments.repository';
 
@@ -142,7 +143,7 @@ export class StudentPaymentsService {
 
     // Determine payment status
     let status = 'PARTIAL';
-    if (paidAmount === Number(existingPayment.amount)) {
+    if (Number(paidAmount) >= Number(existingPayment.amount)) {
       status = 'PAID';
     }
 
@@ -151,6 +152,98 @@ export class StudentPaymentsService {
       paidAmount,
       status: status as any,
       paidAt: paidAt || new Date().toISOString(),
+    });
+
+    return studentPayment;
+  }
+
+  async requestPayment(userId: string, requestPaymentDto: RequestPaymentDto) {
+    const { studentId, paymentStructureId, dueDate, notes } = requestPaymentDto;
+
+    // Get user's school ID
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not associated with a school');
+    }
+
+    // Verify the student belongs to the user's school
+    const student = await this.prisma.student.findFirst({
+      where: {
+        id: studentId,
+        user: { schoolId: user.schoolId },
+        deletedAt: null,
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found or access denied');
+    }
+
+    // Fetch the payment structure and verify it belongs to the same school
+    const paymentStructure = await this.prisma.paymentStructure.findFirst({
+      where: {
+        id: paymentStructureId,
+        schoolId: user.schoolId,
+        deletedAt: null,
+      },
+    });
+
+    if (!paymentStructure) {
+      throw new NotFoundException('Payment structure not found or access denied');
+    }
+
+    // Check for duplicate payment
+    const existingPayment = await this.prisma.studentPayment.findFirst({
+      where: {
+        studentId,
+        paymentStructureId,
+        deletedAt: null,
+      },
+    });
+
+    if (existingPayment) {
+      throw new BadRequestException(
+        'A payment for this structure already exists for this student',
+      );
+    }
+
+    // Create the student payment
+    const studentPayment = await this.prisma.studentPayment.create({
+      data: {
+        studentId,
+        paymentStructureId,
+        amount: paymentStructure.amount,
+        currency: paymentStructure.currency,
+        dueDate: dueDate ? new Date(dueDate) : paymentStructure.dueDate || new Date(),
+        notes,
+      },
+      include: {
+        student: {
+          include: {
+            user: true,
+            classArmStudents: {
+              where: { isActive: true },
+              include: {
+                classArm: {
+                  include: { level: true },
+                },
+              },
+            },
+          },
+        },
+        paymentStructure: {
+          include: {
+            academicSession: true,
+            term: true,
+            level: true,
+            classArm: true,
+          },
+        },
+      },
     });
 
     return studentPayment;
@@ -184,6 +277,36 @@ export class StudentPaymentsService {
       waivedBy: userId,
       waivedAt: new Date().toISOString(),
       waiverReason,
+    });
+
+    return studentPayment;
+  }
+
+  async unwaivePayment(userId: string, id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not associated with a school');
+    }
+
+    const existingPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
+
+    if (!existingPayment) {
+      throw new NotFoundException('Student payment not found or access denied');
+    }
+
+    if (existingPayment.status !== 'WAIVED') {
+      throw new BadRequestException('Only waived payments can be unwaived');
+    }
+
+    const studentPayment = await this.studentPaymentsRepository.update(id, {
+      status: 'PENDING',
+      waivedBy: null,
+      waivedAt: null,
+      waiverReason: null,
     });
 
     return studentPayment;
@@ -322,7 +445,7 @@ export class StudentPaymentsService {
         PARTIAL: ['PAID', 'WAIVED'],
         PAID: [], // Cannot change from PAID
         OVERDUE: ['PAID', 'PARTIAL', 'WAIVED'],
-        WAIVED: [], // Cannot change from WAIVED
+        WAIVED: ['PENDING'], // Allow reversing a waiver
       };
 
       const currentStatus = existingPayment.status;

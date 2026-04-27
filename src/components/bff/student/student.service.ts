@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -76,24 +81,28 @@ export class StudentService extends BaseService {
     });
 
     // Group assessments by subject to compute per-subject totals
-    const subjectAssessmentsMap = new Map<string, { subject: any; assessments: typeof assessments }>();
+    const subjectAssessmentsMap = new Map<
+      string,
+      { subject: any; assessments: typeof assessments }
+    >();
     for (const a of assessments) {
       const subjectId = a.classArmSubject.subject.id;
       if (!subjectAssessmentsMap.has(subjectId)) {
-        subjectAssessmentsMap.set(subjectId, { subject: a.classArmSubject.subject, assessments: [] });
+        subjectAssessmentsMap.set(subjectId, {
+          subject: a.classArmSubject.subject,
+          assessments: [],
+        });
       }
       subjectAssessmentsMap.get(subjectId).assessments.push(a);
     }
 
     // Calculate statistics
     const totalSubjects = subjectAssessmentsMap.size;
-    const totalScore = assessments.reduce((sum, a) => sum + a.score, 0);
-    const subjectTotals = Array.from(subjectAssessmentsMap.values()).map(
-      (entry) => entry.assessments.reduce((sum, a) => sum + a.score, 0),
+    const subjectTotals = Array.from(subjectAssessmentsMap.values()).map((entry) =>
+      entry.assessments.reduce((sum, a) => sum + a.score, 0),
     );
-    const averageScore = totalSubjects > 0
-      ? subjectTotals.reduce((sum, t) => sum + t, 0) / totalSubjects
-      : 0;
+    const averageScore =
+      totalSubjects > 0 ? subjectTotals.reduce((sum, t) => sum + t, 0) / totalSubjects : 0;
     const totalAssessments = assessments.length;
 
     // Get attendance rate for current term
@@ -110,31 +119,9 @@ export class StudentService extends BaseService {
     const attendanceRate =
       attendanceRecords.length > 0 ? (presentDays / attendanceRecords.length) * 100 : 0;
 
-    // Get recent activities (last 5 assessments)
-    const recentAssessments = await this.prisma.classArmStudentAssessment.findMany({
-      where: {
-        studentId: student.id,
-        deletedAt: null,
-      },
-      include: {
-        classArmSubject: {
-          include: {
-            subject: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
-
-    const recentActivities = recentAssessments.map((assessment) => ({
-      id: assessment.id,
-      type: 'ASSESSMENT' as const,
-      title: assessment.name,
-      description: `Scored ${assessment.score}`,
-      date: assessment.createdAt,
-      subjectName: assessment.classArmSubject.subject.name,
-    }));
+    // Score-input activities are intentionally excluded from the student feed:
+    // schools may not want students to see scores until results are finalized.
+    // Finalized scores are surfaced via the Results page.
 
     // Get recent payment activities (last 5)
     const recentPaymentActivities = await this.prisma.userActivity.findMany({
@@ -153,10 +140,10 @@ export class StudentService extends BaseService {
       const details = activity.details as any;
       const amount = details?.amount || 0;
       const currency = details?.currency || 'NGN';
-      
+
       let title = '';
       let description = '';
-      
+
       switch (activity.action) {
         case 'PAYMENT_COMPLETED':
           title = 'Payment Completed';
@@ -190,10 +177,9 @@ export class StudentService extends BaseService {
       };
     });
 
-    // Combine and sort all activities by date (most recent first)
-    const allActivities = [...recentActivities, ...paymentActivities]
+    const allActivities = paymentActivities
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 10); // Take the 10 most recent activities
+      .slice(0, 10);
 
     // Get upcoming events (exams in the next 30 days)
     const upcomingExams = await this.prisma.classArmStudentAssessment.findMany({
@@ -295,6 +281,37 @@ export class StudentService extends BaseService {
       throw new Error('Student not found');
     }
 
+    // Check for unpaid payments that are required for result access
+    const blockingPayments = await this.prisma.studentPayment.findMany({
+      where: {
+        studentId: student.id,
+        deletedAt: null,
+        status: { notIn: ['PAID', 'WAIVED'] },
+        paymentStructure: {
+          requiredForResult: true,
+          deletedAt: null,
+        },
+      },
+      include: {
+        paymentStructure: {
+          select: { name: true },
+        },
+      },
+    });
+
+    if (blockingPayments.length > 0) {
+      throw new ForbiddenException({
+        blocked: true,
+        message: 'Your results are unavailable due to outstanding payments',
+        outstandingPayments: blockingPayments.map((p) => ({
+          name: p.paymentStructure.name,
+          amount: Number(p.amount),
+          currency: p.currency,
+          dueDate: p.dueDate,
+        })),
+      });
+    }
+
     // Fetch school details for the report card header
     const school = await this.prisma.school.findUnique({
       where: { id: student.user.schoolId },
@@ -306,7 +323,9 @@ export class StudentService extends BaseService {
     let term = null;
 
     // Get current term/session info for isCurrent computation and fallbacks
-    const currentData = await this.currentTermService.getCurrentTermWithSession(student.user.schoolId);
+    const currentData = await this.currentTermService.getCurrentTermWithSession(
+      student.user.schoolId,
+    );
     const currentTermId = currentData?.term?.id ?? null;
     const currentSessionId = currentData?.session?.id ?? null;
 
@@ -401,12 +420,19 @@ export class StudentService extends BaseService {
     });
 
     // Group assessments by subject
-    const bySubjectId = new Map<string, { subject: any; assessments: typeof allAssessments; totalScore: number }>();
+    const bySubjectId = new Map<
+      string,
+      { subject: any; assessments: typeof allAssessments; totalScore: number }
+    >();
     for (const a of allAssessments) {
       const sid = a.classArmSubject.subject.id;
       const existing = bySubjectId.get(sid);
       if (!existing) {
-        bySubjectId.set(sid, { subject: a.classArmSubject.subject, assessments: [a], totalScore: a.score });
+        bySubjectId.set(sid, {
+          subject: a.classArmSubject.subject,
+          assessments: [a],
+          totalScore: a.score,
+        });
       } else {
         existing.assessments.push(a);
         existing.totalScore += a.score;
@@ -417,20 +443,19 @@ export class StudentService extends BaseService {
     // Get assessment structures from the session's own template.
     // For historical sessions, use read-only lookup to avoid fabricating a template
     // from the current session's structure. Only auto-create for the current session.
-    const template = session.id === currentSessionId
-      ? await this.templateService.findActiveTemplateForSchoolSession(
-          student.user.schoolId,
-          session.id,
-        )
-      : await this.templateService.findTemplateForSessionReadOnly(
-          student.user.schoolId,
-          session.id,
-        );
+    const template =
+      session.id === currentSessionId
+        ? await this.templateService.findActiveTemplateForSchoolSession(
+            student.user.schoolId,
+            session.id,
+          )
+        : await this.templateService.findTemplateForSessionReadOnly(
+            student.user.schoolId,
+            session.id,
+          );
 
     if (!template) {
-      throw new Error(
-        `No assessment structure template found for session ${session.academicYear}`,
-      );
+      throw new Error(`No assessment structure template found for session ${session.academicYear}`);
     }
 
     const assessmentStructures = (template.assessments as any[]).sort(
@@ -598,7 +623,9 @@ export class StudentService extends BaseService {
       teacherComment: resultComment?.teacherComment ?? null,
       principalComment: resultComment?.principalComment ?? null,
       teacherSignatureUrl: classTeacher?.signatureUrl ?? null,
-      teacherName: classTeacher ? `${classTeacher.user.firstName} ${classTeacher.user.lastName}` : null,
+      teacherName: classTeacher
+        ? `${classTeacher.user.firstName} ${classTeacher.user.lastName}`
+        : null,
       principalSignatureUrl: school?.principalSignatureUrl ?? null,
       principalName: school?.principalName ?? null,
     };
@@ -651,7 +678,9 @@ export class StudentService extends BaseService {
     // Get current academic session
     const activeClassArm = student.classArmStudents?.[0];
     const academicSession = activeClassArm?.classArm?.academicSession;
-    const profileCurrentSessionId = (await this.currentTermService.getCurrentTermWithSession(student.user.schoolId))?.session?.id ?? null;
+    const profileCurrentSessionId =
+      (await this.currentTermService.getCurrentTermWithSession(student.user.schoolId))?.session
+        ?.id ?? null;
 
     return {
       student: {
@@ -809,7 +838,9 @@ export class StudentService extends BaseService {
     }
 
     // Get current term/session for isCurrent computation
-    const histCurrent = await this.currentTermService.getCurrentTermWithSession(student.user.schoolId);
+    const histCurrent = await this.currentTermService.getCurrentTermWithSession(
+      student.user.schoolId,
+    );
     const histCurrentTermId = histCurrent?.term?.id ?? null;
     const histCurrentSessionId = histCurrent?.session?.id ?? null;
 
@@ -926,7 +957,11 @@ export class StudentService extends BaseService {
       term = await this.prisma.term.findUnique({
         where: { id: termId },
       });
-    } else if (session && subjectsCurrent && subjectsCurrent.term.academicSessionId === session.id) {
+    } else if (
+      session &&
+      subjectsCurrent &&
+      subjectsCurrent.term.academicSessionId === session.id
+    ) {
       term = await this.prisma.term.findFirst({
         where: { id: subjectsCurrent.term.id },
       });
@@ -966,13 +1001,16 @@ export class StudentService extends BaseService {
     });
 
     // Group assessments by subject
-    const subjectMap = new Map<string, {
-      subject: any;
-      teachers: any[];
-      assessments: typeof studentAssessments;
-      totalScore: number;
-      earliestDate: Date;
-    }>();
+    const subjectMap = new Map<
+      string,
+      {
+        subject: any;
+        teachers: any[];
+        assessments: typeof studentAssessments;
+        totalScore: number;
+        earliestDate: Date;
+      }
+    >();
     for (const a of studentAssessments) {
       const sid = a.classArmSubject.subject.id;
       const existing = subjectMap.get(sid);
@@ -1051,7 +1089,7 @@ export class StudentService extends BaseService {
   // Payment-related methods
   async getStudentPayments(userId: string): Promise<StudentPaymentData[]> {
     const student = await this.getStudentByUserId(userId);
-    
+
     const payments = await this.prisma.studentPayment.findMany({
       where: {
         studentId: student.id,
@@ -1065,7 +1103,7 @@ export class StudentService extends BaseService {
       },
     });
 
-    return payments.map(payment => ({
+    return payments.map((payment) => ({
       id: payment.id,
       studentId: payment.studentId,
       paymentStructureId: payment.paymentStructureId,
@@ -1090,7 +1128,7 @@ export class StudentService extends BaseService {
 
   async getStudentPaymentSummary(userId: string): Promise<StudentPaymentSummaryData> {
     const student = await this.getStudentByUserId(userId);
-    
+
     const payments = await this.prisma.studentPayment.findMany({
       where: {
         studentId: student.id,
@@ -1146,7 +1184,7 @@ export class StudentService extends BaseService {
 
   async getStudentPaymentHistory(userId: string): Promise<StudentPaymentHistoryData[]> {
     const student = await this.getStudentByUserId(userId);
-    
+
     const payments = await this.prisma.studentPayment.findMany({
       where: {
         studentId: student.id,
@@ -1163,7 +1201,7 @@ export class StudentService extends BaseService {
       },
     });
 
-    return payments.map(payment => ({
+    return payments.map((payment) => ({
       id: payment.id,
       amount: Number(payment.amount),
       paidAmount: Number(payment.paidAmount),
@@ -1179,7 +1217,7 @@ export class StudentService extends BaseService {
 
   async getOutstandingPayments(userId: string): Promise<StudentPaymentData[]> {
     const student = await this.getStudentByUserId(userId);
-    
+
     const payments = await this.prisma.studentPayment.findMany({
       where: {
         studentId: student.id,
@@ -1196,7 +1234,7 @@ export class StudentService extends BaseService {
       },
     });
 
-    return payments.map(payment => ({
+    return payments.map((payment) => ({
       id: payment.id,
       studentId: payment.studentId,
       paymentStructureId: payment.paymentStructureId,
@@ -1219,7 +1257,11 @@ export class StudentService extends BaseService {
     }));
   }
 
-  async initiatePayment(userId: string, paymentId: string, amount?: number): Promise<{
+  async initiatePayment(
+    userId: string,
+    paymentId: string,
+    amount?: number,
+  ): Promise<{
     authorization_url: string;
     access_code: string;
     reference: string;
@@ -1251,7 +1293,7 @@ export class StudentService extends BaseService {
     }
 
     // Calculate payment amount (the school fee portion)
-    const feeAmount = amount || (Number(payment.amount) - Number(payment.paidAmount));
+    const feeAmount = amount || Number(payment.amount) - Number(payment.paidAmount);
 
     if (feeAmount <= 0) {
       throw new BadRequestException('Payment amount must be greater than zero');
@@ -1290,7 +1332,9 @@ export class StudentService extends BaseService {
     // If school has a subaccount, route payment to them
     if (!bankAccountMissing) {
       paystackRequest.subaccount = bankAccount.paystackSubaccountCode;
-      paystackRequest.transaction_charge = this.paystackService.convertToKobo(breakdown.platformFee);
+      paystackRequest.transaction_charge = this.paystackService.convertToKobo(
+        breakdown.platformFee,
+      );
     }
 
     // Initialize payment with Paystack
@@ -1333,13 +1377,16 @@ export class StudentService extends BaseService {
     };
   }
 
-  async verifyPayment(userId: string, reference: string): Promise<{ success: boolean; message: string; payment?: StudentPaymentData }> {
+  async verifyPayment(
+    userId: string,
+    reference: string,
+  ): Promise<{ success: boolean; message: string; payment?: StudentPaymentData }> {
     const student = await this.getStudentByUserId(userId);
-    
+
     try {
       // Verify payment with Paystack
       const paystackResponse = await this.paystackService.verifyPayment(reference);
-      
+
       if (paystackResponse.data.status !== 'success') {
         return {
           success: false,
@@ -1349,7 +1396,7 @@ export class StudentService extends BaseService {
 
       const paymentData = paystackResponse.data;
       const amountPaid = this.paystackService.convertFromKobo(paymentData.amount);
-      
+
       // Find the payment record
       const payment = await this.prisma.studentPayment.findFirst({
         where: {

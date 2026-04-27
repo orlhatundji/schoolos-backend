@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
+import { BaseService } from '../../common/base-service';
 
 const ALLOWED_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -15,13 +16,14 @@ export const FOLDER_CONFIG = {
 export type StorageFolder = keyof typeof FOLDER_CONFIG;
 
 @Injectable()
-export class StorageService {
+export class StorageService extends BaseService {
   private readonly s3: S3Client;
   private readonly bucket: string;
   private readonly endpoint: string;
   private readonly envFolder: string;
 
   constructor(private readonly configService: ConfigService) {
+    super(StorageService.name);
     this.bucket = this.configService.get<string>('aws.s3Bucket');
     this.endpoint = this.configService.get<string>('aws.s3Endpoint');
     this.envFolder = this.configService.get<string>('aws.s3Folder');
@@ -73,7 +75,7 @@ export class StorageService {
         }),
       );
     } catch (error) {
-      console.error(`Failed to delete S3 object ${key}:`, error);
+      this.logger.error(`Failed to delete S3 object ${key}:`, error);
     }
   }
 

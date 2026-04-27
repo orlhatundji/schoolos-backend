@@ -5,6 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BaseService } from '../../common/base-service';
 import {
   CreateAssessmentStructureTemplateDto,
   UpdateAssessmentStructureTemplateDto,
@@ -22,8 +23,10 @@ interface AssessmentEntry {
 }
 
 @Injectable()
-export class AssessmentStructureTemplateService {
-  constructor(private prisma: PrismaService) {}
+export class AssessmentStructureTemplateService extends BaseService {
+  constructor(private prisma: PrismaService) {
+    super(AssessmentStructureTemplateService.name);
+  }
 
   /**
    * Ensures every assessment in the array has a UUID.
@@ -296,7 +299,7 @@ export class AssessmentStructureTemplateService {
 
       return globalDefault;
     } catch (error) {
-      console.error('Error creating global default template:', error);
+      this.logger.error('Error creating global default template:', error);
       throw new ConflictException(
         'Failed to create global default template. It may already exist.',
       );

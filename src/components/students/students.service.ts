@@ -752,7 +752,7 @@ export class StudentsService extends BaseService {
         throw error;
       }
 
-      console.error('Error updating student status:', error);
+      this.logger.error('Error updating student status:', error);
       throw new BadRequestException('Failed to update student status');
     }
   }
@@ -878,7 +878,7 @@ export class StudentsService extends BaseService {
       return this.getLevelsWithClassArmsForSession(schoolId, current.session.id);
     } catch (error) {
       // Log the error for debugging
-      console.error('Error fetching levels and class arms:', error);
+      this.logger.error('Error fetching levels and class arms:', error);
 
       // Return empty structure if database query fails
       return {
@@ -942,7 +942,7 @@ export class StudentsService extends BaseService {
       };
     } catch (error) {
       // Log the error for debugging
-      console.error('Error fetching levels and class arms for session:', error);
+      this.logger.error('Error fetching levels and class arms for session:', error);
 
       // Return empty structure if database query fails
       return {
@@ -1020,7 +1020,7 @@ export class StudentsService extends BaseService {
         levels: transformedLevels,
       };
     } catch (error) {
-      console.error('Error fetching higher levels for promotion:', error);
+      this.logger.error('Error fetching higher levels for promotion:', error);
       return {
         levels: [],
       };
@@ -1083,7 +1083,7 @@ export class StudentsService extends BaseService {
         classArms: transformedClassArms,
       };
     } catch (error) {
-      console.error('Error fetching class arms by session and level:', error);
+      this.logger.error('Error fetching class arms by session and level:', error);
       return {
         classArms: [],
       };
@@ -1154,7 +1154,7 @@ export class StudentsService extends BaseService {
       };
     } catch (error) {
       // Log the error for debugging
-      console.error('Error fetching filter options:', error);
+      this.logger.error('Error fetching filter options:', error);
 
       // Return empty structure if database query fails
       return {

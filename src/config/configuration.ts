@@ -45,6 +45,11 @@ const getConfiguration = () => ({
     publicKey: process.env.PAYSTACK_PUBLIC_KEY,
     webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET,
   },
+  grafana: {
+    lokiHost: process.env.GRAFANA_LOKI_HOST,
+    lokiUsername: process.env.GRAFANA_LOKI_USERNAME,
+    lokiPassword: process.env.GRAFANA_LOKI_PASSWORD,
+  },
   aws: {
     region: process.env.AWS_REGION,
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,

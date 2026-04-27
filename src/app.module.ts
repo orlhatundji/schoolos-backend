@@ -1,8 +1,10 @@
 import { BullModule } from '@nestjs/bullmq';
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
 import { AppModuleList } from './app-module.list';
 import { AppController } from './app.controller';
@@ -44,4 +46,8 @@ import { AllExceptionsFilter } from './utils/exception-filter';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

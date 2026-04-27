@@ -1,7 +1,7 @@
 import { Injectable, LoggerService } from '@nestjs/common';
 import * as winston from 'winston';
 import { winstonOptions } from './winston-config';
-const { combine, timestamp, label, prettyPrint, splat } = winston.format;
+const { combine, timestamp, label, splat, json, prettyPrint } = winston.format;
 
 @Injectable()
 export class WinstonLoggerService implements LoggerService {
@@ -9,41 +9,47 @@ export class WinstonLoggerService implements LoggerService {
 
   constructor(name: string) {
     this.logger = winston.createLogger({
-      format: combine(label({ label: name }), timestamp(), prettyPrint(), splat()),
+      format: combine(label({ label: name }), timestamp(), splat(), json()),
       transports: [
-        new winston.transports.Console(),
+        new winston.transports.Console({
+          format: combine(label({ label: name }), timestamp(), splat(), prettyPrint()),
+        }),
         new winston.transports.File(winstonOptions.file),
+        ...winstonOptions.getLokiTransports(),
       ],
       exitOnError: false,
     });
   }
+
   private shouldLog = process.env.NODE_ENV !== 'test';
 
-  private wrapCall(fn: winston.LeveledLogMethod, message: any) {
+  log(message: string, meta?: Record<string, any>) {
     if (this.shouldLog) {
-      fn(message);
+      this.logger.info(message, meta);
     }
   }
 
-  log(message: any) {
+  info(message: string, meta?: Record<string, any>) {
     if (this.shouldLog) {
-      this.logger.log('info', message);
+      this.logger.info(message, meta);
     }
   }
 
-  info(message: any) {
-    this.wrapCall(this.logger.info, message);
+  error(message: string, meta?: Record<string, any>) {
+    if (this.shouldLog) {
+      this.logger.error(message, meta);
+    }
   }
 
-  error(message: any) {
-    this.wrapCall(this.logger.error, message);
+  warn(message: string, meta?: Record<string, any>) {
+    if (this.shouldLog) {
+      this.logger.warn(message, meta);
+    }
   }
 
-  warn(message: any) {
-    this.wrapCall(this.logger.warn, message);
-  }
-
-  debug(message: any) {
-    this.wrapCall(this.logger.debug, message);
+  debug(message: string, meta?: Record<string, any>) {
+    if (this.shouldLog) {
+      this.logger.debug(message, meta);
+    }
   }
 }

@@ -5,9 +5,12 @@ import { tap } from 'rxjs/operators';
 import { ActivityLogService } from '../services/activity-log.service';
 import { LOG_ACTIVITY_KEY, LogActivityOptions } from '../decorators/log-activity.decorator';
 import { GetCurrentUserId } from '../decorators';
+import { WinstonLoggerService } from '../../utils/logger/winston-logger';
 
 @Injectable()
 export class ActivityLogInterceptor implements NestInterceptor {
+  private readonly logger = new WinstonLoggerService(ActivityLogInterceptor.name);
+
   constructor(
     private readonly reflector: Reflector,
     private readonly activityLogService: ActivityLogService,
@@ -65,7 +68,7 @@ export class ActivityLogInterceptor implements NestInterceptor {
           });
         } catch (error) {
           // Don't let logging errors break the main application
-          console.error('Failed to log activity in interceptor:', error);
+          this.logger.error('Failed to log activity in interceptor:', error);
         }
       }),
     );

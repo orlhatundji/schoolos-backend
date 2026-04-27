@@ -152,4 +152,19 @@ export class StudentPaymentsController {
   ) {
     return this.studentPaymentsService.waivePayment(userId, id, body.waiverReason);
   }
+
+  @Post(':id/unwaive')
+  @CheckPolicies()
+  @ApiOperation({ summary: 'Reverse a waiver on a student payment' })
+  @ApiResponse({ status: 200, description: 'Waiver reversed successfully' })
+  @ApiResponse({ status: 404, description: 'Student payment not found' })
+  @ApiResponse({ status: 400, description: 'Payment is not currently waived' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  unwaivePayment(
+    @GetCurrentUserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.studentPaymentsService.unwaivePayment(userId, id);
+  }
 }

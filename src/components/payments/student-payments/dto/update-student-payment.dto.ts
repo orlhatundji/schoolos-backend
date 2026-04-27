@@ -18,20 +18,19 @@ export class UpdateStudentPaymentDto {
   @IsDateString()
   paidAt?: string;
 
-  @ApiProperty({ description: 'User ID who waived the payment', required: false })
+  @ApiProperty({ description: 'User ID who waived the payment', required: false, nullable: true })
   @IsOptional()
   @IsString()
-  waivedBy?: string;
+  waivedBy?: string | null;
 
-  @ApiProperty({ description: 'Date when payment was waived', required: false })
+  @ApiProperty({ description: 'Date when payment was waived', required: false, nullable: true })
   @IsOptional()
-  @IsDateString()
-  waivedAt?: string;
+  waivedAt?: string | null;
 
-  @ApiProperty({ description: 'Reason for waiving the payment', required: false })
+  @ApiProperty({ description: 'Reason for waiving the payment', required: false, nullable: true })
   @IsOptional()
   @IsString()
-  waiverReason?: string;
+  waiverReason?: string | null;
 
   @ApiProperty({ description: 'Additional notes', required: false })
   @IsOptional()

@@ -282,6 +282,36 @@ export class StudentPaymentsService {
     return studentPayment;
   }
 
+  async unwaivePayment(userId: string, id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { schoolId: true },
+    });
+
+    if (!user?.schoolId) {
+      throw new BadRequestException('User not associated with a school');
+    }
+
+    const existingPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
+
+    if (!existingPayment) {
+      throw new NotFoundException('Student payment not found or access denied');
+    }
+
+    if (existingPayment.status !== 'WAIVED') {
+      throw new BadRequestException('Only waived payments can be unwaived');
+    }
+
+    const studentPayment = await this.studentPaymentsRepository.update(id, {
+      status: 'PENDING',
+      waivedBy: null,
+      waivedAt: null,
+      waiverReason: null,
+    });
+
+    return studentPayment;
+  }
+
   async getPaymentStatistics(userId: string) {
     // Get user's school ID
     const user = await this.prisma.user.findUnique({
@@ -415,7 +445,7 @@ export class StudentPaymentsService {
         PARTIAL: ['PAID', 'WAIVED'],
         PAID: [], // Cannot change from PAID
         OVERDUE: ['PAID', 'PARTIAL', 'WAIVED'],
-        WAIVED: [], // Cannot change from WAIVED
+        WAIVED: ['PENDING'], // Allow reversing a waiver
       };
 
       const currentStatus = existingPayment.status;

@@ -13,11 +13,18 @@ import { AuthModule } from './components/auth/auth.module';
 import { BffAdminModule } from './components/bff/admin/bff-admin.module';
 import { StudentModule } from './components/bff/student/student.module';
 import { TeacherModule } from './components/bff/teacher/teacher.module';
+import { CanonicalReferencesModule } from './components/canonical-references/canonical-references.module';
 import { CategoriesModule } from './components/categories/categories.module';
 import { DepartmentsModule } from './components/departments/departments.module';
 import { LevelsModule } from './components/levels/levels.module';
 import { PaymentsModule } from './components/payments/payments.module';
 import { PlatformModule } from './components/platform/platform.module';
+import { PopularExamsModule } from './components/popular-exams/popular-exams.module';
+import { QuestionsModule } from './components/questions/questions.module';
+import { QuizAggregationsModule } from './components/quiz-aggregations/quiz-aggregations.module';
+import { QuizAssignmentsModule } from './components/quiz-assignments/quiz-assignments.module';
+import { QuizAttemptsModule } from './components/quiz-attempts/quiz-attempts.module';
+import { QuizzesModule } from './components/quizzes/quizzes.module';
 import { ResultCommentsModule } from './components/result-comments/result-comments.module';
 import { StorageModule } from './components/storage/storage.module';
 import { RolesManagerModule } from './components/roles-manager';
@@ -25,6 +32,7 @@ import { SchoolsModule } from './components/schools/schools.module';
 import { SettingsModule } from './components/settings/settings.module';
 import { StudentsModule } from './components/students/students.module';
 import { SubjectsModule } from './components/subjects/subjects.module';
+import { TopicsModule } from './components/topics/topics.module';
 import { UsersModule } from './components/users/users.module';
 import getConfiguration from './config/configuration';
 import { getEnvFileName } from './config/get-env';
@@ -67,6 +75,7 @@ export const AppModuleList = [
   BffAdminModule,
   TeacherModule,
   StudentModule,
+  CanonicalReferencesModule,
   CategoriesModule,
   SubjectsModule,
   DepartmentsModule,
@@ -76,6 +85,13 @@ export const AppModuleList = [
   AssessmentStructuresModule,
   PaymentsModule,
   PlatformModule,
+  PopularExamsModule,
+  QuestionsModule,
+  QuizAggregationsModule,
+  QuizAssignmentsModule,
+  QuizAttemptsModule,
+  QuizzesModule,
   ResultCommentsModule,
   StorageModule,
+  TopicsModule,
 ];

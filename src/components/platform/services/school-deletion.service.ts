@@ -5,11 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Prisma,
-  SchoolDeletionRequestStatus,
-  UserType,
-} from '@prisma/client';
+import { Prisma, SchoolDeletionRequestStatus, UserType } from '@prisma/client';
 
 import { PrismaService } from '../../../prisma/prisma.service';
 import { MailService } from '../../../utils/mail/mail.service';
@@ -126,9 +122,7 @@ export class SchoolDeletionService extends BaseService {
     const { user, school } = await this.loadSuperAdminContext(userId);
 
     if (school.deletionRequestedAt) {
-      throw new BadRequestException(
-        'A deletion request is already pending for this school',
-      );
+      throw new BadRequestException('A deletion request is already pending for this school');
     }
 
     const requestedAt = new Date();
@@ -166,10 +160,7 @@ export class SchoolDeletionService extends BaseService {
     };
   }
 
-  async cancelForCurrentSchool(
-    userId: string,
-    dto: CancelSchoolDeletionDto,
-  ) {
+  async cancelForCurrentSchool(userId: string, dto: CancelSchoolDeletionDto) {
     const { user, school } = await this.loadSuperAdminContext(userId);
 
     const pending = await this.prisma.schoolDeletionRequest.findFirst({
@@ -309,11 +300,7 @@ export class SchoolDeletionService extends BaseService {
     return updated;
   }
 
-  async rejectRequest(
-    id: string,
-    dto: RejectSchoolDeletionDto,
-    actingSystemAdminUserId: string,
-  ) {
+  async rejectRequest(id: string, dto: RejectSchoolDeletionDto, actingSystemAdminUserId: string) {
     const admin = await this.prisma.systemAdmin.findUnique({
       where: { userId: actingSystemAdminUserId },
     });

@@ -19,6 +19,7 @@ import { AssessmentStructureTemplateService } from '../../assessment-structures/
 import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import { SharedServicesModule } from '../../../shared/shared-services.module';
 import { ResultCommentsModule } from '../../result-comments/result-comments.module';
+import { QuizBillingService } from '../../quiz-billing/quiz-billing.service';
 
 @Module({
   imports: [PrismaModule, ActivityLogModule, UsersModule, RolesManagerModule, JwtAuthModule, SharedServicesModule, ResultCommentsModule],
@@ -35,6 +36,7 @@ import { ResultCommentsModule } from '../../result-comments/result-comments.modu
     AssessmentStructureTemplateService,
     ClassroomBroadsheetBuilder,
     Encryptor,
+    QuizBillingService,
   ],
 })
 export class BffAdminModule {}

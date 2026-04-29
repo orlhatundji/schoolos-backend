@@ -3,6 +3,7 @@ import { TeacherClassInfo } from '../types';
 export class TeacherClassesResult {
   classes: {
     id: string;
+    classArmSubjectId?: string;
     name: string;
     level: string;
     subject: string;

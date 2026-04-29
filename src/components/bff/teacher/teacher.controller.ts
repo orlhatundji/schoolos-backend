@@ -79,6 +79,15 @@ export class TeacherController {
     return new TeacherClassesResult(classes);
   }
 
+  @Get('curriculum')
+  @ApiOperation({
+    summary:
+      "Returns the teacher's school's curriculum metadata (subjects, levels, terms with IDs) for authoring dropdowns.",
+  })
+  async getTeacherCurriculum(@GetCurrentUserId() userId: string) {
+    return this.teacherService.getTeacherCurriculum(userId);
+  }
+
   @Get('subject-assignments')
   @ApiQuery({
     name: 'limit',

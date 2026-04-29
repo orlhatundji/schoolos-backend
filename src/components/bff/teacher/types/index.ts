@@ -46,6 +46,9 @@ export interface TeacherProfile {
 // Class information
 export interface TeacherClassInfo {
   id: string;
+  /** classArmSubject.id — the FK target for QuizAssignment.classArmSubjectId.
+   *  Only set on subject-assignment results; null on whole-class entries. */
+  classArmSubjectId?: string;
   name: string;
   level: string;
   subject: string;

@@ -148,14 +148,16 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
       return this.templateCache.get(templateId)!;
     }
 
-    // Try multiple paths: ts-node/dev (__dirname relative), then production paths
-    // In dev: __dirname = src/shared/services → ../templates works
-    // In prod: __dirname = dist/src/shared/services → need to go up further
+    // Try multiple paths: ts-node/dev (__dirname relative), production dist paths,
+    // then a final fallback that reads directly from the checked-out src/ folder.
+    // The src/ fallback covers the case where `nest build` didn't copy assets
+    // (intermittent on the Lightsail deploy) — the repo is still on disk.
     const candidates = [
       join(__dirname, '..', 'templates', 'results', `${templateId}.hbs`),
       join(__dirname, '..', '..', '..', 'shared', 'templates', 'results', `${templateId}.hbs`),
       join(process.cwd(), 'dist', 'shared', 'templates', 'results', `${templateId}.hbs`),
       join(process.cwd(), 'dist', 'src', 'shared', 'templates', 'results', `${templateId}.hbs`),
+      join(process.cwd(), 'src', 'shared', 'templates', 'results', `${templateId}.hbs`),
     ];
     const templatePath = candidates.find((p) => existsSync(p));
     if (!templatePath) {

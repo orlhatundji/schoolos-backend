@@ -1052,7 +1052,180 @@ async function main() {
 
   console.log(`✅ Created ${paymentStructures.length} payment structures`);
   console.log(`✅ Generated ${studentPayments.length} student payments`);
+
+  await seedPopularExams();
+  await seedCanonicalSubjects();
+  await seedCanonicalLevels();
+  await seedCanonicalTerms();
+
   console.log('✅ School seed data generated successfully!');
+}
+
+const POPULAR_EXAMS: ReadonlyArray<{
+  code: string;
+  name: string;
+  country: string;
+  description: string;
+}> = [
+  { code: 'WAEC', name: 'West African Examinations Council', country: 'NG', description: 'Senior School Certificate Examination administered across West Africa.' },
+  { code: 'NECO', name: 'National Examinations Council', country: 'NG', description: 'Nigerian senior secondary certificate examination.' },
+  { code: 'JAMB', name: 'Joint Admissions and Matriculation Board', country: 'NG', description: 'Nigerian university matriculation examination (UTME).' },
+  { code: 'NABTEB', name: 'National Business and Technical Examinations Board', country: 'NG', description: 'Nigerian technical and business education certificate.' },
+  { code: 'BECE', name: 'Basic Education Certificate Examination', country: 'NG', description: 'Junior secondary school exit examination in Nigeria.' },
+  { code: 'COMMON_ENTRANCE', name: 'National Common Entrance Examination', country: 'NG', description: 'Entry examination for federal unity colleges.' },
+  { code: 'IGCSE', name: 'International General Certificate of Secondary Education', country: 'INTL', description: 'Cambridge international secondary qualification.' },
+  { code: 'CHECKPOINT', name: 'Cambridge Lower Secondary Checkpoint', country: 'INTL', description: 'Cambridge end-of-stage assessment for lower secondary.' },
+  { code: 'A_LEVELS', name: 'GCE Advanced Level', country: 'INTL', description: 'Cambridge / Edexcel pre-university qualification.' },
+  { code: 'O_LEVELS', name: 'GCE Ordinary Level', country: 'INTL', description: 'Cambridge / Edexcel ordinary-level qualification.' },
+  { code: 'SAT', name: 'Scholastic Assessment Test', country: 'INTL', description: 'College Board standardized university admissions test.' },
+  { code: 'TOEFL', name: 'Test of English as a Foreign Language', country: 'INTL', description: 'English-language proficiency test for non-native speakers.' },
+  { code: 'IELTS', name: 'International English Language Testing System', country: 'INTL', description: 'English-language proficiency test for study, work, migration.' },
+];
+
+const CANONICAL_SUBJECTS: ReadonlyArray<{ name: string; slug: string; description?: string }> = [
+  { name: 'Mathematics', slug: 'mathematics' },
+  { name: 'Further Mathematics', slug: 'further-mathematics' },
+  { name: 'English Language', slug: 'english-language' },
+  { name: 'Literature in English', slug: 'literature-in-english' },
+  { name: 'Physics', slug: 'physics' },
+  { name: 'Chemistry', slug: 'chemistry' },
+  { name: 'Biology', slug: 'biology' },
+  { name: 'Agricultural Science', slug: 'agricultural-science' },
+  { name: 'Geography', slug: 'geography' },
+  { name: 'Economics', slug: 'economics' },
+  { name: 'Government', slug: 'government' },
+  { name: 'History', slug: 'history' },
+  { name: 'Civic Education', slug: 'civic-education' },
+  { name: 'Christian Religious Studies', slug: 'christian-religious-studies' },
+  { name: 'Islamic Religious Studies', slug: 'islamic-religious-studies' },
+  { name: 'Commerce', slug: 'commerce' },
+  { name: 'Financial Accounting', slug: 'financial-accounting' },
+  { name: 'Business Studies', slug: 'business-studies' },
+  { name: 'Office Practice', slug: 'office-practice' },
+  { name: 'Marketing', slug: 'marketing' },
+  { name: 'Computer Science', slug: 'computer-science' },
+  { name: 'Information Communication Technology', slug: 'ict' },
+  { name: 'Basic Science', slug: 'basic-science' },
+  { name: 'Basic Technology', slug: 'basic-technology' },
+  { name: 'Social Studies', slug: 'social-studies' },
+  { name: 'Cultural and Creative Arts', slug: 'cultural-and-creative-arts' },
+  { name: 'Visual Arts', slug: 'visual-arts' },
+  { name: 'Music', slug: 'music' },
+  { name: 'Home Economics', slug: 'home-economics' },
+  { name: 'Food and Nutrition', slug: 'food-and-nutrition' },
+  { name: 'Physical and Health Education', slug: 'physical-and-health-education' },
+  { name: 'French', slug: 'french' },
+  { name: 'Yoruba', slug: 'yoruba' },
+  { name: 'Igbo', slug: 'igbo' },
+  { name: 'Hausa', slug: 'hausa' },
+  { name: 'Verbal Reasoning', slug: 'verbal-reasoning' },
+  { name: 'Quantitative Reasoning', slug: 'quantitative-reasoning' },
+];
+
+const CANONICAL_LEVELS: ReadonlyArray<{
+  code: string;
+  name: string;
+  group: string;
+  order: number;
+}> = [
+  // Nigerian primary
+  { code: 'PRY1', name: 'Primary 1', group: 'PRIMARY', order: 1 },
+  { code: 'PRY2', name: 'Primary 2', group: 'PRIMARY', order: 2 },
+  { code: 'PRY3', name: 'Primary 3', group: 'PRIMARY', order: 3 },
+  { code: 'PRY4', name: 'Primary 4', group: 'PRIMARY', order: 4 },
+  { code: 'PRY5', name: 'Primary 5', group: 'PRIMARY', order: 5 },
+  { code: 'PRY6', name: 'Primary 6', group: 'PRIMARY', order: 6 },
+  // Nigerian junior secondary
+  { code: 'JSS1', name: 'Junior Secondary 1', group: 'JUNIOR_SECONDARY', order: 7 },
+  { code: 'JSS2', name: 'Junior Secondary 2', group: 'JUNIOR_SECONDARY', order: 8 },
+  { code: 'JSS3', name: 'Junior Secondary 3', group: 'JUNIOR_SECONDARY', order: 9 },
+  // Nigerian senior secondary
+  { code: 'SSS1', name: 'Senior Secondary 1', group: 'SENIOR_SECONDARY', order: 10 },
+  { code: 'SSS2', name: 'Senior Secondary 2', group: 'SENIOR_SECONDARY', order: 11 },
+  { code: 'SSS3', name: 'Senior Secondary 3', group: 'SENIOR_SECONDARY', order: 12 },
+  // International grade system (US/IB)
+  { code: 'GRADE_1', name: 'Grade 1', group: 'INTL_GRADE', order: 1 },
+  { code: 'GRADE_2', name: 'Grade 2', group: 'INTL_GRADE', order: 2 },
+  { code: 'GRADE_3', name: 'Grade 3', group: 'INTL_GRADE', order: 3 },
+  { code: 'GRADE_4', name: 'Grade 4', group: 'INTL_GRADE', order: 4 },
+  { code: 'GRADE_5', name: 'Grade 5', group: 'INTL_GRADE', order: 5 },
+  { code: 'GRADE_6', name: 'Grade 6', group: 'INTL_GRADE', order: 6 },
+  { code: 'GRADE_7', name: 'Grade 7', group: 'INTL_GRADE', order: 7 },
+  { code: 'GRADE_8', name: 'Grade 8', group: 'INTL_GRADE', order: 8 },
+  { code: 'GRADE_9', name: 'Grade 9', group: 'INTL_GRADE', order: 9 },
+  { code: 'GRADE_10', name: 'Grade 10', group: 'INTL_GRADE', order: 10 },
+  { code: 'GRADE_11', name: 'Grade 11', group: 'INTL_GRADE', order: 11 },
+  { code: 'GRADE_12', name: 'Grade 12', group: 'INTL_GRADE', order: 12 },
+  // British / Cambridge pre-university
+  { code: 'O_LEVEL', name: 'O Level', group: 'BRITISH', order: 1 },
+  { code: 'A_LEVEL', name: 'A Level', group: 'BRITISH', order: 2 },
+];
+
+const CANONICAL_TERMS: ReadonlyArray<{ name: string; order: number }> = [
+  { name: 'First Term', order: 1 },
+  { name: 'Second Term', order: 2 },
+  { name: 'Third Term', order: 3 },
+];
+
+async function seedCanonicalSubjects() {
+  console.log('Seeding canonical subjects...');
+  for (const s of CANONICAL_SUBJECTS) {
+    await prisma.canonicalSubject.upsert({
+      where: { slug: s.slug },
+      update: { name: s.name, description: s.description },
+      create: { name: s.name, slug: s.slug, description: s.description, active: true },
+    });
+  }
+  console.log(`✅ Seeded ${CANONICAL_SUBJECTS.length} canonical subjects`);
+}
+
+async function seedCanonicalLevels() {
+  console.log('Seeding canonical levels...');
+  for (const l of CANONICAL_LEVELS) {
+    await prisma.canonicalLevel.upsert({
+      where: { code: l.code },
+      update: { name: l.name, group: l.group, order: l.order },
+      create: { code: l.code, name: l.name, group: l.group, order: l.order, active: true },
+    });
+  }
+  console.log(`✅ Seeded ${CANONICAL_LEVELS.length} canonical levels`);
+}
+
+async function seedCanonicalTerms() {
+  console.log('Seeding canonical terms...');
+  for (const t of CANONICAL_TERMS) {
+    await prisma.canonicalTerm.upsert({
+      where: { name: t.name },
+      update: { order: t.order },
+      create: { name: t.name, order: t.order, active: true },
+    });
+  }
+  console.log(`✅ Seeded ${CANONICAL_TERMS.length} canonical terms`);
+}
+
+/**
+ * Idempotent: upserts the canonical PopularExam reference list. Safe to re-run.
+ */
+async function seedPopularExams() {
+  console.log('Seeding popular exams...');
+  for (const exam of POPULAR_EXAMS) {
+    await prisma.popularExam.upsert({
+      where: { code: exam.code },
+      update: {
+        name: exam.name,
+        country: exam.country,
+        description: exam.description,
+      },
+      create: {
+        code: exam.code,
+        name: exam.name,
+        country: exam.country,
+        description: exam.description,
+        active: true,
+      },
+    });
+  }
+  console.log(`✅ Seeded ${POPULAR_EXAMS.length} popular exams`);
 }
 
 main()

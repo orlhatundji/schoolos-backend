@@ -24,6 +24,11 @@ import {
 } from './dto';
 import { GradingService } from './grading/grading.service';
 import { QuizAttemptsQueue } from './quiz-attempts.queue';
+import {
+  UNIT_RATE_NAIRA,
+  computeChargeableUnits,
+  resolveWaiver,
+} from '../quiz-billing/pricing.constants';
 
 const ATTEMPT_DETAIL_INCLUDE = {
   responses: {
@@ -136,6 +141,17 @@ export class QuizAttemptsService {
     });
     const attemptNumber = (lastNumber?.attemptNumber ?? 0) + 1;
 
+    const studentRecord = await this.prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      select: { user: { select: { schoolId: true, school: { select: { createdAt: true } } } } },
+    });
+    const schoolId = studentRecord.user.schoolId;
+    if (!schoolId || !studentRecord.user.school) {
+      throw new BadRequestException('Student is not associated with a school');
+    }
+    const units = computeChargeableUnits(assignment.durationMinutes, quizQuestions.length);
+    const waiver = resolveWaiver(studentRecord.user.school.createdAt);
+
     const created = await this.prisma.$transaction(async (tx) => {
       const attempt = await tx.quizAttempt.create({
         data: {
@@ -154,6 +170,21 @@ export class QuizAttemptsService {
           questionId: qq.questionId,
           weight: qq.weightOverride ?? qq.question.weight,
         })),
+      });
+      await tx.quizUsageEvent.create({
+        data: {
+          schoolId,
+          quizAttemptId: attempt.id,
+          quizAssignmentId: assignment.id,
+          studentId,
+          durationMinutes: assignment.durationMinutes,
+          questionCount: quizQuestions.length,
+          chargeableUnits: new Prisma.Decimal(units.toFixed(2)),
+          unitRateSnapshot: new Prisma.Decimal(UNIT_RATE_NAIRA.toFixed(4)),
+          amountKobo: Math.round(units * UNIT_RATE_NAIRA * 100),
+          isWaived: waiver.isWaived,
+          waiverReason: waiver.reason,
+        },
       });
       return attempt;
     });

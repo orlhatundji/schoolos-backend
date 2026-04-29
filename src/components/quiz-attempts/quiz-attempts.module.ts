@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 
+import { AssessmentsFeatureGuard } from '../../common/guards';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { Encryptor } from '../../utils/encryptor';
 import { AuthModule } from '../auth/auth.module';
@@ -24,6 +25,7 @@ import { QUIZ_ATTEMPTS_QUEUE } from './types';
     QuizAttemptsProcessor,
     GradingService,
     Encryptor,
+    AssessmentsFeatureGuard,
   ],
   exports: [QuizAttemptsService, GradingService],
 })

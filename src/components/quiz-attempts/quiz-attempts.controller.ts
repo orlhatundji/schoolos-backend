@@ -15,6 +15,7 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
 import { GetCurrentUserId } from '../../common/decorators';
+import { AssessmentsFeatureGuard } from '../../common/guards';
 import { StrategyEnum } from '../auth/strategies';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
 import { PageEventDto, SaveResponsesDto, StartAttemptDto } from './dto';
@@ -65,6 +66,7 @@ export class QuizAttemptsController {
 
   @Post('start')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(AssessmentsFeatureGuard)
   @StartAttemptSwagger()
   async start(@GetCurrentUserId() userId: string, @Body() dto: StartAttemptDto) {
     const view = await this.service.start(userId, dto);

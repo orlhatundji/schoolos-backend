@@ -14,6 +14,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { GetCurrentUserId } from '../../common/decorators';
+import { AssessmentsFeatureGuard } from '../../common/guards';
 import { StrategyEnum } from '../auth/strategies';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
 import {
@@ -57,6 +58,7 @@ export class QuizAssignmentsController {
   constructor(private readonly service: QuizAssignmentsService) {}
 
   @Post()
+  @UseGuards(AssessmentsFeatureGuard)
   @CreateQuizAssignmentSwagger()
   async create(@GetCurrentUserId() userId: string, @Body() dto: CreateQuizAssignmentDto) {
     const a = await this.service.create(userId, dto);

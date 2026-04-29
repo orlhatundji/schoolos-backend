@@ -82,6 +82,10 @@ model School {
   resultTemplateId             String?                       @default("professional") @map("result_template_id")
   currentTermId                String?                       @map("current_term_id")
   currentTerm                  Term?                         @relation("SchoolCurrentTerm", fields: [currentTermId], references: [id])
+  assessmentsEnabled           Boolean                       @default(false)
+  assessmentsEnabledAt         DateTime?
+  assessmentsEnabledById       String?
+  assessmentsDisabledAt        DateTime?
   academicSessions             AcademicSession[]
   assessmentStructureTemplates AssessmentStructureTemplate[]
   bulkImportJobs               BulkImportJob[]
@@ -110,6 +114,7 @@ model School {
   questions                    Question[]
   quizzes                      Quiz[]
   quizScoreAggregations        QuizScoreAggregation[]
+  quizUsageEvents              QuizUsageEvent[]
 
   @@map("schools")
 }
@@ -2009,12 +2014,45 @@ model QuizAttempt {
   quizAssignment QuizAssignment     @relation(fields: [quizAssignmentId], references: [id])
   student        Student            @relation(fields: [studentId], references: [id])
   responses      QuestionResponse[]
+  usageEvent     QuizUsageEvent?
 
   @@unique([quizAssignmentId, studentId, attemptNumber])
   @@index([quizAssignmentId, status])
   @@index([studentId, status])
   @@index([dueAt, status])
   @@map("quiz_attempts")
+}
+
+/// *
+/// * QuizUsageEvent
+/// * --------------
+/// * One row per QuizAttempt at the moment a student starts. Captures the
+/// * nominal billable amount (rate-card price) and an `isWaived` flag with
+/// * `waiverReason` ('BETA' | 'FIRST_YEAR') when the school is in a free
+/// * period. Billing systems must skip events where `isWaived = true`.
+/// * Keyed @unique on quizAttemptId so refresh-resilient attempt-start does
+/// * not produce duplicate events.
+model QuizUsageEvent {
+  id               String      @id @default(uuid())
+  schoolId         String
+  quizAttemptId    String      @unique
+  quizAssignmentId String
+  studentId        String
+  durationMinutes  Int
+  questionCount    Int
+  chargeableUnits  Decimal     @db.Decimal(10, 2)
+  unitRateSnapshot Decimal     @db.Decimal(10, 4)
+  amountKobo       Int
+  isWaived         Boolean     @default(false)
+  waiverReason     String?
+  recordedAt       DateTime    @default(now())
+
+  school      School      @relation(fields: [schoolId], references: [id])
+  quizAttempt QuizAttempt @relation(fields: [quizAttemptId], references: [id])
+
+  @@index([schoolId, recordedAt])
+  @@index([schoolId, isWaived])
+  @@map("quiz_usage_events")
 }
 
 /// *

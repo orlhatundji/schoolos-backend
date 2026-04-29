@@ -426,6 +426,7 @@ model User {
   schoolDeletionsCancelled SchoolDeletionRequest[] @relation("SchoolDeletionCancelledBy")
   authoredQuestions        Question[]              @relation("QuestionAuthor")
   authoredQuizzes          Quiz[]                  @relation("QuizAuthor")
+  triggeredSeedRuns        SeedRun[]               @relation("SeedRunTriggeredBy")
 
   @@map("users")
 }
@@ -1650,7 +1651,93 @@ model CanonicalSubject {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  equationLibraryItems EquationLibraryItem[]
+
   @@map("canonical_subjects")
+}
+
+/// *
+/// * EquationLibraryItem
+/// * -------------------
+/// * Platform-curated library of common equations teachers can pick into the
+/// * "Insert math" dialog. Stored as raw LaTeX so the existing TipTap MathInline
+/// * extension can consume it unchanged. Subject-keyed via CanonicalSubject so
+/// * a school's Subject (per-tenant) doesn't bleed into curated content.
+model EquationLibraryItem {
+  id                 String           @id @default(uuid())
+  canonicalSubjectId String
+  canonicalSubject   CanonicalSubject @relation(fields: [canonicalSubjectId], references: [id])
+  name               String
+  description        String?
+  latex              String
+  tags               String[]
+  order              Int              @default(0)
+  isActive           Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([canonicalSubjectId, name])
+  @@index([canonicalSubjectId, isActive, order])
+  @@index([isActive])
+  @@map("equation_library_items")
+}
+
+/// *
+/// * SymbolLibraryItem
+/// * -----------------
+/// * Platform-curated palette of single-glyph LaTeX tokens (Greek letters,
+/// * operators, calculus symbols, etc.) that teachers can drop into a math
+/// * expression at the cursor position. Decoupled from CanonicalSubject —
+/// * symbols are subject-agnostic. Categorised via a string `category` field
+/// * (kept as String rather than enum so platform admins can add new
+/// * categories via seed without a migration).
+model SymbolLibraryItem {
+  id        String   @id @default(uuid())
+  category  String
+  name      String
+  latex     String
+  tags      String[]
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, name])
+  @@index([category, isActive, order])
+  @@index([isActive])
+  @@map("symbol_library_items")
+}
+
+/// *
+/// * SeedRun
+/// * -------
+/// * Audit row for every platform seed-script execution kicked off via the
+/// * platform-portal seed-runner. Used to show "last run by" / "last run at"
+/// * on the seeds page and to trace bad seed deploys after the fact. Status
+/// * lifecycles: RUNNING -> SUCCEEDED | FAILED.
+model SeedRun {
+  id           String          @id @default(uuid())
+  seedSlug     String
+  status       SeedRunStatus
+  startedAt    DateTime        @default(now())
+  finishedAt   DateTime?
+  upserted     Int             @default(0)
+  skipped      Int             @default(0)
+  durationMs   Int?
+  notes        String?
+  errorMessage String?
+  triggeredById String?
+  triggeredBy  User?           @relation("SeedRunTriggeredBy", fields: [triggeredById], references: [id])
+
+  @@index([seedSlug, startedAt])
+  @@index([status])
+  @@map("seed_runs")
+}
+
+enum SeedRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 /// *

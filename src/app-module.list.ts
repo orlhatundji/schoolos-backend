@@ -16,7 +16,10 @@ import { TeacherModule } from './components/bff/teacher/teacher.module';
 import { CanonicalReferencesModule } from './components/canonical-references/canonical-references.module';
 import { CategoriesModule } from './components/categories/categories.module';
 import { DepartmentsModule } from './components/departments/departments.module';
+import { EquationLibraryModule } from './components/equation-library/equation-library.module';
 import { LevelsModule } from './components/levels/levels.module';
+import { SeedRunnerModule } from './components/seed-runner/seed-runner.module';
+import { SymbolLibraryModule } from './components/symbol-library/symbol-library.module';
 import { PaymentsModule } from './components/payments/payments.module';
 import { PlatformModule } from './components/platform/platform.module';
 import { PopularExamsModule } from './components/popular-exams/popular-exams.module';
@@ -87,6 +90,9 @@ export const AppModuleList = [
   PlatformModule,
   PopularExamsModule,
   QuestionsModule,
+  EquationLibraryModule,
+  SymbolLibraryModule,
+  SeedRunnerModule,
   QuizAggregationsModule,
   QuizAssignmentsModule,
   QuizAttemptsModule,

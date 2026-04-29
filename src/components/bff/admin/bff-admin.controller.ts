@@ -26,6 +26,10 @@ import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
 import { ManageStudentPolicyHandler } from '../../students/policies';
 import { BffAdminService } from './bff-admin.service';
 import { ResultCommentsService } from '../../result-comments/result-comments.service';
+import { QuizBillingService } from '../../quiz-billing/quiz-billing.service';
+import { ToggleAssessmentsDto } from './dto/toggle-assessments.dto';
+import { AssessmentsSettingsResult } from './results/assessments-settings.result';
+import { AssessmentsUsageResult } from './results/assessments-usage.result';
 import {
   UpsertResultCommentDto,
   BulkUpsertResultCommentDto,
@@ -38,12 +42,17 @@ import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
 import {
   AdminsViewSwagger,
+  AssessmentsUsageMonthQuery,
   ClassroomDetailsLimitQuery,
   ClassroomDetailsPageQuery,
   ClassroomDetailsParam,
   ClassroomDetailsResponse,
   ClassroomsViewSwagger,
   DepartmentsViewSwagger,
+  GetAssessmentsSettingsOperation,
+  GetAssessmentsSettingsSwagger,
+  GetAssessmentsUsageOperation,
+  GetAssessmentsUsageSwagger,
   SingleStudentDetailsParam,
   SingleStudentDetailsResponse,
   SingleTeacherDetailsParam,
@@ -58,6 +67,8 @@ import {
   TeachersViewSwagger,
   LevelsViewSwagger,
   DashboardSummarySwagger,
+  ToggleAssessmentsSettingsOperation,
+  ToggleAssessmentsSettingsSwagger,
 } from './bff-admin.swagger';
 import { AdminAdminsViewResult } from './results/admin-admins-view.result';
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
@@ -81,7 +92,42 @@ export class BffAdminController {
   constructor(
     private readonly bffAdminService: BffAdminService,
     private readonly resultCommentsService: ResultCommentsService,
+    private readonly quizBillingService: QuizBillingService,
   ) {}
+
+  @Get('assessments-settings')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @GetAssessmentsSettingsOperation()
+  @GetAssessmentsSettingsSwagger()
+  async getAssessmentsSettings(@GetCurrentUserId() userId: string) {
+    const data = await this.quizBillingService.getSettings(userId);
+    return new AssessmentsSettingsResult(data);
+  }
+
+  @Patch('assessments-settings')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @ToggleAssessmentsSettingsOperation()
+  @ToggleAssessmentsSettingsSwagger()
+  async toggleAssessmentsSettings(
+    @GetCurrentUserId() userId: string,
+    @Body() dto: ToggleAssessmentsDto,
+  ) {
+    const data = await this.quizBillingService.toggleSettings(userId, dto.enabled);
+    return new AssessmentsSettingsResult(data);
+  }
+
+  @Get('assessments-usage')
+  @CheckPolicies(new ManageStudentPolicyHandler())
+  @GetAssessmentsUsageOperation()
+  @AssessmentsUsageMonthQuery()
+  @GetAssessmentsUsageSwagger()
+  async getAssessmentsUsage(
+    @GetCurrentUserId() userId: string,
+    @Query('month') month?: string,
+  ) {
+    const data = await this.quizBillingService.getUsage(userId, month);
+    return new AssessmentsUsageResult(data);
+  }
 
   @Get('dashboard-summary')
   @DashboardSummarySwagger()

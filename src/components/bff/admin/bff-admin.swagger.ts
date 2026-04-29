@@ -1,5 +1,8 @@
 import { HttpStatus } from '@nestjs/common';
-import { ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
+
+import { AssessmentsSettingsResult } from './results/assessments-settings.result';
+import { AssessmentsUsageResult } from './results/assessments-usage.result';
 
 import { AdminClassroomDetailsResult } from './results/admin-classroom-details.result';
 import { AdminClassroomsViewResult } from './results/admin-classrooms-view.result';
@@ -301,3 +304,49 @@ export const DashboardSummarySwagger = () =>
     description:
       'Get comprehensive dashboard summary with aggregated statistics for all major resources including students, teachers, classrooms, subjects, departments, levels, admins, attendance, payments, and recent activities',
   });
+
+// Assessments Settings — read
+export const GetAssessmentsSettingsSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AssessmentsSettingsResult,
+    description:
+      "Read the school's Assessments enable state, audit fields, and the active free-period end date / reason",
+  });
+
+// Assessments Settings — toggle
+export const ToggleAssessmentsSettingsSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AssessmentsSettingsResult,
+    description:
+      'Enable or disable Assessments for the calling admin\'s school. Sets enabledAt/enabledById on enable, disabledAt on disable.',
+  });
+
+// Assessments Usage — month aggregate
+export const AssessmentsUsageMonthQuery = () =>
+  ApiQuery({
+    name: 'month',
+    required: false,
+    type: String,
+    example: '2026-04',
+    description: 'Month to aggregate, in YYYY-MM. Defaults to current UTC month if omitted.',
+  });
+
+export const GetAssessmentsUsageSwagger = () =>
+  ApiResponse({
+    status: HttpStatus.OK,
+    type: AssessmentsUsageResult,
+    description:
+      'Aggregated quiz_usage_events for the school for the given month. Returns nominal, waived, and chargeable totals plus per-assignment breakdown.',
+  });
+
+// Assessments operation summaries (used alongside the response decorators)
+export const GetAssessmentsSettingsOperation = () =>
+  ApiOperation({ summary: "Read the school's Assessments feature settings" });
+
+export const ToggleAssessmentsSettingsOperation = () =>
+  ApiOperation({ summary: 'Enable or disable Assessments for the school' });
+
+export const GetAssessmentsUsageOperation = () =>
+  ApiOperation({ summary: 'Get aggregated Assessments usage for a month' });

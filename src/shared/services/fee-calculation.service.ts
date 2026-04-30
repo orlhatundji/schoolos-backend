@@ -7,6 +7,18 @@ export interface FeeBreakdown {
   schoolReceives: number; // = feeAmount (school gets exact amount)
 }
 
+// Block-tier platform fee table (NGN). Each row covers feeAmount up to
+// and including `maxAmount`; the final row (Infinity) is the cap.
+const PLATFORM_FEE_TIERS: ReadonlyArray<{ maxAmount: number; fee: number }> = [
+  { maxAmount: 5_000, fee: 250 },
+  { maxAmount: 20_000, fee: 500 },
+  { maxAmount: 50_000, fee: 750 },
+  { maxAmount: 100_000, fee: 1_000 },
+  { maxAmount: 150_000, fee: 1_500 },
+  { maxAmount: 300_000, fee: 2_000 },
+  { maxAmount: Infinity, fee: 3_000 },
+];
+
 @Injectable()
 export class FeeCalculationService {
   /**
@@ -21,8 +33,8 @@ export class FeeCalculationService {
    * We reverse-calculate so that after Paystack takes its fee,
    * the school still receives the original fee amount.
    */
-  calculateStudentTotal(feeAmount: number, platformRate = 0.03): FeeBreakdown {
-    const platformFee = Math.ceil(feeAmount * platformRate);
+  calculateStudentTotal(feeAmount: number): FeeBreakdown {
+    const platformFee = this.calculatePlatformFee(feeAmount);
     const baseAmount = feeAmount + platformFee;
 
     let studentTotal: number;
@@ -51,5 +63,12 @@ export class FeeCalculationService {
       paystackFee,
       schoolReceives: feeAmount,
     };
+  }
+
+  private calculatePlatformFee(feeAmount: number): number {
+    for (const tier of PLATFORM_FEE_TIERS) {
+      if (feeAmount <= tier.maxAmount) return tier.fee;
+    }
+    return PLATFORM_FEE_TIERS[PLATFORM_FEE_TIERS.length - 1].fee;
   }
 }

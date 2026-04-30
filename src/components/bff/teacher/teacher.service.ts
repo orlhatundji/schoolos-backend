@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -2178,6 +2179,21 @@ export class TeacherService {
   /**
    * Mark class attendance for students by class teacher
    */
+  private assertAttendanceDateWithinWindow(date: Date): void {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const earliest = new Date();
+    earliest.setDate(earliest.getDate() - 14);
+    earliest.setHours(0, 0, 0, 0);
+
+    if (date > today) {
+      throw new BadRequestException('Cannot mark attendance for a future date');
+    }
+    if (date < earliest) {
+      throw new BadRequestException('Cannot mark attendance more than 2 weeks in the past');
+    }
+  }
+
   async markClassAttendance(
     userId: string,
     dto: MarkClassAttendanceDto,
@@ -2256,6 +2272,9 @@ export class TeacherService {
       throw new NotFoundException('Term not found');
     }
 
+    const attendanceDate = new Date(dto.date);
+    this.assertAttendanceDateWithinWindow(attendanceDate);
+
     // Get students in the class arm with their ClassArmStudent records
     const students = await this.prisma.student.findMany({
       where: {
@@ -2277,8 +2296,6 @@ export class TeacherService {
         },
       },
     });
-
-    const attendanceDate = new Date(dto.date);
 
     // Create or update attendance records
     const attendanceRecords = [];
@@ -2451,6 +2468,9 @@ export class TeacherService {
       throw new NotFoundException('Term not found');
     }
 
+    const attendanceDate = new Date(dto.date);
+    this.assertAttendanceDateWithinWindow(attendanceDate);
+
     // Get students in the class arm with their ClassArmStudent records
     const students = await this.prisma.student.findMany({
       where: {
@@ -2472,8 +2492,6 @@ export class TeacherService {
         },
       },
     });
-
-    const attendanceDate = new Date(dto.date);
 
     // Create or update attendance records
     const attendanceRecords = [];

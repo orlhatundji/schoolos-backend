@@ -3024,6 +3024,109 @@ export class TeacherService {
     };
   }
 
+  /**
+   * Returns one student's per-day class attendance over the last `days`
+   * calendar days (oldest first). Days with no record yield `status: null`.
+   * Authorization: same as getClassAttendanceData — class teacher OR subject
+   * teacher of the classArm. Powers the pastoral student detail heat-strip.
+   */
+  async getStudentAttendanceHistory(
+    userId: string,
+    studentId: string,
+    classArmId: string,
+    days: number,
+  ) {
+    const teacher = await this.prisma.teacher.findFirst({
+      where: { userId, deletedAt: null },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    const classArmTeacher = await this.prisma.classArmTeacher.findFirst({
+      where: { teacherId: teacher.id, classArmId, deletedAt: null },
+    });
+    const subjectTeacher = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: { teacherId: teacher.id, deletedAt: null, classArmSubject: { classArmId } },
+    });
+    if (!classArmTeacher && !subjectTeacher) {
+      throw new ForbiddenException('You are not authorized to view attendance for this class');
+    }
+
+    const classArmStudent = await this.prisma.classArmStudent.findFirst({
+      where: { classArmId, studentId, isActive: true },
+    });
+    if (!classArmStudent) {
+      throw new NotFoundException('Student is not enrolled in this class');
+    }
+
+    // Date range — last N days inclusive of today, midnight-aligned.
+    const today = new Date();
+    const endOfToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+    const startBoundary = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - (days - 1),
+      0,
+      0,
+      0,
+      0,
+    );
+
+    const records = await this.prisma.studentAttendance.findMany({
+      where: {
+        classArmStudentId: classArmStudent.id,
+        date: { gte: startBoundary, lte: endOfToday },
+        deletedAt: null,
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    // Bucket records by YYYY-MM-DD for fast lookup.
+    const byDate = new Map<string, (typeof records)[number]>();
+    for (const r of records) {
+      const d = r.date;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      byDate.set(key, r);
+    }
+
+    // Walk every day in range and emit a result entry (oldest first).
+    const history: Array<{ date: string; status: string | null }> = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      history.push({ date: key, status: byDate.get(key)?.status ?? null });
+    }
+
+    const presentDays = history.filter((h) => h.status === 'PRESENT').length;
+    const absentDays = history.filter((h) => h.status === 'ABSENT').length;
+    const lateDays = history.filter((h) => h.status === 'LATE').length;
+    const excusedDays = history.filter((h) => h.status === 'EXCUSED').length;
+    const recordedDays = presentDays + absentDays + lateDays + excusedDays;
+
+    return {
+      studentId,
+      classArmId,
+      days,
+      history,
+      statistics: {
+        presentDays,
+        absentDays,
+        lateDays,
+        excusedDays,
+        recordedDays,
+        attendanceRate:
+          recordedDays > 0 ? Math.round(((presentDays + lateDays) / recordedDays) * 10000) / 100 : 0,
+      },
+    };
+  }
+
   // Classroom Broadsheet methods
   async getClassroomBroadsheet(userId: string, classArmId: string) {
     const { schoolId } = await this.verifyClassTeacher(userId, classArmId);

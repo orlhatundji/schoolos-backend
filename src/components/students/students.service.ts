@@ -39,12 +39,31 @@ export class StudentsService extends BaseService {
     super(StudentsService.name);
   }
 
-  async create(createStudentDto: CreateStudentDto, schoolId: string): Promise<Student> {
+  /**
+   * Create a single student.
+   *
+   * `options.tx` — when provided, every write goes through this Prisma
+   * transaction client so the bulk-import processor can roll the entire
+   * job back if any single row fails. Reads of stable reference data
+   * (school, current term) intentionally bypass the tx for a small perf
+   * win and to avoid lock contention.
+   *
+   * `options.postCommitTasks` — side-effects that must NOT be inside the
+   * tx (e.g. mail-queue enqueues for BullMQ) push into this list. The
+   * caller runs them after the tx commits successfully so a rollback
+   * doesn't leave queued welcome emails for students that no longer
+   * exist.
+   */
+  async create(
+    createStudentDto: CreateStudentDto,
+    schoolId: string,
+    options?: { tx?: Prisma.TransactionClient; postCommitTasks?: Array<() => Promise<void>> },
+  ): Promise<Student> {
     if (createStudentDto.admissionNo) {
       await this.throwIfStudentAdmissionNoExists(createStudentDto.admissionNo, schoolId);
     }
 
-    return this.save(createStudentDto, schoolId);
+    return this.save(createStudentDto, schoolId, options);
   }
 
   private async throwIfStudentAdmissionNoExists(admissionNo: string, schoolId: string) {
@@ -60,7 +79,12 @@ export class StudentsService extends BaseService {
     }
   }
 
-  private async save(createStudentDto: CreateStudentDto, schoolId: string): Promise<Student> {
+  private async save(
+    createStudentDto: CreateStudentDto,
+    schoolId: string,
+    options?: { tx?: Prisma.TransactionClient; postCommitTasks?: Array<() => Promise<void>> },
+  ): Promise<Student> {
+    const tx = options?.tx;
     const {
       classArmId,
       guardianId,
@@ -90,11 +114,11 @@ export class StudentsService extends BaseService {
       phone: userData.phone || '', // Provide empty string if not provided
     };
 
-    const user = await this.userService.save(userCreateData);
+    const user = await this.userService.save(userCreateData, tx);
     const school = await this.schoolsService.getSchoolById(schoolId);
     const dateTime = admissionDate || new Date();
 
-    const nextSeq = await this.counterService.getNextSequenceNo(UserTypes.STUDENT, school.id);
+    const nextSeq = await this.counterService.getNextSequenceNo(UserTypes.STUDENT, school.id, tx);
     const studentNo = getNextUserEntityNoFormatted(
       UserTypes.STUDENT,
       school.code,
@@ -128,9 +152,14 @@ export class StudentsService extends BaseService {
       studentData.medicalInformation = JSON.parse(JSON.stringify(medicalInformation));
     }
 
-    const student = await this.studentsRepository.create(studentData, {
-      include: { user: true },
-    });
+    const student = tx
+      ? ((await tx.student.create({
+          data: studentData,
+          include: { user: true },
+        })) as Student)
+      : await this.studentsRepository.create(studentData, {
+          include: { user: true },
+        });
 
     // Get the current academic session for the school
     const current = await this.currentTermService.getCurrentTermWithSession(schoolId);
@@ -142,16 +171,21 @@ export class StudentsService extends BaseService {
     }
 
     // Create ClassArmStudent relationship
-    await this.classArmStudentService.enrollStudent(student.id, classArmId, current.session.id);
+    await this.classArmStudentService.enrollStudent(
+      student.id,
+      classArmId,
+      current.session.id,
+      tx,
+    );
 
-    // Send welcome email with credentials (non-blocking)
-    try {
-      const recipientEmail = userCreateData.email;
-      await this.mailQueueService.add({
-        recipientAddress: recipientEmail,
-        recipientName: `${userData.firstName} ${userData.lastName}`,
-        subject: `Welcome to ${school.name} - Your Login Credentials`,
-        html: `
+    // Welcome email payload — built eagerly so post-commit closures don't
+    // capture mutable userData/userCreateData references.
+    const recipientEmail = userCreateData.email;
+    const mailPayload = {
+      recipientAddress: recipientEmail,
+      recipientName: `${userData.firstName} ${userData.lastName}`,
+      subject: `Welcome to ${school.name} - Your Login Credentials`,
+      html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">Welcome to ${school.name}!</h2>
             <p>Hi ${userData.firstName},</p>
@@ -165,9 +199,26 @@ export class StudentsService extends BaseService {
             <p>Best regards,<br/>The ${school.name} Team</p>
           </div>
         `,
+    };
+
+    if (options?.postCommitTasks) {
+      // Bulk path: defer the mail-queue enqueue until the outer tx commits.
+      // If the tx rolls back, the email never gets queued — no welcome
+      // mail goes out for a student that doesn't exist.
+      options.postCommitTasks.push(async () => {
+        try {
+          await this.mailQueueService.add(mailPayload);
+        } catch (error) {
+          this.logger.error(`Failed to queue welcome email for student ${studentNo}:`, error);
+        }
       });
-    } catch (error) {
-      this.logger.error(`Failed to queue welcome email for student ${studentNo}:`, error);
+    } else {
+      // Single-student path (existing behavior): queue immediately.
+      try {
+        await this.mailQueueService.add(mailPayload);
+      } catch (error) {
+        this.logger.error(`Failed to queue welcome email for student ${studentNo}:`, error);
+      }
     }
 
     return student;

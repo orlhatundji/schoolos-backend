@@ -56,6 +56,13 @@ export class QuestionsService {
       where.ownerType = QuestionOwnerType.SCHOS_CURATED;
     }
 
+    // Teachers only ever see PUBLISHED curated content; ignore any user-supplied status filter
+    // when scoped to the library. System admins keep full visibility for library management.
+    const teacherLibraryView = scope === 'library' && caller.type === UserTypes.TEACHER;
+    if (teacherLibraryView) {
+      where.status = QuestionStatus.PUBLISHED;
+    }
+
     if (query.subjectId) where.subjectId = query.subjectId;
     if (query.levelId) where.levelId = query.levelId;
     if (query.canonicalSubjectName) {
@@ -69,7 +76,7 @@ export class QuestionsService {
     }
     if (query.type) where.type = query.type;
     if (query.difficulty) where.difficulty = query.difficulty;
-    if (query.status) where.status = query.status;
+    if (query.status && !teacherLibraryView) where.status = query.status;
     if (query.search) {
       where.promptPlainText = { contains: query.search, mode: 'insensitive' };
     }
@@ -114,6 +121,14 @@ export class QuestionsService {
       question.authorUserId === callerUserId &&
       question.schoolId === caller.schoolId;
     if (!isCurated && !isOwn) {
+      throw new NotFoundException('Question not found');
+    }
+    // Teachers must not see DRAFT/ARCHIVED curated questions — only system admins can preview those.
+    if (
+      isCurated &&
+      caller.type === UserTypes.TEACHER &&
+      question.status !== QuestionStatus.PUBLISHED
+    ) {
       throw new NotFoundException('Question not found');
     }
 
@@ -308,11 +323,14 @@ export class QuestionsService {
         id,
         deletedAt: null,
         ownerType: QuestionOwnerType.SCHOS_CURATED,
+        status: QuestionStatus.PUBLISHED,
       },
       include: QUESTION_INCLUDE,
     });
     if (!source) {
-      throw new NotFoundException('Curated question not found (only SCHOS_CURATED questions can be cloned)');
+      throw new NotFoundException(
+        'Curated question not found (only PUBLISHED curated questions can be cloned)',
+      );
     }
 
     const cloned = await this.prisma.$transaction(async (tx) => {

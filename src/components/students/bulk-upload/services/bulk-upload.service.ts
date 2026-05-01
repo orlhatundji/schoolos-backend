@@ -306,6 +306,32 @@ export class BulkUploadService extends BaseService {
       )?.toString(),
       guardianRelationship:
         row.guardianRelationship || row['Guardian Relationship'] || row['guardian_relationship'],
+      // Address (optional)
+      addressStreet1: row.addressStreet1 || row['Address Street 1'] || row['address_street1'],
+      addressStreet2: row.addressStreet2 || row['Address Street 2'] || row['address_street2'],
+      addressCity: row.addressCity || row['Address City'] || row['address_city'],
+      addressState: row.addressState || row['Address State'] || row['address_state'],
+      addressCountry: row.addressCountry || row['Address Country'] || row['address_country'],
+      addressPostalCode:
+        row.addressPostalCode || row['Address Postal Code'] || row['address_postal_code'],
+      // Medical (optional)
+      bloodGroup: row.bloodGroup || row['Blood Group'] || row['blood_group'],
+      allergies: row.allergies || row['Allergies'] || row['allergies'],
+      medicalConditions:
+        row.medicalConditions || row['Medical Conditions'] || row['medical_conditions'],
+      emergencyContactName:
+        row.emergencyContactName ||
+        row['Emergency Contact Name'] ||
+        row['emergency_contact_name'],
+      emergencyContactPhone: (
+        row.emergencyContactPhone ||
+        row['Emergency Contact Phone'] ||
+        row['emergency_contact_phone']
+      )?.toString(),
+      emergencyContactRelationship:
+        row.emergencyContactRelationship ||
+        row['Emergency Contact Relationship'] ||
+        row['emergency_contact_relationship'],
     };
 
     // Validate required fields with detailed error messages
@@ -350,7 +376,12 @@ export class BulkUploadService extends BaseService {
   }
 
   private transformExcelRowToStudentRecord(row: any[], rowNumber: number): StudentRecordDto | null {
-    // Column order: firstName, lastName, gender, className, dateOfBirth, email, phone, stateOfOrigin, admissionDate, guardianFirstName, guardianLastName, guardianEmail, guardianPhone, guardianRelationship
+    // Column order: firstName, lastName, gender, className, dateOfBirth, email, phone,
+    //   stateOfOrigin, admissionDate, guardianFirstName, guardianLastName, guardianEmail,
+    //   guardianPhone, guardianRelationship,
+    //   addressStreet1, addressStreet2, addressCity, addressState, addressCountry, addressPostalCode,
+    //   bloodGroup, allergies, medicalConditions,
+    //   emergencyContactName, emergencyContactPhone, emergencyContactRelationship
     const record: StudentRecordDto = {
       firstName: row[0],
       lastName: row[1],
@@ -367,6 +398,20 @@ export class BulkUploadService extends BaseService {
       guardianEmail: row[11],
       guardianPhone: row[12]?.toString(),
       guardianRelationship: row[13],
+      // Address (optional)
+      addressStreet1: row[14],
+      addressStreet2: row[15],
+      addressCity: row[16],
+      addressState: row[17],
+      addressCountry: row[18],
+      addressPostalCode: row[19]?.toString(),
+      // Medical (optional)
+      bloodGroup: row[20],
+      allergies: row[21],
+      medicalConditions: row[22],
+      emergencyContactName: row[23],
+      emergencyContactPhone: row[24]?.toString(),
+      emergencyContactRelationship: row[25],
     };
 
     // Validate required fields with detailed error messages

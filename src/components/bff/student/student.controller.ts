@@ -243,6 +243,26 @@ export class StudentController {
     }
   }
 
+  @Get('attendance-history')
+  @ApiOperation({
+    summary: "Get the logged-in student's class attendance history over the last N days",
+  })
+  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Defaults to 28' })
+  @ApiResponse({ status: 200, description: 'Attendance history retrieved successfully' })
+  async getMyAttendanceHistory(
+    @GetCurrentUserId() userId: string,
+    @Query('days') daysParam?: string,
+  ) {
+    const parsed = daysParam ? Number.parseInt(daysParam, 10) : 28;
+    const days = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 28, 1), 90);
+    const result = await this.studentService.getMyAttendanceHistory(userId, days);
+    return {
+      success: true,
+      message: 'Attendance history retrieved successfully',
+      data: result,
+    };
+  }
+
   // Payment endpoints
   @Get('payments')
   @ApiOperation({ summary: 'Get student payments' })

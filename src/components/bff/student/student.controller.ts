@@ -36,13 +36,6 @@ export class StudentController {
     description: 'Student dashboard data retrieved successfully',
     type: StudentDashboardResult,
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_DASHBOARD',
-    entityType: 'STUDENT_DASHBOARD',
-    description: 'Student viewed dashboard',
-    category: 'STUDENT',
-  })
   async getStudentDashboard(@GetCurrentUserId() userId: string) {
     const data = await this.studentService.getStudentDashboardData(userId);
     return new StudentDashboardResult(data);
@@ -75,13 +68,6 @@ export class StudentController {
     description: 'Student results retrieved successfully',
     type: StudentResultsResult,
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_RESULTS',
-    entityType: 'STUDENT_RESULTS',
-    description: 'Student viewed academic results',
-    category: 'STUDENT',
-  })
   async getStudentResults(
     @GetCurrentUserId() userId: string,
     @Query('academicSessionId') academicSessionId?: string,
@@ -102,13 +88,6 @@ export class StudentController {
   @ApiResponse({
     status: 200,
     description: 'Student profile retrieved successfully',
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_PROFILE',
-    entityType: 'STUDENT_PROFILE',
-    description: 'Student viewed profile',
-    category: 'STUDENT',
   })
   async getStudentProfile(@GetCurrentUserId() userId: string) {
     const profile = await this.studentService.getStudentProfile(userId);
@@ -153,13 +132,6 @@ export class StudentController {
   @ApiResponse({
     status: 200,
     description: 'Student academic sessions with terms retrieved successfully',
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_ACADEMIC_SESSIONS',
-    entityType: 'STUDENT_ACADEMIC_SESSIONS',
-    description: 'Student viewed enrolled academic sessions with terms',
-    category: 'STUDENT',
   })
   async getStudentAcademicSessions(@GetCurrentUserId() userId: string) {
     const sessions = await this.studentService.getStudentAcademicSessions(userId);
@@ -271,13 +243,6 @@ export class StudentController {
     description: 'Student payments retrieved successfully',
     type: [StudentPaymentResponseDto],
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_PAYMENTS',
-    entityType: 'STUDENT_PAYMENTS',
-    description: 'Student viewed payments',
-    category: 'STUDENT',
-  })
   async getStudentPayments(@GetCurrentUserId() userId: string) {
     const payments = await this.studentService.getStudentPayments(userId);
     return {
@@ -293,13 +258,6 @@ export class StudentController {
     status: 200,
     description: 'Student payment summary retrieved successfully',
     type: StudentPaymentSummaryDto,
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_PAYMENT_SUMMARY',
-    entityType: 'STUDENT_PAYMENT_SUMMARY',
-    description: 'Student viewed payment summary',
-    category: 'STUDENT',
   })
   async getStudentPaymentSummary(@GetCurrentUserId() userId: string) {
     const summary = await this.studentService.getStudentPaymentSummary(userId);
@@ -317,13 +275,6 @@ export class StudentController {
     description: 'Student outstanding payments retrieved successfully',
     type: [StudentPaymentResponseDto],
   })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_OUTSTANDING_PAYMENTS',
-    entityType: 'STUDENT_OUTSTANDING_PAYMENTS',
-    description: 'Student viewed outstanding payments',
-    category: 'STUDENT',
-  })
   async getOutstandingPayments(@GetCurrentUserId() userId: string) {
     const payments = await this.studentService.getOutstandingPayments(userId);
     return {
@@ -339,13 +290,6 @@ export class StudentController {
     status: 200,
     description: 'Student payment history retrieved successfully',
     type: [StudentPaymentHistoryDto],
-  })
-  @UseInterceptors(ActivityLogInterceptor)
-  @LogActivity({
-    action: 'VIEW_STUDENT_PAYMENT_HISTORY',
-    entityType: 'STUDENT_PAYMENT_HISTORY',
-    description: 'Student viewed payment history',
-    category: 'STUDENT',
   })
   async getStudentPaymentHistory(@GetCurrentUserId() userId: string) {
     const history = await this.studentService.getStudentPaymentHistory(userId);

@@ -425,34 +425,30 @@ export class ActivityLogService extends BaseService {
   }
 
   /**
-   * Helper method to generate descriptive notification messages
+   * Build a clean human-readable description for the activity feed.
+   * Frontend renders the user's name as a separate "by ${user}" line, so
+   * we deliberately don't suffix it here. Raw enum tokens (action /
+   * entityType) are also kept out — those are system-level and surface
+   * elsewhere as filter badges, not as prose.
    */
   private generateNotificationMessage(
     action: string,
     entityType: string,
     details?: any,
-    userName?: string,
+    _userName?: string,
   ): string {
-    let message = `${action} ${entityType}`;
-
-    if (details) {
-      if (details.changes && Object.keys(details.changes).length > 0) {
-        message += ` with changes: ${JSON.stringify(details.changes)}`;
-      } else if (details.description) {
-        message += `: ${details.description}`;
-      } else if (details.reason) {
-        message += `: ${details.reason}`;
-      } else if (details.message) {
-        message += `: ${details.message}`;
-      } else {
-        message += `: ${JSON.stringify(details)}`;
-      }
+    if (details?.message) return details.message;
+    if (details?.description) return details.description;
+    if (details?.reason) return details.reason;
+    if (details?.changes && Object.keys(details.changes).length > 0) {
+      return `Updated ${this.toFriendly(entityType).toLowerCase()}`;
     }
+    return this.toFriendly(action);
+  }
 
-    if (userName && !details?.skipUserName) {
-      message += ` by ${userName}`;
-    }
-
-    return message;
+  private toFriendly(token: string): string {
+    if (!token) return '';
+    const lower = token.toLowerCase().replace(/_/g, ' ');
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
   }
 }

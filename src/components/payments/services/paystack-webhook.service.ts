@@ -121,13 +121,30 @@ export class PaystackWebhookService {
           });
         }
 
-        await this.logPaymentActivity(studentPayment.student.userId, 'PAYMENT_COMPLETED', {
-          paymentId: studentPayment.id,
-          amount: amountToCredit,
-          reference,
-          status: newStatus,
-          platformCommission: platformTx ? Number(platformTx.platformCommission) : 0,
-        });
+        const studentName = `${studentPayment.student.user.firstName} ${studentPayment.student.user.lastName}`;
+        const formattedAmount = this.formatNaira(amountToCredit);
+        const studentDescription =
+          newStatus === 'PAID'
+            ? `Payment of ${formattedAmount} completed (Ref: ${reference})`
+            : `Partial payment of ${formattedAmount} received (Ref: ${reference})`;
+        const adminDescription =
+          newStatus === 'PAID'
+            ? `${studentName} paid ${formattedAmount} (Ref: ${reference})`
+            : `${studentName} made partial payment of ${formattedAmount} (Ref: ${reference})`;
+
+        await this.logPaymentActivity(
+          studentPayment.student.userId,
+          'PAYMENT_COMPLETED',
+          {
+            paymentId: studentPayment.id,
+            amount: amountToCredit,
+            reference,
+            status: newStatus,
+            platformCommission: platformTx ? Number(platformTx.platformCommission) : 0,
+          },
+          studentDescription,
+          adminDescription,
+        );
 
         return { success: true, message: 'Student payment processed successfully' };
       }
@@ -153,12 +170,22 @@ export class PaystackWebhookService {
           },
         });
 
-        await this.logPaymentActivity(colorSchemePayment.userId, 'COLOR_SCHEME_PAYMENT_COMPLETED', {
-          paymentId: colorSchemePayment.id,
-          amount: Number(colorSchemePayment.amount),
-          reference,
-          status: 'PAID',
-        });
+        const csAmount = Number(colorSchemePayment.amount);
+        const csUserName = `${colorSchemePayment.user.firstName} ${colorSchemePayment.user.lastName}`;
+        const csFormatted = this.formatNaira(csAmount);
+
+        await this.logPaymentActivity(
+          colorSchemePayment.userId,
+          'COLOR_SCHEME_PAYMENT_COMPLETED',
+          {
+            paymentId: colorSchemePayment.id,
+            amount: csAmount,
+            reference,
+            status: 'PAID',
+          },
+          `Color scheme payment of ${csFormatted} completed (Ref: ${reference})`,
+          `${csUserName} paid ${csFormatted} for color scheme (Ref: ${reference})`,
+        );
 
         return { success: true, message: 'Color scheme payment processed successfully' };
       }
@@ -213,11 +240,20 @@ export class PaystackWebhookService {
           });
         }
 
-        await this.logPaymentActivity(studentPayment.student.userId, 'PAYMENT_FAILED', {
-          paymentId: studentPayment.id,
-          reference,
-          reason: gateway_response,
-        });
+        const failedStudentName = `${studentPayment.student.user.firstName} ${studentPayment.student.user.lastName}`;
+        const failureReason = gateway_response || 'unknown reason';
+
+        await this.logPaymentActivity(
+          studentPayment.student.userId,
+          'PAYMENT_FAILED',
+          {
+            paymentId: studentPayment.id,
+            reference,
+            reason: gateway_response,
+          },
+          `Payment failed: ${failureReason} (Ref: ${reference})`,
+          `${failedStudentName}'s payment failed: ${failureReason} (Ref: ${reference})`,
+        );
 
         return { success: true, message: 'Student payment failure logged' };
       }
@@ -235,11 +271,20 @@ export class PaystackWebhookService {
 
       if (colorSchemePayment) {
         // Mark color scheme payment as failed (we could add a FAILED status or just log it)
-        await this.logPaymentActivity(colorSchemePayment.userId, 'COLOR_SCHEME_PAYMENT_FAILED', {
-          paymentId: colorSchemePayment.id,
-          reference,
-          reason: gateway_response,
-        });
+        const failedCsUserName = `${colorSchemePayment.user.firstName} ${colorSchemePayment.user.lastName}`;
+        const csFailureReason = gateway_response || 'unknown reason';
+
+        await this.logPaymentActivity(
+          colorSchemePayment.userId,
+          'COLOR_SCHEME_PAYMENT_FAILED',
+          {
+            paymentId: colorSchemePayment.id,
+            reference,
+            reason: gateway_response,
+          },
+          `Color scheme payment failed: ${csFailureReason} (Ref: ${reference})`,
+          `${failedCsUserName}'s color scheme payment failed: ${csFailureReason} (Ref: ${reference})`,
+        );
 
         return { success: true, message: 'Color scheme payment failure logged' };
       }
@@ -294,6 +339,8 @@ export class PaystackWebhookService {
     userId: string | null,
     action: string,
     details: Record<string, any>,
+    description?: string,
+    adminDescription?: string,
   ): Promise<void> {
     try {
       if (userId) {
@@ -309,7 +356,7 @@ export class PaystackWebhookService {
               schoolId: user.schoolId,
               action,
               entityType: 'PAYMENT',
-              description: `Payment activity: ${action}`,
+              description: description ?? this.toFriendlyAction(action),
               details: details,
               ipAddress: 'webhook',
               userAgent: 'paystack-webhook',
@@ -317,7 +364,12 @@ export class PaystackWebhookService {
             },
           });
 
-          await this.logActivityForSchoolAdmins(user.schoolId, action, details);
+          await this.logActivityForSchoolAdmins(
+            user.schoolId,
+            action,
+            details,
+            adminDescription ?? description,
+          );
         }
       }
     } catch (error) {
@@ -329,6 +381,7 @@ export class PaystackWebhookService {
     schoolId: string,
     action: string,
     details: Record<string, any>,
+    description?: string,
   ): Promise<void> {
     try {
       const schoolAdmins = await this.prisma.user.findMany({
@@ -348,7 +401,7 @@ export class PaystackWebhookService {
             schoolId: schoolId,
             action,
             entityType: 'PAYMENT',
-            description: `Student payment activity: ${action}`,
+            description: description ?? this.toFriendlyAction(action),
             details: {
               ...details,
               loggedFor: 'school_admin',
@@ -362,6 +415,15 @@ export class PaystackWebhookService {
     } catch (error) {
       this.logger.error(`Error logging activity for school admins: ${error.message}`, error.stack);
     }
+  }
+
+  private formatNaira(amount: number): string {
+    return `₦${amount.toLocaleString('en-NG')}`;
+  }
+
+  private toFriendlyAction(action: string): string {
+    const lower = action.toLowerCase().replace(/_/g, ' ');
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
   }
 
   async getWebhookEvents(limit: number = 50): Promise<any[]> {

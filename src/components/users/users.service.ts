@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import { BaseService } from '../../common/base-service';
 import { PasswordHasher } from '../../utils/hasher';
@@ -28,19 +29,26 @@ export class UsersService extends BaseService {
     return this.userRepository.findById(id);
   }
 
-  async save(createUserDto: CreateUserDto) {
+  async save(createUserDto: CreateUserDto, tx?: Prisma.TransactionClient) {
     const { password, email, dateOfBirth, ...others } = createUserDto;
     const hashedPassword = await this.hasher.hash(password);
     const dateOfBirthDate = dateOfBirth ? new Date(dateOfBirth) : undefined;
 
-    const createdUser = await this.userRepository.create({
+    const data = {
       ...others,
       email,
       password: hashedPassword,
       dateOfBirth: dateOfBirthDate,
-    });
+    };
 
-    return createdUser;
+    // When a Prisma transaction client is supplied (e.g. from the bulk-import
+    // processor) we write through it so the create is rolled back if any
+    // sibling row in the same job fails. Otherwise we go through the repo
+    // and inherit its ambient client behavior.
+    if (tx) {
+      return tx.user.create({ data });
+    }
+    return this.userRepository.create(data);
   }
 
   async update(id: string, updateObj: UpdateUserDto) {

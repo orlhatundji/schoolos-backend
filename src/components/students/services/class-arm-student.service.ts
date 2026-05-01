@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -88,11 +89,21 @@ export class ClassArmStudentService {
   }
 
   /**
-   * Enroll a student in a class arm for a specific academic session
+   * Enroll a student in a class arm for a specific academic session.
+   * Pass a `tx` Prisma transaction client (e.g. from the bulk-import
+   * processor) to enroll within an outer transaction so the enrollment
+   * rolls back atomically with the rest of the job.
    */
-  async enrollStudent(studentId: string, classArmId: string, academicSessionId: string) {
+  async enrollStudent(
+    studentId: string,
+    classArmId: string,
+    academicSessionId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const client = tx ?? this.prisma;
+
     // Check if student is already enrolled in this class arm for this session
-    const existingEnrollment = await this.prisma.classArmStudent.findFirst({
+    const existingEnrollment = await client.classArmStudent.findFirst({
       where: {
         studentId,
         classArmId,
@@ -106,7 +117,7 @@ export class ClassArmStudentService {
     }
 
     // Deactivate any current active enrollment for this student in this session
-    await this.prisma.classArmStudent.updateMany({
+    await client.classArmStudent.updateMany({
       where: {
         studentId,
         academicSessionId,
@@ -119,7 +130,7 @@ export class ClassArmStudentService {
     });
 
     // Create new enrollment
-    return this.prisma.classArmStudent.create({
+    return client.classArmStudent.create({
       data: {
         studentId,
         classArmId,

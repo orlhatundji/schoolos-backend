@@ -505,24 +505,25 @@ export class BffAdminService {
           user: { gender: 'FEMALE' },
         },
       }),
+      // Active students: explicit ACTIVE status. The previous version filtered
+      // by `deletedAt: null` which was a no-op (the soft-delete extension
+      // already enforces that on every read of `student`), so it was really
+      // returning "all enrolled students" rather than "currently active".
       this.prisma.student.count({
         where: {
-          classArmStudents: {
-            some: {
-              classArm: { schoolId },
-            },
-          },
-          deletedAt: null,
+          classArmStudents: { some: { classArm: { schoolId } } },
+          status: 'ACTIVE',
         },
       }),
+      // Graduated students: explicit GRADUATED status. The previous version
+      // used `deletedAt: { not: null }` to mean "graduated", which is wrong
+      // on its own (soft-deleted ≠ graduated) and was further silently
+      // overridden back to `deletedAt: null` by the soft-delete extension —
+      // the count was always equal to totalStudents.
       this.prisma.student.count({
         where: {
-          classArmStudents: {
-            some: {
-              classArm: { schoolId },
-            },
-          },
-          deletedAt: { not: null },
+          classArmStudents: { some: { classArm: { schoolId } } },
+          status: 'GRADUATED',
         },
       }),
       this.prisma.student.count({

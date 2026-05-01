@@ -145,4 +145,82 @@ export class StudentRecordDto {
   @IsOptional()
   @IsString()
   guardianRelationship?: string;
+
+  // --- Address (optional) ---
+  @ApiProperty({ description: 'Address line 1', example: '12 Marina Road', required: false })
+  @IsOptional()
+  @IsString()
+  addressStreet1?: string;
+
+  @ApiProperty({ description: 'Address line 2', example: 'Apt 4B', required: false })
+  @IsOptional()
+  @IsString()
+  addressStreet2?: string;
+
+  @ApiProperty({ description: 'City', example: 'Lagos', required: false })
+  @IsOptional()
+  @IsString()
+  addressCity?: string;
+
+  @ApiProperty({ description: 'State / region', example: 'Lagos', required: false })
+  @IsOptional()
+  @IsString()
+  addressState?: string;
+
+  @ApiProperty({ description: 'Country', example: 'Nigeria', required: false })
+  @IsOptional()
+  @IsString()
+  addressCountry?: string;
+
+  @ApiProperty({ description: 'Postal / ZIP code', example: '101241', required: false })
+  @IsOptional()
+  @IsString()
+  addressPostalCode?: string;
+
+  // --- Medical (optional) ---
+  @ApiProperty({ description: 'Blood group', example: 'O+', required: false })
+  @IsOptional()
+  @IsString()
+  bloodGroup?: string;
+
+  @ApiProperty({
+    description: 'Allergies, semicolon-separated',
+    example: 'peanuts;penicillin',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  allergies?: string;
+
+  @ApiProperty({
+    description: 'Medical conditions, semicolon-separated',
+    example: 'asthma;eczema',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  medicalConditions?: string;
+
+  @ApiProperty({ description: 'Emergency contact name', example: 'Jane Doe', required: false })
+  @IsOptional()
+  @IsString()
+  emergencyContactName?: string;
+
+  @ApiProperty({
+    description: 'Emergency contact phone',
+    example: '+234-XXX-XXX-XXXX',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  emergencyContactPhone?: string;
+
+  @ApiProperty({
+    description: 'Emergency contact relationship to student',
+    example: 'Mother',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  emergencyContactRelationship?: string;
 }

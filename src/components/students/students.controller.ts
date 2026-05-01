@@ -350,6 +350,23 @@ export class StudentsController {
     });
   }
 
+  @Get(':id/attendance-history')
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: "Student's class attendance history over the last N days",
+  })
+  @CheckPolicies(new ReadStudentPolicyHandler())
+  async getAttendanceHistory(@Param('id') id: string, @Query('days') daysParam?: string) {
+    const parsed = daysParam ? Number.parseInt(daysParam, 10) : 28;
+    const days = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 28, 1), 90);
+    const result = await this.studentsService.getStudentAttendanceHistoryById(id, days);
+    return {
+      success: true,
+      message: 'Attendance history retrieved successfully',
+      data: result,
+    };
+  }
+
   @Get(':id')
   @ApiResponse({
     status: HttpStatus.OK,

@@ -42,6 +42,18 @@ export class TemplateService extends BaseService {
         'guardianEmail',
         'guardianPhone',
         'guardianRelationship',
+        'addressStreet1',
+        'addressStreet2',
+        'addressCity',
+        'addressState',
+        'addressCountry',
+        'addressPostalCode',
+        'bloodGroup',
+        'allergies',
+        'medicalConditions',
+        'emergencyContactName',
+        'emergencyContactPhone',
+        'emergencyContactRelationship',
       ];
 
       // Create sample data
@@ -62,6 +74,18 @@ export class TemplateService extends BaseService {
           'jane.doe@email.com',
           '+234-XXX-XXX-XXXX',
           'Mother',
+          '12 Marina Road',
+          'Apt 4B',
+          'Lagos',
+          'Lagos',
+          'Nigeria',
+          '101241',
+          'O+',
+          'peanuts;penicillin',
+          'asthma',
+          'Jane Doe',
+          '+234-XXX-XXX-XXXX',
+          'Mother',
         ],
         [
           'Alice',
@@ -79,6 +103,18 @@ export class TemplateService extends BaseService {
           'robert.smith@email.com',
           '+234-XXX-XXX-XXXX',
           'Father',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
         ],
       ];
 
@@ -176,37 +212,73 @@ export class TemplateService extends BaseService {
         },
       ],
       requiredFields: [
-        { field: 'firstName', description: 'Student first name', example: 'John' },
-        { field: 'lastName', description: 'Student last name', example: 'Doe' },
-        { field: 'gender', description: 'Student gender', example: 'MALE or FEMALE' },
+        { field: 'First Name', description: "Student's first name", example: 'John' },
+        { field: 'Last Name', description: "Student's last name", example: 'Doe' },
+        { field: 'Gender', description: "Student's gender", example: 'MALE or FEMALE' },
         {
-          field: 'classArmId',
-          description: 'Class arm UUID',
-          example: '123e4567-e89b-12d3-a456-426614174000',
+          field: 'Class',
+          description: 'Class the student belongs to (pick from the dropdown in the template)',
+          example: 'JSS 1 A',
         },
       ],
       optionalFields: [
-        { field: 'dateOfBirth', description: 'Student date of birth', example: '15-05-2012' },
-        { field: 'email', description: 'Student email address', example: 'john.doe@school.com' },
-        { field: 'phone', description: 'Student phone number', example: '+234-XXX-XXX-XXXX' },
-        { field: 'stateOfOrigin', description: 'Student state of origin', example: 'Lagos' },
-        { field: 'admissionNo', description: 'Custom admission number', example: 'ADM001' },
-        { field: 'admissionDate', description: 'Admission date', example: '01-09-2025' },
-        { field: 'guardianFirstName', description: 'Guardian first name', example: 'Jane' },
-        { field: 'guardianLastName', description: 'Guardian last name', example: 'Doe' },
+        { field: 'Date of Birth', description: "Student's date of birth", example: '15-05-2012' },
+        { field: 'Email Address', description: "Student's email address", example: 'john.doe@school.com' },
+        { field: 'Phone Number', description: "Student's phone number", example: '+234-XXX-XXX-XXXX' },
+        { field: 'State of Origin', description: "Student's state of origin", example: 'Lagos' },
         {
-          field: 'guardianEmail',
-          description: 'Guardian email address',
+          field: 'Admission Number',
+          description: 'Custom admission number (auto-generated if left blank)',
+          example: 'ADM001',
+        },
+        { field: 'Admission Date', description: 'Date the student was admitted', example: '01-09-2025' },
+        { field: 'Guardian First Name', description: "Guardian's first name", example: 'Jane' },
+        { field: 'Guardian Last Name', description: "Guardian's last name", example: 'Doe' },
+        {
+          field: 'Guardian Email',
+          description: "Guardian's email address",
           example: 'jane.doe@email.com',
         },
         {
-          field: 'guardianPhone',
-          description: 'Guardian phone number',
+          field: 'Guardian Phone',
+          description: "Guardian's phone number",
           example: '+234-XXX-XXX-XXXX',
         },
         {
-          field: 'guardianRelationship',
-          description: 'Relationship to student',
+          field: 'Guardian Relationship',
+          description: "Guardian's relationship to the student",
+          example: 'Mother',
+        },
+        { field: 'Address Line 1', description: 'Street address line 1', example: '12 Marina Road' },
+        { field: 'Address Line 2', description: 'Street address line 2', example: 'Apt 4B' },
+        { field: 'City', description: 'City', example: 'Lagos' },
+        { field: 'State / Region', description: 'State or region', example: 'Lagos' },
+        { field: 'Country', description: 'Country', example: 'Nigeria' },
+        { field: 'Postal / ZIP Code', description: 'Postal or ZIP code', example: '101241' },
+        { field: 'Blood Group', description: 'Blood group', example: 'O+' },
+        {
+          field: 'Allergies',
+          description: 'List of allergies, separated by semicolons',
+          example: 'peanuts;penicillin',
+        },
+        {
+          field: 'Medical Conditions',
+          description: 'List of medical conditions, separated by semicolons',
+          example: 'asthma;eczema',
+        },
+        {
+          field: 'Emergency Contact Name',
+          description: "Emergency contact's full name",
+          example: 'Jane Doe',
+        },
+        {
+          field: 'Emergency Contact Phone',
+          description: "Emergency contact's phone number",
+          example: '+234-XXX-XXX-XXXX',
+        },
+        {
+          field: 'Emergency Contact Relationship',
+          description: "Emergency contact's relationship to the student",
           example: 'Mother',
         },
       ],
@@ -251,6 +323,18 @@ export class TemplateService extends BaseService {
         'guardianEmail',
         'guardianPhone',
         'guardianRelationship',
+        'addressStreet1',
+        'addressStreet2',
+        'addressCity',
+        'addressState',
+        'addressCountry',
+        'addressPostalCode',
+        'bloodGroup',
+        'allergies',
+        'medicalConditions',
+        'emergencyContactName',
+        'emergencyContactPhone',
+        'emergencyContactRelationship',
       ];
 
       // Create sample data
@@ -271,6 +355,18 @@ export class TemplateService extends BaseService {
           'jane.doe@email.com',
           '+234-XXX-XXX-XXXX',
           'Mother',
+          '12 Marina Road',
+          'Apt 4B',
+          'Lagos',
+          'Lagos',
+          'Nigeria',
+          '101241',
+          'O+',
+          'peanuts;penicillin',
+          'asthma',
+          'Jane Doe',
+          '+234-XXX-XXX-XXXX',
+          'Mother',
         ],
         [
           'Alice',
@@ -288,6 +384,18 @@ export class TemplateService extends BaseService {
           'robert.smith@email.com',
           '+234-XXX-XXX-XXXX',
           'Father',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
         ],
       ];
 
@@ -314,11 +422,23 @@ export class TemplateService extends BaseService {
         { wch: 25 }, // guardianEmail
         { wch: 18 }, // guardianPhone
         { wch: 15 }, // guardianRelationship
+        { wch: 22 }, // addressStreet1
+        { wch: 18 }, // addressStreet2
+        { wch: 15 }, // addressCity
+        { wch: 15 }, // addressState
+        { wch: 15 }, // addressCountry
+        { wch: 12 }, // addressPostalCode
+        { wch: 10 }, // bloodGroup
+        { wch: 25 }, // allergies
+        { wch: 25 }, // medicalConditions
+        { wch: 20 }, // emergencyContactName
+        { wch: 18 }, // emergencyContactPhone
+        { wch: 18 }, // emergencyContactRelationship
       ];
       worksheet['!cols'] = colWidths;
 
-      // Set phone columns (G=phone, N=guardianPhone) to text format to preserve leading zeros
-      const phoneColLetters = ['G', 'N'];
+      // Set phone columns (G=phone, N=guardianPhone, Z=emergencyContactPhone) to text format to preserve leading zeros
+      const phoneColLetters = ['G', 'N', 'Z'];
       for (const col of phoneColLetters) {
         for (let row = 1; row <= 1000; row++) {
           const cellRef = `${col}${row}`;
@@ -400,6 +520,22 @@ export class TemplateService extends BaseService {
         ["• guardianPhone - Guardian's phone number"],
         ['• guardianRelationship - Relationship to student (e.g., Mother, Father)'],
         [''],
+        ['Address (Optional):'],
+        ['• addressStreet1 - Address line 1 (e.g., 12 Marina Road)'],
+        ['• addressStreet2 - Address line 2 (e.g., Apt 4B)'],
+        ['• addressCity - City (e.g., Lagos)'],
+        ['• addressState - State / region (e.g., Lagos)'],
+        ['• addressCountry - Country (e.g., Nigeria)'],
+        ['• addressPostalCode - Postal / ZIP code'],
+        [''],
+        ['Medical (Optional):'],
+        ['• bloodGroup - Blood group (e.g., O+, A-)'],
+        ['• allergies - Semicolon-separated list (e.g., peanuts;penicillin)'],
+        ['• medicalConditions - Semicolon-separated list (e.g., asthma;eczema)'],
+        ["• emergencyContactName - Emergency contact's full name"],
+        ["• emergencyContactPhone - Emergency contact's phone number"],
+        ['• emergencyContactRelationship - Relationship to student (e.g., Mother)'],
+        [''],
         ['Available Classes:'],
         ...classOptions.map((className) => [`• ${className}`]),
         [''],
@@ -480,6 +616,18 @@ export class TemplateService extends BaseService {
         'guardianEmail',
         'guardianPhone',
         'guardianRelationship',
+        'addressStreet1',
+        'addressStreet2',
+        'addressCity',
+        'addressState',
+        'addressCountry',
+        'addressPostalCode',
+        'bloodGroup',
+        'allergies',
+        'medicalConditions',
+        'emergencyContactName',
+        'emergencyContactPhone',
+        'emergencyContactRelationship',
       ];
 
       // Create sample data with actual class names
@@ -500,6 +648,18 @@ export class TemplateService extends BaseService {
           'jane.doe@email.com',
           '+234-XXX-XXX-XXXX',
           'Mother',
+          '12 Marina Road',
+          'Apt 4B',
+          'Lagos',
+          'Lagos',
+          'Nigeria',
+          '101241',
+          'O+',
+          'peanuts;penicillin',
+          'asthma',
+          'Jane Doe',
+          '+234-XXX-XXX-XXXX',
+          'Mother',
         ],
         [
           'Alice',
@@ -517,6 +677,18 @@ export class TemplateService extends BaseService {
           'robert.smith@email.com',
           '+234-XXX-XXX-XXXX',
           'Father',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
         ],
       ];
 
@@ -540,6 +712,10 @@ export class TemplateService extends BaseService {
         '# ',
         '# REQUIRED FIELDS: firstName, lastName, gender, className',
         '# OPTIONAL FIELDS: All others',
+        '# ',
+        '# ADDRESS COLUMNS (all optional): addressStreet1, addressStreet2, addressCity, addressState, addressCountry, addressPostalCode',
+        '# MEDICAL COLUMNS (all optional): bloodGroup, allergies, medicalConditions, emergencyContactName, emergencyContactPhone, emergencyContactRelationship',
+        '# • allergies and medicalConditions accept multiple values separated by semicolons (e.g., peanuts;penicillin)',
         '# ',
         '',
         csvContent,
@@ -600,6 +776,18 @@ export class TemplateService extends BaseService {
         'guardianEmail',
         'guardianPhone',
         'guardianRelationship',
+        'addressStreet1',
+        'addressStreet2',
+        'addressCity',
+        'addressState',
+        'addressCountry',
+        'addressPostalCode',
+        'bloodGroup',
+        'allergies',
+        'medicalConditions',
+        'emergencyContactName',
+        'emergencyContactPhone',
+        'emergencyContactRelationship',
       ];
 
       // Add headers to the worksheet
@@ -630,6 +818,18 @@ export class TemplateService extends BaseService {
         { width: 25 }, // guardianEmail
         { width: 18, style: { numFmt: '@' } }, // guardianPhone — text format
         { width: 15 }, // guardianRelationship
+        { width: 22 }, // addressStreet1
+        { width: 18 }, // addressStreet2
+        { width: 15 }, // addressCity
+        { width: 15 }, // addressState
+        { width: 15 }, // addressCountry
+        { width: 14, style: { numFmt: '@' } }, // addressPostalCode — text format to preserve leading zeros
+        { width: 10 }, // bloodGroup
+        { width: 25 }, // allergies
+        { width: 25 }, // medicalConditions
+        { width: 20 }, // emergencyContactName
+        { width: 18, style: { numFmt: '@' } }, // emergencyContactPhone — text format
+        { width: 18 }, // emergencyContactRelationship
       ];
 
       // Add sample data
@@ -649,6 +849,18 @@ export class TemplateService extends BaseService {
           'jane.doe@email.com',
           '+234-XXX-XXX-XXXX',
           'Mother',
+          '12 Marina Road',
+          'Apt 4B',
+          'Lagos',
+          'Lagos',
+          'Nigeria',
+          '101241',
+          'O+',
+          'peanuts;penicillin',
+          'asthma',
+          'Jane Doe',
+          '+234-XXX-XXX-XXXX',
+          'Mother',
         ],
         [
           'Alice',
@@ -665,6 +877,18 @@ export class TemplateService extends BaseService {
           'robert.smith@email.com',
           '+234-XXX-XXX-XXXX',
           'Father',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
         ],
       ];
 
@@ -674,8 +898,9 @@ export class TemplateService extends BaseService {
       });
 
       // Add empty rows to ensure the column range exists for validation
+      const emptyRow = new Array(headers.length).fill('');
       for (let i = 0; i < 50; i++) {
-        worksheet.addRow(['', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+        worksheet.addRow([...emptyRow]);
       }
 
       // Add data validation for dropdowns using ExcelJS
@@ -738,6 +963,22 @@ export class TemplateService extends BaseService {
         ["• guardianEmail - Guardian's email address"],
         ["• guardianPhone - Guardian's phone number"],
         ['• guardianRelationship - Relationship to student (e.g., Mother, Father)'],
+        [''],
+        ['Address (Optional):'],
+        ['• addressStreet1 - Address line 1 (e.g., 12 Marina Road)'],
+        ['• addressStreet2 - Address line 2 (e.g., Apt 4B)'],
+        ['• addressCity - City (e.g., Lagos)'],
+        ['• addressState - State / region (e.g., Lagos)'],
+        ['• addressCountry - Country (e.g., Nigeria)'],
+        ['• addressPostalCode - Postal / ZIP code'],
+        [''],
+        ['Medical (Optional):'],
+        ['• bloodGroup - Blood group (e.g., O+, A-)'],
+        ['• allergies - Semicolon-separated list (e.g., peanuts;penicillin)'],
+        ['• medicalConditions - Semicolon-separated list (e.g., asthma;eczema)'],
+        ["• emergencyContactName - Emergency contact's full name"],
+        ["• emergencyContactPhone - Emergency contact's phone number"],
+        ['• emergencyContactRelationship - Relationship to student (e.g., Mother)'],
         [''],
         ['Available Classes:'],
         ...classOptions.map((className) => [`• ${className}`]),

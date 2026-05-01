@@ -825,6 +825,112 @@ export class StudentService extends BaseService {
     };
   }
 
+  /**
+   * Returns the logged-in student's per-day class attendance over the last
+   * `days` days (oldest first). Days with no record yield `status: null`,
+   * rendered as a neutral cell in the pastoral heat-strip on mobile.
+   * Mirrors the teacher-side getStudentAttendanceHistory but keyed off the
+   * authenticated user instead of an arbitrary studentId.
+   */
+  async getMyAttendanceHistory(userId: string, days: number) {
+    const student = await this.prisma.student.findFirst({
+      where: { userId },
+    });
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    // A student can be enrolled in more than one class arm over time — the
+    // active enrollment is what we want for daily attendance.
+    const classArmStudent = await this.prisma.classArmStudent.findFirst({
+      where: { studentId: student.id, isActive: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!classArmStudent) {
+      // No active class enrollment — return an empty history so the screen
+      // can still render the section with all-neutral cells.
+      return {
+        studentId: student.id,
+        classArmId: null,
+        days,
+        history: [],
+        statistics: {
+          presentDays: 0,
+          absentDays: 0,
+          lateDays: 0,
+          excusedDays: 0,
+          recordedDays: 0,
+          attendanceRate: 0,
+        },
+      };
+    }
+
+    const today = new Date();
+    const endOfToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+    const startBoundary = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - (days - 1),
+      0,
+      0,
+      0,
+      0,
+    );
+
+    const records = await this.prisma.studentAttendance.findMany({
+      where: {
+        classArmStudentId: classArmStudent.id,
+        date: { gte: startBoundary, lte: endOfToday },
+        deletedAt: null,
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const byDate = new Map<string, (typeof records)[number]>();
+    for (const r of records) {
+      const d = r.date;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      byDate.set(key, r);
+    }
+
+    const history: Array<{ date: string; status: string | null }> = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      history.push({ date: key, status: byDate.get(key)?.status ?? null });
+    }
+
+    const presentDays = history.filter((h) => h.status === 'PRESENT').length;
+    const absentDays = history.filter((h) => h.status === 'ABSENT').length;
+    const lateDays = history.filter((h) => h.status === 'LATE').length;
+    const excusedDays = history.filter((h) => h.status === 'EXCUSED').length;
+    const recordedDays = presentDays + absentDays + lateDays + excusedDays;
+
+    return {
+      studentId: student.id,
+      classArmId: classArmStudent.classArmId,
+      days,
+      history,
+      statistics: {
+        presentDays,
+        absentDays,
+        lateDays,
+        excusedDays,
+        recordedDays,
+        attendanceRate:
+          recordedDays > 0 ? Math.round(((presentDays + lateDays) / recordedDays) * 10000) / 100 : 0,
+      },
+    };
+  }
+
   async getStudentAcademicSessions(userId: string) {
     const student = await this.prisma.student.findFirst({
       where: { userId },

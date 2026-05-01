@@ -8,6 +8,7 @@ import {
 import {
   Prisma,
   QuestionOwnerType,
+  QuestionStatus,
   QuizAssignmentStatus,
   QuizOwnerType,
   QuizStatus,
@@ -76,6 +77,13 @@ export class QuizzesService {
       where.ownerType = QuizOwnerType.SCHOS_CURATED;
     }
 
+    // Teachers only ever see PUBLISHED curated content; ignore any user-supplied status filter
+    // when scoped to the library. System admins keep full visibility for library management.
+    const teacherLibraryView = scope === 'library' && caller.type === UserTypes.TEACHER;
+    if (teacherLibraryView) {
+      where.status = QuizStatus.PUBLISHED;
+    }
+
     if (query.subjectId) where.subjectId = query.subjectId;
     if (query.levelId) where.levelId = query.levelId;
     if (query.canonicalSubjectName) {
@@ -88,7 +96,7 @@ export class QuizzesService {
       where.canonicalTermName = { equals: query.canonicalTermName, mode: 'insensitive' };
     }
     if (query.difficulty) where.difficulty = query.difficulty;
-    if (query.status) where.status = query.status;
+    if (query.status && !teacherLibraryView) where.status = query.status;
     if (query.search) where.title = { contains: query.search, mode: 'insensitive' };
     if (query.topicIds?.length) {
       where.topics = { some: { topicId: { in: query.topicIds } } };
@@ -125,6 +133,14 @@ export class QuizzesService {
       quiz.authorUserId === callerUserId &&
       quiz.schoolId === caller.schoolId;
     if (!isCurated && !isOwn) {
+      throw new NotFoundException('Quiz not found');
+    }
+    // Teachers must not see DRAFT/ARCHIVED curated quizzes — only system admins can preview those.
+    if (
+      isCurated &&
+      caller.type === UserTypes.TEACHER &&
+      quiz.status !== QuizStatus.PUBLISHED
+    ) {
       throw new NotFoundException('Quiz not found');
     }
 
@@ -276,7 +292,12 @@ export class QuizzesService {
     }
 
     const source = await this.prisma.quiz.findFirst({
-      where: { id, deletedAt: null, ownerType: QuizOwnerType.SCHOS_CURATED },
+      where: {
+        id,
+        deletedAt: null,
+        ownerType: QuizOwnerType.SCHOS_CURATED,
+        status: QuizStatus.PUBLISHED,
+      },
       include: {
         questions: { orderBy: { order: 'asc' } },
         topics: true,
@@ -284,7 +305,7 @@ export class QuizzesService {
     });
     if (!source) {
       throw new NotFoundException(
-        'Curated quiz not found (only SCHOS_CURATED quizzes can be cloned)',
+        'Curated quiz not found (only PUBLISHED curated quizzes can be cloned)',
       );
     }
 
@@ -355,7 +376,13 @@ export class QuizzesService {
 
     const questions = await this.prisma.question.findMany({
       where: { id: { in: questionIds }, deletedAt: null },
-      select: { id: true, ownerType: true, schoolId: true, authorUserId: true },
+      select: {
+        id: true,
+        ownerType: true,
+        schoolId: true,
+        authorUserId: true,
+        status: true,
+      },
     });
     if (questions.length !== questionIds.length) {
       const found = new Set(questions.map((q) => q.id));
@@ -373,6 +400,15 @@ export class QuizzesService {
         throw new ForbiddenException(
           `Cannot attach question ${q.id}: not curated and not owned by you`,
         );
+      }
+      // Teachers can only pull PUBLISHED curated questions from the library; DRAFT/ARCHIVED
+      // curated content is invisible to them. System admins composing curated quizzes are unrestricted.
+      if (
+        isCurated &&
+        caller.type === UserTypes.TEACHER &&
+        q.status !== QuestionStatus.PUBLISHED
+      ) {
+        throw new NotFoundException(`Question ${q.id} not found`);
       }
       if (quiz.ownerType === QuizOwnerType.SCHOS_CURATED && !isCurated) {
         throw new BadRequestException(

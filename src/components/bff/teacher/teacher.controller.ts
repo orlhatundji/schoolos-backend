@@ -641,6 +641,37 @@ export class TeacherController {
     };
   }
 
+  @Get('student/:studentId/attendance-history')
+  @ApiOperation({
+    summary: "Get one student's class attendance history over the last N days (pastoral view)",
+  })
+  @ApiQuery({ name: 'classArmId', required: true, type: String })
+  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Defaults to 28' })
+  @ApiResponse({ status: 200, description: 'Student attendance history retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not authorized for this class' })
+  @ApiResponse({ status: 404, description: 'Teacher or student not found in class' })
+  async getStudentAttendanceHistory(
+    @GetCurrentUserId() userId: string,
+    @Param('studentId') studentId: string,
+    @Query('classArmId') classArmId: string,
+    @Query('days') daysParam?: string,
+  ) {
+    const parsed = daysParam ? Number.parseInt(daysParam, 10) : 28;
+    // Cap to a sane range so a typo can't yank a year of records.
+    const days = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 28, 1), 90);
+    const result = await this.teacherService.getStudentAttendanceHistory(
+      userId,
+      studentId,
+      classArmId,
+      days,
+    );
+    return {
+      success: true,
+      message: 'Student attendance history retrieved successfully',
+      data: result,
+    };
+  }
+
   // Classroom Broadsheet Endpoints
   @Get('classroom-broadsheet')
   @ApiOperation({ summary: 'Get broadsheet data (class teacher only)' })

@@ -409,13 +409,27 @@ export class StudentImportProcessor extends WorkerHost {
   }
 
   private transformRecordToCreateStudentDto(record: any): any {
-    // Extract guardian fields and className (used only for mapping) and group them into guardianInformation
+    // Extract guardian fields, address fields, medical fields, and className (used only for mapping)
+    // so they don't leak into the User create call. Only fields on the User model should remain in studentFields.
     const {
       guardianFirstName,
       guardianLastName,
       guardianEmail,
       guardianPhone,
       guardianRelationship,
+      className: _className,
+      addressStreet1,
+      addressStreet2,
+      addressCity,
+      addressState,
+      addressCountry,
+      addressPostalCode,
+      bloodGroup,
+      allergies,
+      medicalConditions,
+      emergencyContactName,
+      emergencyContactPhone,
+      emergencyContactRelationship,
       ...studentFields
     } = record;
 
@@ -444,6 +458,72 @@ export class StudentImportProcessor extends WorkerHost {
       });
     }
 
+    // Build address object if any address fields are provided
+    let address = undefined;
+    if (
+      addressStreet1 ||
+      addressStreet2 ||
+      addressCity ||
+      addressState ||
+      addressCountry ||
+      addressPostalCode
+    ) {
+      address = {
+        street1: addressStreet1,
+        street2: addressStreet2,
+        city: addressCity,
+        state: addressState,
+        country: addressCountry,
+        postalCode: addressPostalCode,
+      };
+      Object.keys(address).forEach((key) => {
+        if (address[key] === undefined || address[key] === '') {
+          delete address[key];
+        }
+      });
+    }
+
+    // Build medicalInformation object if any medical fields are provided
+    const splitList = (value: unknown): string[] | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const parts = value
+        .split(';')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      return parts.length > 0 ? parts : undefined;
+    };
+
+    const allergiesList = splitList(allergies);
+    const medicalConditionsList = splitList(medicalConditions);
+    let emergencyContact: any = undefined;
+    if (emergencyContactName || emergencyContactPhone) {
+      emergencyContact = {
+        name: emergencyContactName,
+        phone: emergencyContactPhone,
+        relationship: emergencyContactRelationship,
+      };
+      Object.keys(emergencyContact).forEach((key) => {
+        if (emergencyContact[key] === undefined || emergencyContact[key] === '') {
+          delete emergencyContact[key];
+        }
+      });
+    }
+
+    let medicalInformation: any = undefined;
+    if (bloodGroup || allergiesList || medicalConditionsList || emergencyContact) {
+      medicalInformation = {
+        bloodGroup: bloodGroup || undefined,
+        allergies: allergiesList,
+        medicalConditions: medicalConditionsList,
+        emergencyContact,
+      };
+      Object.keys(medicalInformation).forEach((key) => {
+        if (medicalInformation[key] === undefined) {
+          delete medicalInformation[key];
+        }
+      });
+    }
+
     // Convert date strings to Date objects, handling DD-MM-YYYY format
     let admissionDate = undefined;
     if (studentFields.admissionDate) {
@@ -460,6 +540,8 @@ export class StudentImportProcessor extends WorkerHost {
       dateOfBirth,
       guardianInformation,
       admissionDate,
+      address,
+      medicalInformation,
     };
   }
 

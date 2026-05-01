@@ -452,66 +452,114 @@ export class BffAdminStudentService {
     const maleStudents = students.filter((student) => student.user.gender === 'MALE').length;
     const femaleStudents = students.filter((student) => student.user.gender === 'FEMALE').length;
 
-    // Calculate graduated students (students in final year/class)
-    // This is a simplified calculation - you might want to adjust based on your logic
-    const graduatedStudents = students.filter((student) => {
-      // Assuming final year is the highest level
-      const levels = students
-        .map((s) => s.classArmStudents?.[0]?.classArm?.level?.name)
-        .filter(Boolean);
-      const maxLevel = Math.max(
-        ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
-      );
-      return student.classArmStudents?.[0]?.classArm?.level?.name?.includes(maxLevel.toString());
-    }).length;
+    // Status counts come from Student.status, the canonical field that
+    // admins flip when they explicitly graduate / suspend / deactivate a
+    // student. The previous implementation faked these (random ratios for
+    // active/inactive/suspended; a substring match against the highest-
+    // numbered level for graduated), which produced non-zero graduate
+    // counts for any school with students enrolled in their senior class —
+    // including schools that had never graduated anyone.
+    const [activeStudents, inactiveStudents, suspendedStudents, graduatedStudents] =
+      await Promise.all([
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'ACTIVE' },
+        }),
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'INACTIVE' },
+        }),
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'SUSPENDED' },
+        }),
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'GRADUATED' },
+        }),
+      ]);
 
-    // Calculate attendance today (simulated for now)
-    const studentsPresent = Math.floor(totalStudents * (0.9 + Math.random() * 0.08)); // 90-98% present
-    const studentsAbsent = totalStudents - studentsPresent;
+    // Today's attendance: real records keyed by classArmStudent for the
+    // current day. PRESENT/LATE both count as attended; ABSENT counts as
+    // absent. EXCUSED and "no record yet" are uncounted, so present + absent
+    // ≤ totalStudents (the card will read 0/0 if attendance hasn't been
+    // taken today, which is accurate).
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+    const todaysAttendances = await this.prisma.studentAttendance.findMany({
+      where: {
+        date: { gte: startOfDay, lte: endOfDay },
+        deletedAt: null,
+        classArmStudent: { student: { user: { schoolId } } },
+      },
+      select: { classArmStudentId: true, status: true },
+    });
+    const presentClassArmStudentIds = new Set(
+      todaysAttendances
+        .filter((a) => a.status === 'PRESENT' || a.status === 'LATE')
+        .map((a) => a.classArmStudentId),
+    );
+    const studentsPresent = presentClassArmStudentIds.size;
+    const studentsAbsent = todaysAttendances.filter((a) => a.status === 'ABSENT').length;
     const presentPercentage = totalStudents > 0 ? studentsPresent / totalStudents : 0;
     const absentPercentage = totalStudents > 0 ? studentsAbsent / totalStudents : 0;
 
-    // Calculate status breakdown (simplified)
-    const activeStudents = Math.floor(totalStudents * 0.95); // 95% active
-    const inactiveStudents = Math.floor(totalStudents * 0.03); // 3% inactive
-    const suspendedStudents = totalStudents - activeStudents - inactiveStudents;
-
     // Transform students data for the response
-    const studentsData = students.map((student) => ({
-      id: student.id,
-      name: `${student.user.firstName} ${student.user.lastName}`,
-      studentId: student.studentNo,
-      admissionNumber: student.admissionNo || student.studentNo,
-      gender: student.user.gender,
-      age: student.user.dateOfBirth
-        ? Math.floor(
-            (Date.now() - new Date(student.user.dateOfBirth).getTime()) /
-              (365.25 * 24 * 60 * 60 * 1000),
-          )
-        : 0,
-      stateOfOrigin: student.user.stateOfOrigin || 'Unknown',
-      // Use new guardian fields on student, fallback to old guardian relation
-      guardianName:
-        student.guardianFirstName && student.guardianLastName
-          ? `${student.guardianFirstName} ${student.guardianLastName}`
-          : student.guardian?.user
-            ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
-            : 'N/A',
-      guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
-      guardianPhone: student.guardianPhone || student.guardian?.user?.phone || 'N/A',
-      telephone: student.user.phone || 'N/A',
-      email: student.user.email || null,
-      dateAdmitted: student.admissionDate?.toISOString() || null,
-      className: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
-      classLevel: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
-      departmentName: student.classArmStudents?.[0]?.classArm?.department?.name || null,
-      averageGrade: 0, // This would need to be calculated from actual grades
-      isPresent: Math.random() > 0.1, // Simulated attendance
-      attendanceRate: Math.floor(Math.random() * 40) + 60, // 60-100% attendance rate
-      avatarUrl: student.user.avatarUrl || null,
-      address: student.address || null,
-      medicalInformation: student.medicalInformation || null,
-    }));
+    const studentsData = students.map((student) => {
+      // Real attendance rate from the last 30 records already pulled in the
+      // include above. Same definition used elsewhere: PRESENT or LATE
+      // counts as attended.
+      const allAttendances = student.classArmStudents.flatMap((cas) => cas.studentAttendances);
+      const attendedCount = allAttendances.filter(
+        (a) => a.status === 'PRESENT' || a.status === 'LATE',
+      ).length;
+      const attendanceRate =
+        allAttendances.length > 0 ? (attendedCount / allAttendances.length) * 100 : 0;
+      const isPresent = student.classArmStudents.some((cas) =>
+        presentClassArmStudentIds.has(cas.id),
+      );
+
+      return {
+        id: student.id,
+        name: `${student.user.firstName} ${student.user.lastName}`,
+        studentId: student.studentNo,
+        admissionNumber: student.admissionNo || student.studentNo,
+        gender: student.user.gender,
+        age: student.user.dateOfBirth
+          ? Math.floor(
+              (Date.now() - new Date(student.user.dateOfBirth).getTime()) /
+                (365.25 * 24 * 60 * 60 * 1000),
+            )
+          : 0,
+        stateOfOrigin: student.user.stateOfOrigin || 'Unknown',
+        // Use new guardian fields on student, fallback to old guardian relation
+        guardianName:
+          student.guardianFirstName && student.guardianLastName
+            ? `${student.guardianFirstName} ${student.guardianLastName}`
+            : student.guardian?.user
+              ? `${student.guardian.user.firstName} ${student.guardian.user.lastName}`
+              : 'N/A',
+        guardianEmail: student.guardianEmail || student.guardian?.user?.email || null,
+        guardianPhone: student.guardianPhone || student.guardian?.user?.phone || 'N/A',
+        telephone: student.user.phone || 'N/A',
+        email: student.user.email || null,
+        dateAdmitted: student.admissionDate?.toISOString() || null,
+        className: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
+        classLevel: student.classArmStudents?.[0]?.classArm?.level?.name || 'N/A',
+        departmentName: student.classArmStudents?.[0]?.classArm?.department?.name || null,
+        averageGrade: 0, // This would need to be calculated from actual grades
+        isPresent,
+        attendanceRate: Math.round(attendanceRate * 100) / 100,
+        avatarUrl: student.user.avatarUrl || null,
+        address: student.address || null,
+        medicalInformation: student.medicalInformation || null,
+      };
+    });
 
     return {
       stats: {
@@ -590,30 +638,53 @@ export class BffAdminStudentService {
     const maleStudents = students.filter((student) => student.user.gender === 'MALE').length;
     const femaleStudents = students.filter((student) => student.user.gender === 'FEMALE').length;
 
-    // Calculate graduated students (students in final year/class)
-    // This is a simplified calculation - you might want to adjust based on your logic
-    const graduatedStudents = students.filter((student) => {
-      // Assuming final year is the highest level
-      const levels = students
-        .map((s) => s.classArmStudents?.[0]?.classArm?.level?.name)
-        .filter(Boolean);
-      const maxLevel = Math.max(
-        ...levels.map((level) => parseInt(level?.replace(/\D/g, '') || '0')),
-      );
-      return student.classArmStudents?.[0]?.classArm?.level?.name?.includes(maxLevel.toString());
-    }).length;
+    // Status counts from Student.status (see getStudentsViewData for the
+    // rationale — same fix applied here for parity).
+    const [activeStudents, inactiveStudents, suspendedStudents, graduatedStudents] =
+      await Promise.all([
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'ACTIVE' },
+        }),
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'INACTIVE' },
+        }),
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'SUSPENDED' },
+        }),
+        this.prisma.student.count({
+          where: { user: { schoolId }, status: 'GRADUATED' },
+        }),
+      ]);
 
-    // Calculate attendance today (simulated for now)
-    const studentsPresent = Math.floor(totalStudents * (0.9 + Math.random() * 0.08)); // 90-98% present
-    const studentsAbsent = totalStudents - studentsPresent;
+    // Today's attendance from real records.
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
+    const todaysAttendances = await this.prisma.studentAttendance.findMany({
+      where: {
+        date: { gte: startOfDay, lte: endOfDay },
+        deletedAt: null,
+        classArmStudent: { student: { user: { schoolId } } },
+      },
+      select: { classArmStudentId: true, status: true },
+    });
+    const presentClassArmStudentIds = new Set(
+      todaysAttendances
+        .filter((a) => a.status === 'PRESENT' || a.status === 'LATE')
+        .map((a) => a.classArmStudentId),
+    );
+    const studentsPresent = presentClassArmStudentIds.size;
+    const studentsAbsent = todaysAttendances.filter((a) => a.status === 'ABSENT').length;
     const presentPercentage = totalStudents > 0 ? (studentsPresent / totalStudents) * 100 : 0;
     const absentPercentage = totalStudents > 0 ? (studentsAbsent / totalStudents) * 100 : 0;
-
-    // Calculate status breakdown (simulated for now)
-    // In a real implementation, you'd have status fields in your database
-    const activeStudents = Math.floor(totalStudents * 0.95); // 95% active
-    const inactiveStudents = Math.floor(totalStudents * 0.03); // 3% inactive
-    const suspendedStudents = totalStudents - activeStudents - inactiveStudents; // 2% suspended
 
     // Process student data for the list
     const studentsData = students.map((student) => {
@@ -632,17 +703,20 @@ export class BffAdminStudentService {
           ? allScores.reduce((sum, score) => sum + score, 0) / allScores.length
           : 0;
 
-      // Calculate attendance rate
+      // Real attendance rate from the last 30 records pulled in the include.
+      // PRESENT or LATE both count as attended.
       const allAttendances = student.classArmStudents.flatMap((cas) => cas.studentAttendances);
-      const presentCount = allAttendances.filter(
-        (attendance) => attendance.status === 'PRESENT',
+      const attendedCount = allAttendances.filter(
+        (attendance) => attendance.status === 'PRESENT' || attendance.status === 'LATE',
       ).length;
       const totalAttendanceRecords = allAttendances.length;
       const attendanceRate =
-        totalAttendanceRecords > 0 ? (presentCount / totalAttendanceRecords) * 100 : 0;
+        totalAttendanceRecords > 0 ? (attendedCount / totalAttendanceRecords) * 100 : 0;
 
-      // Simulate current presence
-      const isPresent = Math.random() > 0.1; // 90% chance of being present
+      // Real "is the student in school today" — based on today's attendance set.
+      const isPresent = student.classArmStudents.some((cas) =>
+        presentClassArmStudentIds.has(cas.id),
+      );
 
       // Get guardian info - fall back to inline fields on student
       const guardianName =

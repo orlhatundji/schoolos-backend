@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 
 // Note: if we have a distributed db replication in a near future deployment,
@@ -28,19 +29,18 @@ export class CounterService {
   ): Promise<number> {
     const client = prismaClient || this.prisma;
 
-    // ensure the counter row exists
-    try {
-      await client.counter.create({
-        data: {
-          entity,
-          schoolId,
-          current: 0,
-        },
-      });
-    } catch (error) {
-      // ignore if already exists (P2002)
-      if (error.code !== 'P2002') throw error;
-    }
+    // Ensure the counter row exists. We use raw SQL with ON CONFLICT DO
+    // NOTHING rather than `counter.create` + catch P2002 because in Postgres
+    // a unique-violation poisons the surrounding transaction even when the
+    // JS exception is caught — every subsequent statement in that tx then
+    // fails with 25P02. ON CONFLICT handles the existing-row case at the
+    // SQL layer without aborting the tx, which matters when the caller is
+    // running us inside an outer transaction (e.g. the bulk-import worker).
+    await client.$executeRaw`
+      INSERT INTO "counters" ("id", "schoolId", "entity", "current", "createdAt", "updatedAt")
+      VALUES (${randomUUID()}, ${schoolId}, ${entity}, 0, NOW(), NOW())
+      ON CONFLICT ("schoolId", "entity") DO NOTHING
+    `;
 
     // If we're already in a transaction, use that client directly
     if (prismaClient) {

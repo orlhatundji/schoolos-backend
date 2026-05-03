@@ -24,10 +24,12 @@ import { StrategyEnum } from '../../auth/strategies';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards';
 import { CheckPolicies, PoliciesGuard } from '../../roles-manager';
 import { ManageStudentPolicyHandler } from '../../students/policies';
+import { UsersService } from '../../users/users.service';
 import { BffAdminService } from './bff-admin.service';
 import { ResultCommentsService } from '../../result-comments/result-comments.service';
 import { QuizBillingService } from '../../quiz-billing/quiz-billing.service';
 import { ToggleAssessmentsDto } from './dto/toggle-assessments.dto';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { AssessmentsSettingsResult } from './results/assessments-settings.result';
 import { AssessmentsUsageResult } from './results/assessments-usage.result';
 import {
@@ -93,7 +95,67 @@ export class BffAdminController {
     private readonly bffAdminService: BffAdminService,
     private readonly resultCommentsService: ResultCommentsService,
     private readonly quizBillingService: QuizBillingService,
+    private readonly usersService: UsersService,
   ) {}
+
+  // ─── Personal Profile ──────────────────────────────────
+
+  @Get('me/profile')
+  @ApiOperation({ summary: "Get the logged-in admin's own user profile" })
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
+  async getMyProfile(@GetCurrentUserId() userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      return { success: false, message: 'User not found', data: null };
+    }
+    return {
+      success: true,
+      message: 'Profile retrieved successfully',
+      data: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        gender: user.gender,
+        dateOfBirth: user.dateOfBirth,
+        stateOfOrigin: user.stateOfOrigin,
+        avatarUrl: user.avatarUrl,
+      },
+    };
+  }
+
+  @Patch('me/profile')
+  @ApiOperation({ summary: "Update the logged-in admin's own user profile" })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  @UseInterceptors(ActivityLogInterceptor)
+  @LogActivity({
+    action: 'UPDATE_MY_PROFILE',
+    entityType: 'USER',
+    description: 'Admin updated their own profile',
+    category: 'ACCOUNT',
+  })
+  async updateMyProfile(
+    @GetCurrentUserId() userId: string,
+    @Body() dto: UpdateMyProfileDto,
+  ) {
+    const updated = await this.usersService.update(userId, dto);
+    return {
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        id: updated.id,
+        firstName: updated.firstName,
+        lastName: updated.lastName,
+        email: updated.email,
+        phone: updated.phone,
+        gender: updated.gender,
+        dateOfBirth: updated.dateOfBirth,
+        stateOfOrigin: updated.stateOfOrigin,
+        avatarUrl: updated.avatarUrl,
+      },
+    };
+  }
 
   @Get('assessments-settings')
   @CheckPolicies(new ManageStudentPolicyHandler())

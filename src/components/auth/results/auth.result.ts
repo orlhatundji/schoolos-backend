@@ -53,12 +53,17 @@ export class AuthResult extends BaseResultWithData {
       throw new Error('User, student, or teacher must be provided');
     }
     const data: AuthResultData = { tokens, preferences };
+    // Always surface the User entity at `data.user` so clients have one
+    // canonical place to read identity fields (firstName, avatarUrl, …)
+    // regardless of role. The role-specific student/teacher entities still
+    // ride alongside for callers that need their domain fields.
+    if (user) {
+      data.user = UserEntity.from(user);
+    }
     if (student) {
       data.student = StudentEntity.fromStudent(student);
     } else if (teacher) {
       data.teacher = TeacherEntity.fromTeacher(teacher);
-    } else {
-      data.user = UserEntity.from(user);
     }
 
     if (admin) {

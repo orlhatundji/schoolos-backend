@@ -34,6 +34,12 @@ class AttendanceStatsResult {
 
   @ApiProperty({ example: 30, description: 'Total students in the classroom' })
   totalStudents: number;
+
+  @ApiProperty({
+    example: true,
+    description: 'False when no attendance has been marked yet for today',
+  })
+  recordedToday: boolean;
 }
 
 class TopPerformerResult {

@@ -42,6 +42,7 @@ export interface AttendanceStats {
   studentsPresent: number; // number of students currently present today
   studentsAbsent: number; // number of students currently absent today
   totalStudents: number; // total students in the classroom
+  recordedToday: boolean; // false when no attendance has been marked yet today
 }
 
 export interface TopPerformer {

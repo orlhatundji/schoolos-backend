@@ -275,15 +275,42 @@ export class BffAdminClassroomService {
     const maleStudents = allStudents.filter((student) => student.user.gender === 'MALE').length;
     const femaleStudents = allStudents.filter((student) => student.user.gender === 'FEMALE').length;
 
-    // Calculate attendance statistics
-    const totalDays = 180; // Academic year days
-    const presentDays = Math.floor(totalDays * (0.85 + Math.random() * 0.15)); // Random between 85-100%
-    const absentDays = totalDays - presentDays;
-    const attendanceRate = (presentDays / totalDays) * 100;
+    // Today's attendance for this class arm, scoped to the current term
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfToday = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
-    // Calculate individual student attendance for today (realistic simulation)
-    const studentsPresent = Math.floor(totalStudents * (0.9 + Math.random() * 0.08)); // 90-98% present today
-    const studentsAbsent = totalStudents - studentsPresent;
+    const todayWhere = {
+      deletedAt: null,
+      termId: current.term.id,
+      date: { gte: startOfToday, lte: endOfToday },
+      classArmStudent: { classArmId: classroomId, isActive: true },
+    } as const;
+
+    const [recordedTodayCount, studentsPresent] = await Promise.all([
+      this.prisma.studentAttendance.count({ where: todayWhere }),
+      this.prisma.studentAttendance.count({ where: { ...todayWhere, status: 'PRESENT' } }),
+    ]);
+    const recordedToday = recordedTodayCount > 0;
+    const studentsAbsent = recordedToday ? Math.max(totalStudents - studentsPresent, 0) : 0;
+    const attendanceRate =
+      recordedToday && totalStudents > 0
+        ? Math.round((studentsPresent / totalStudents) * 10000) / 100
+        : 0;
+
+    // Historical per-class day aggregates are not meaningful at the class-arm level
+    // and the admin UI does not surface them; leave as zero rather than fabricate.
+    const totalDays = 0;
+    const presentDays = 0;
+    const absentDays = 0;
 
     // Get class teacher and captain using efficient direct references
     const classTeacher = (classroom as any).classTeacher;
@@ -379,6 +406,7 @@ export class BffAdminClassroomService {
         studentsPresent,
         studentsAbsent,
         totalStudents,
+        recordedToday,
       },
       classTeacher: classTeacher
         ? {
@@ -624,13 +652,14 @@ export class BffAdminClassroomService {
     // Get attendance data (simplified - you might want to implement proper attendance calculation)
     // TODO: Implement proper attendance calculation
     const attendanceData = {
-      totalDays: 180, // Academic year days
-      presentDays: 173, // This should be calculated from actual attendance records
-      absentDays: 7,
-      attendanceRate: 96.11,
-      studentsPresent: 0, // Today's attendance
+      totalDays: 0,
+      presentDays: 0,
+      absentDays: 0,
+      attendanceRate: 0,
+      studentsPresent: 0,
       studentsAbsent: 0,
       totalStudents: totalStudents,
+      recordedToday: false,
     };
 
     // Get top performers (simplified - you might want to implement proper performance calculation)
@@ -858,13 +887,14 @@ export class BffAdminClassroomService {
         female: femaleStudents,
       },
       attendance: {
-        totalDays: 0, // Placeholder
-        presentDays: 0, // Placeholder
-        absentDays: 0, // Placeholder
-        attendanceRate: 0, // Placeholder
-        studentsPresent: 0, // Placeholder
-        studentsAbsent: 0, // Placeholder
+        totalDays: 0,
+        presentDays: 0,
+        absentDays: 0,
+        attendanceRate: 0,
+        studentsPresent: 0,
+        studentsAbsent: 0,
         totalStudents: allStudents.length,
+        recordedToday: false,
       },
       classTeacher: classroom.classTeacher
         ? {

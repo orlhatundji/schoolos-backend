@@ -161,7 +161,7 @@ export class SettingsService {
       updatedFields.push('colorScheme');
     }
     if (updateData.resultTemplateId !== undefined) {
-      const validTemplates = ['classic', 'modern', 'traditional', 'colorful', 'professional'];
+      const validTemplates = ['classic', 'traditional', 'professional'];
       if (!validTemplates.includes(updateData.resultTemplateId)) {
         throw new BadRequestException('Invalid result template ID');
       }

@@ -158,7 +158,7 @@ export class UpdateSchoolConfigDto {
   @IsString()
   colorScheme?: string;
 
-  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'] })
+  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'traditional', 'professional'] })
   @IsOptional()
   @IsString()
   resultTemplateId?: string;

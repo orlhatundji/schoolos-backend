@@ -11,13 +11,7 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
   private browser: puppeteer.Browser | null = null;
   private templateCache = new Map<string, HandlebarsTemplateDelegate>();
 
-  static readonly VALID_TEMPLATES = [
-    'classic',
-    'modern',
-    'traditional',
-    'colorful',
-    'professional',
-  ] as const;
+  static readonly VALID_TEMPLATES = ['classic', 'traditional', 'professional'] as const;
 
   // Default school crest SVG as data URI — used when school has no logo
   private static readonly DEFAULT_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" fill="none">
@@ -38,16 +32,10 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
   static readonly TEMPLATE_INFO = [
     { id: 'classic', name: 'Classic', description: 'Dark header with blue accents' },
-    { id: 'modern', name: 'Modern', description: 'Clean minimalist design with gradient header' },
     {
       id: 'traditional',
       name: 'Traditional',
       description: 'Formal bordered design with serif fonts',
-    },
-    {
-      id: 'colorful',
-      name: 'Colorful',
-      description: 'Bright student-friendly design with rounded elements',
     },
     {
       id: 'professional',

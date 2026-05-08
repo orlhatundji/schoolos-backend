@@ -102,7 +102,7 @@ export class SchoolConfigDto {
   @ApiProperty({
     description: 'Result template ID',
     required: false,
-    enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'],
+    enum: ['classic', 'traditional', 'professional'],
   })
   resultTemplateId?: string;
 

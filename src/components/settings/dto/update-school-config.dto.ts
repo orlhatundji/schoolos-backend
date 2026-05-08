@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNumber, IsObject, ValidateNested } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsObject,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateSchoolAddressDto {
@@ -155,6 +162,11 @@ export class UpdateSchoolConfigDto {
   @IsOptional()
   @IsString()
   resultTemplateId?: string;
+
+  @ApiProperty({ description: 'Show attendance days on the report card', required: false })
+  @IsOptional()
+  @IsBoolean()
+  showAttendanceOnReport?: boolean;
 
   @ApiProperty({ description: 'School address', type: UpdateSchoolAddressDto, required: false })
   @IsOptional()

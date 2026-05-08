@@ -34,6 +34,9 @@ export class TermEntity implements Term {
   @ApiProperty()
   isLocked: boolean;
 
+  @ApiProperty({ required: false, nullable: true })
+  daysOpen: number | null;
+
   public static from(term: Term): TermEntity {
     return Object.assign(new TermEntity(), term);
   }

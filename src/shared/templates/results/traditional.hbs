@@ -189,6 +189,12 @@
         <div class="label">Position</div>
         <div class="value">{{or overallStats.position "N/A"}}/{{overallStats.totalStudents}}</div>
       </div>
+      {{#if attendance}}
+      <div class="summary-item">
+        <div class="label">Attendance</div>
+        <div class="value">{{attendance.daysAttended}}{{#if attendance.daysOpen}}/{{attendance.daysOpen}}{{/if}}</div>
+      </div>
+      {{/if}}
     </div>
   </div>
 

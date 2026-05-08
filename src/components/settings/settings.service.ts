@@ -57,6 +57,7 @@ export class SettingsService {
       description: school.description || '',
       colorScheme: school.colorScheme || 'default',
       resultTemplateId: school.resultTemplateId || 'professional',
+      showAttendanceOnReport: school.showAttendanceOnReport ?? false,
       schoolAddress: primaryAddress
         ? {
             street: primaryAddress.street1,
@@ -166,6 +167,10 @@ export class SettingsService {
       }
       updatePayload.resultTemplateId = updateData.resultTemplateId;
       updatedFields.push('resultTemplateId');
+    }
+    if (updateData.showAttendanceOnReport !== undefined) {
+      updatePayload.showAttendanceOnReport = updateData.showAttendanceOnReport;
+      updatedFields.push('showAttendanceOnReport');
     }
 
     // Handle contact info updates

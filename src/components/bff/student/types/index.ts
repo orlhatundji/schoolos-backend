@@ -113,6 +113,10 @@ export interface StudentResultsData {
     totalStudents: number;
     grade?: string;
   };
+  attendance?: {
+    daysAttended: number;
+    daysOpen: number | null;
+  } | null;
   gradingModel?: Record<string, [number, number]> | null;
   teacherComment?: string | null;
   principalComment?: string | null;

@@ -106,6 +106,9 @@ export class SchoolConfigDto {
   })
   resultTemplateId?: string;
 
+  @ApiProperty({ description: 'Show attendance days on the report card', required: false })
+  showAttendanceOnReport?: boolean;
+
   @ApiProperty({ description: 'School address', type: SchoolAddressDto, required: false })
   schoolAddress?: SchoolAddressDto;
 

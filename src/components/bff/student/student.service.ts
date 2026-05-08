@@ -397,6 +397,22 @@ export class StudentService extends BaseService {
       }
     }
 
+    // Attendance line on the report card (per-school toggle, per-term denominator).
+    let attendance: { daysAttended: number; daysOpen: number | null } | null = null;
+    if (school?.showAttendanceOnReport) {
+      const daysAttended = await this.prisma.studentAttendance.count({
+        where: {
+          classArmStudent: { studentId: student.id },
+          termId: term.id,
+          status: { in: ['PRESENT', 'LATE'] },
+        },
+      });
+      attendance = {
+        daysAttended,
+        daysOpen: term.daysOpen ?? null,
+      };
+    }
+
     const assessmentWhereClause: any = {
       studentId: student.id,
       termId: term.id,
@@ -605,6 +621,7 @@ export class StudentService extends BaseService {
         endDate: term.endDate,
       },
       subjects,
+      attendance,
       assessmentStructures: assessmentStructures.map((s: any) => ({
         name: s.name,
         maxScore: s.maxScore,

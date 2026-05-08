@@ -172,7 +172,8 @@
       Total Score: {{overallStats.totalScore}} &bull;
       Average: {{fixed overallStats.averageScore 1}}% &bull;
       Grade: {{or overallStats.grade "N/A"}} &bull;
-      Position: {{or overallStats.position "N/A"}} of {{overallStats.totalStudents}}
+      Position: {{or overallStats.position "N/A"}} of {{overallStats.totalStudents}}{{#if attendance}} &bull;
+      Attendance: {{attendance.daysAttended}}{{#if attendance.daysOpen}} / {{attendance.daysOpen}}{{/if}} days{{/if}}
     </div>
   </div>
 

@@ -11,13 +11,7 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
   private browser: puppeteer.Browser | null = null;
   private templateCache = new Map<string, HandlebarsTemplateDelegate>();
 
-  static readonly VALID_TEMPLATES = [
-    'classic',
-    'modern',
-    'traditional',
-    'colorful',
-    'professional',
-  ] as const;
+  static readonly VALID_TEMPLATES = ['classic', 'traditional', 'professional'] as const;
 
   // Default school crest SVG as data URI — used when school has no logo
   private static readonly DEFAULT_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" fill="none">
@@ -38,16 +32,10 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
   static readonly TEMPLATE_INFO = [
     { id: 'classic', name: 'Classic', description: 'Dark header with blue accents' },
-    { id: 'modern', name: 'Modern', description: 'Clean minimalist design with gradient header' },
     {
       id: 'traditional',
       name: 'Traditional',
       description: 'Formal bordered design with serif fonts',
-    },
-    {
-      id: 'colorful',
-      name: 'Colorful',
-      description: 'Bright student-friendly design with rounded elements',
     },
     {
       id: 'professional',
@@ -110,6 +98,9 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
     const logoSrc = resultsData.school.logoUrl || PdfService.DEFAULT_LOGO_DATA_URI;
 
+    const previousTerms = resultsData.previousTerms ?? [];
+    const hasPreviousTerms = previousTerms.length > 0;
+
     const html = template({
       ...resultsData,
       logoSrc,
@@ -117,15 +108,31 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
       termEndDate: this.formatDate(resultsData.term.endDate),
       generatedDate: this.formatDate(new Date()),
       totalMaxScore,
+      hasPreviousTerms,
+      previousTerms,
       subjects: resultsData.subjects.map((s, i) => ({
         ...s,
         serialNumber: i + 1,
-        remark: this.getPerformanceRemark(s.grade, s.totalScore, totalMaxScore),
+        previousTermTotals: previousTerms.map(
+          (pt) => pt.subjects.find((ps) => ps.subjectId === s.id)?.totalScore ?? null,
+        ),
+        // The Grade column on the printed report should reflect cumulative
+        // performance (avg across terms shown), matching the on-screen UI.
+        grade: s.cumulativeGrade ?? s.grade,
+        remark: this.getPerformanceRemark(
+          s.cumulativeGrade ?? s.grade,
+          s.cumulativeTotal,
+          totalMaxScore * (previousTerms.length + 1),
+        ),
         remarkColor: this.getRemarkColor(
-          this.getPerformanceRemark(s.grade, s.totalScore, totalMaxScore),
+          this.getPerformanceRemark(
+            s.cumulativeGrade ?? s.grade,
+            s.cumulativeTotal,
+            totalMaxScore * (previousTerms.length + 1),
+          ),
         ),
         scoreColor: this.getScoreColorClass(s.totalScore, totalMaxScore),
-        gradeColor: this.getGradeColor(s.grade),
+        gradeColor: this.getGradeColor(s.cumulativeGrade ?? s.grade),
       })),
     });
 

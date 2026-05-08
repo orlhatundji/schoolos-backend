@@ -80,6 +80,7 @@ model School {
   colorScheme                  String?
   principalSignatureUrl        String?
   resultTemplateId             String?                       @default("professional") @map("result_template_id")
+  showAttendanceOnReport       Boolean                       @default(false) @map("show_attendance_on_report")
   currentTermId                String?                       @map("current_term_id")
   currentTerm                  Term?                         @relation("SchoolCurrentTerm", fields: [currentTermId], references: [id])
   assessmentsEnabled           Boolean                       @default(false)
@@ -268,6 +269,7 @@ model Term {
   isLocked              Boolean                     @default(false)
   endDate               DateTime
   startDate             DateTime
+  daysOpen              Int?                        @map("days_open")
   paymentStructures     PaymentStructure[]
   assessments           ClassArmStudentAssessment[]
   studentAttendances    StudentAttendance[]

@@ -57,6 +57,7 @@ export class SettingsService {
       description: school.description || '',
       colorScheme: school.colorScheme || 'default',
       resultTemplateId: school.resultTemplateId || 'professional',
+      showAttendanceOnReport: school.showAttendanceOnReport ?? false,
       schoolAddress: primaryAddress
         ? {
             street: primaryAddress.street1,
@@ -160,12 +161,16 @@ export class SettingsService {
       updatedFields.push('colorScheme');
     }
     if (updateData.resultTemplateId !== undefined) {
-      const validTemplates = ['classic', 'modern', 'traditional', 'colorful', 'professional'];
+      const validTemplates = ['classic', 'traditional', 'professional'];
       if (!validTemplates.includes(updateData.resultTemplateId)) {
         throw new BadRequestException('Invalid result template ID');
       }
       updatePayload.resultTemplateId = updateData.resultTemplateId;
       updatedFields.push('resultTemplateId');
+    }
+    if (updateData.showAttendanceOnReport !== undefined) {
+      updatePayload.showAttendanceOnReport = updateData.showAttendanceOnReport;
+      updatedFields.push('showAttendanceOnReport');
     }
 
     // Handle contact info updates

@@ -140,10 +140,14 @@
       <tr>
         <th style="width:28px">S/N</th>
         <th style="text-align:left; padding-left:8px;">Subject</th>
+        {{#each previousTerms}}
+        <th>{{this.name}}<br><small>Total</small></th>
+        {{/each}}
         {{#each assessmentStructures}}
         <th>{{this.name}}<br><small>({{this.maxScore}})</small></th>
         {{/each}}
         <th>Total</th>
+        {{#if hasPreviousTerms}}<th>Cum.<br><small>Avg</small></th>{{/if}}
         <th>Grade</th>
         <th style="width:70px">Remarks</th>
       </tr>
@@ -153,12 +157,16 @@
       <tr>
         <td>{{this.serialNumber}}</td>
         <td class="subject-name">{{this.name}}</td>
+        {{#each this.previousTermTotals}}
+        <td style="font-weight:600; color:#666;">{{#if this}}{{this}}{{else}}-{{/if}}</td>
+        {{/each}}
         {{#each this.assessments}}
         <td style="font-weight:600;">
           {{#if this.score}}{{this.score}}{{else}}-{{/if}}
         </td>
         {{/each}}
         <td class="total-cell">{{this.totalScore}}</td>
+        {{#if ../hasPreviousTerms}}<td class="total-cell">{{fixed this.cumulativeAverage 1}}</td>{{/if}}
         <td style="font-weight:bold; color:{{this.gradeColor}};">{{or this.grade "-"}}</td>
         <td style="color:{{this.remarkColor}}; font-size:9px; font-weight:bold;">{{this.remark}}</td>
       </tr>
@@ -189,6 +197,12 @@
         <div class="label">Position</div>
         <div class="value">{{or overallStats.position "N/A"}}/{{overallStats.totalStudents}}</div>
       </div>
+      {{#if attendance}}
+      <div class="summary-item">
+        <div class="label">Attendance</div>
+        <div class="value">{{attendance.daysAttended}}{{#if attendance.daysOpen}}/{{attendance.daysOpen}}{{/if}}</div>
+      </div>
+      {{/if}}
     </div>
   </div>
 

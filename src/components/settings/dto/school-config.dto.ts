@@ -102,9 +102,12 @@ export class SchoolConfigDto {
   @ApiProperty({
     description: 'Result template ID',
     required: false,
-    enum: ['classic', 'modern', 'traditional', 'colorful', 'professional'],
+    enum: ['classic', 'traditional', 'professional'],
   })
   resultTemplateId?: string;
+
+  @ApiProperty({ description: 'Show attendance days on the report card', required: false })
+  showAttendanceOnReport?: boolean;
 
   @ApiProperty({ description: 'School address', type: SchoolAddressDto, required: false })
   schoolAddress?: SchoolAddressDto;

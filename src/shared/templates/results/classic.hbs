@@ -139,10 +139,14 @@
       <tr>
         <th style="width:30px">S/N</th>
         <th style="text-align:left; padding-left:8px;">Subject</th>
+        {{#each previousTerms}}
+        <th>{{this.name}}<br><small>Total</small></th>
+        {{/each}}
         {{#each assessmentStructures}}
         <th>{{this.name}}<br><small>({{this.maxScore}})</small></th>
         {{/each}}
         <th>Total</th>
+        {{#if hasPreviousTerms}}<th>Cum.<br><small>Avg</small></th>{{/if}}
         <th>Grade</th>
         <th style="width:70px">Remarks</th>
       </tr>
@@ -152,12 +156,16 @@
       <tr>
         <td>{{this.serialNumber}}</td>
         <td class="subject-name">{{this.name}}</td>
+        {{#each this.previousTermTotals}}
+        <td style="color:#7f8c8d; font-weight: bold;">{{#if this}}{{this}}{{else}}-{{/if}}</td>
+        {{/each}}
         {{#each this.assessments}}
         <td style="color: {{#if this.score}}{{../scoreColor}}{{else}}#999{{/if}}; font-weight: bold;">
           {{#if this.score}}{{this.score}}{{else}}-{{/if}}
         </td>
         {{/each}}
         <td class="total-cell">{{this.totalScore}}</td>
+        {{#if ../hasPreviousTerms}}<td class="total-cell" style="color:#2c3e50;">{{fixed this.cumulativeAverage 1}}</td>{{/if}}
         <td style="color: {{this.gradeColor}}; font-weight: bold; font-size: 11px;">{{or this.grade "-"}}</td>
         <td style="color: {{this.remarkColor}}; font-weight: bold; font-size: 9px;">{{this.remark}}</td>
       </tr>

@@ -110,6 +110,9 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
 
     const logoSrc = resultsData.school.logoUrl || PdfService.DEFAULT_LOGO_DATA_URI;
 
+    const previousTerms = resultsData.previousTerms ?? [];
+    const hasPreviousTerms = previousTerms.length > 0;
+
     const html = template({
       ...resultsData,
       logoSrc,
@@ -117,15 +120,31 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
       termEndDate: this.formatDate(resultsData.term.endDate),
       generatedDate: this.formatDate(new Date()),
       totalMaxScore,
+      hasPreviousTerms,
+      previousTerms,
       subjects: resultsData.subjects.map((s, i) => ({
         ...s,
         serialNumber: i + 1,
-        remark: this.getPerformanceRemark(s.grade, s.totalScore, totalMaxScore),
+        previousTermTotals: previousTerms.map(
+          (pt) => pt.subjects.find((ps) => ps.subjectId === s.id)?.totalScore ?? null,
+        ),
+        // The Grade column on the printed report should reflect cumulative
+        // performance (avg across terms shown), matching the on-screen UI.
+        grade: s.cumulativeGrade ?? s.grade,
+        remark: this.getPerformanceRemark(
+          s.cumulativeGrade ?? s.grade,
+          s.cumulativeTotal,
+          totalMaxScore * (previousTerms.length + 1),
+        ),
         remarkColor: this.getRemarkColor(
-          this.getPerformanceRemark(s.grade, s.totalScore, totalMaxScore),
+          this.getPerformanceRemark(
+            s.cumulativeGrade ?? s.grade,
+            s.cumulativeTotal,
+            totalMaxScore * (previousTerms.length + 1),
+          ),
         ),
         scoreColor: this.getScoreColorClass(s.totalScore, totalMaxScore),
-        gradeColor: this.getGradeColor(s.grade),
+        gradeColor: this.getGradeColor(s.cumulativeGrade ?? s.grade),
       })),
     });
 

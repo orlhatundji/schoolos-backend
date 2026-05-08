@@ -22,6 +22,7 @@ import {
   StudentResultsData,
   StudentSubjectData,
 } from './types';
+import { computeSubjectCumulative, PriorBySubjectByTerm } from './student-cumulative.utils';
 
 @Injectable()
 export class StudentService extends BaseService {
@@ -435,6 +436,42 @@ export class StudentService extends BaseService {
       orderBy: { createdAt: 'asc' },
     });
 
+    // Fetch prior terms in this session so the report card can carry forward
+    // each prior term's per-subject total (Nigerian-style cumulative format).
+    const priorTerms = await this.prisma.term.findMany({
+      where: {
+        academicSessionId: session.id,
+        createdAt: { lt: term.createdAt },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const priorAssessmentWhere: any = {
+      studentId: student.id,
+      termId: { in: priorTerms.map((t) => t.id) },
+      deletedAt: null,
+    };
+    if (subjectId) {
+      priorAssessmentWhere.classArmSubject = { subjectId };
+    }
+
+    const priorAssessments = priorTerms.length
+      ? await this.prisma.classArmStudentAssessment.findMany({
+          where: priorAssessmentWhere,
+          include: { classArmSubject: { include: { subject: true } } },
+        })
+      : [];
+
+    // termId -> (subjectId -> totalScore)
+    const priorBySubjectByTerm: PriorBySubjectByTerm = new Map();
+    for (const t of priorTerms) priorBySubjectByTerm.set(t.id, new Map());
+    for (const a of priorAssessments) {
+      const sid = a.classArmSubject.subject.id;
+      const bucket = priorBySubjectByTerm.get(a.termId)!;
+      bucket.set(sid, (bucket.get(sid) || 0) + a.score);
+    }
+    const priorTermIds = priorTerms.map((t) => t.id);
+
     // Group assessments by subject
     const bySubjectId = new Map<
       string,
@@ -515,6 +552,13 @@ export class StudentService extends BaseService {
         }
       });
 
+      const { cumulativeTotal, cumulativeAverage } = computeSubjectCumulative(
+        entry.subject.id,
+        entry.totalScore,
+        priorTermIds,
+        priorBySubjectByTerm,
+      );
+
       return {
         id: entry.subject.id,
         name: entry.subject.name,
@@ -522,20 +566,49 @@ export class StudentService extends BaseService {
         totalScore: entry.totalScore,
         averageScore: entry.totalScore,
         grade: this.calculateGrade(entry.totalScore, gradingModel?.model),
+        cumulativeTotal,
+        cumulativeAverage,
+        cumulativeGrade: this.calculateGrade(cumulativeAverage, gradingModel?.model),
         assessments: orderedAssessments,
       };
     });
 
-    // Calculate overall statistics
-    const totalSubjects = subjects.length;
-    const totalScore = subjects.reduce((sum, subject) => sum + subject.totalScore, 0);
-    const averageScore = totalSubjects > 0 ? totalScore / totalSubjects : 0;
+    // Build the previousTerms summary for the response (oldest first)
+    const previousTerms = priorTerms.map((t) => {
+      const bucket = priorBySubjectByTerm.get(t.id) ?? new Map<string, number>();
+      const subjectTotals = Array.from(bucket.entries()).map(([subjectId, totalScore]) => ({
+        subjectId,
+        totalScore,
+      }));
+      const totalScore = subjectTotals.reduce((s, x) => s + x.totalScore, 0);
+      const averageScore =
+        subjectTotals.length > 0 ? Math.round((totalScore / subjectTotals.length) * 100) / 100 : 0;
+      return {
+        id: t.id,
+        name: t.name,
+        totalScore,
+        averageScore,
+        subjects: subjectTotals,
+      };
+    });
 
-    // Get class position (simplified - would need more complex logic in real implementation)
+    // Cumulative overall stats across (priorTerms + current term)
+    const totalSubjects = subjects.length;
+    const cumulativeTotalScore = subjects.reduce((sum, s) => sum + s.cumulativeTotal, 0);
+    const cumulativeAverageScore =
+      totalSubjects > 0
+        ? Math.round(
+            (subjects.reduce((sum, s) => sum + s.cumulativeAverage, 0) / totalSubjects) * 100,
+          ) / 100
+        : 0;
+
+    // Cumulative class position — rank classmates by their summed score across
+    // all terms shown (priorTerms + current).
     const currentClassArmId = student.classArmStudents?.[0]?.classArmId;
+    const cumulativeTermIds = [...priorTerms.map((t) => t.id), term.id];
     const classArmAssessments = await this.prisma.classArmStudentAssessment.findMany({
       where: {
-        termId: term.id,
+        termId: { in: cumulativeTermIds },
         deletedAt: null,
         classArmSubject: {
           classArmId: currentClassArmId,
@@ -621,6 +694,7 @@ export class StudentService extends BaseService {
         endDate: term.endDate,
       },
       subjects,
+      previousTerms,
       attendance,
       assessmentStructures: assessmentStructures.map((s: any) => ({
         name: s.name,
@@ -630,11 +704,11 @@ export class StudentService extends BaseService {
       })),
       overallStats: {
         totalSubjects,
-        totalScore,
-        averageScore: Math.round(averageScore * 100) / 100,
+        totalScore: cumulativeTotalScore,
+        averageScore: cumulativeAverageScore,
         position,
         totalStudents: classStudentsCount,
-        grade: this.calculateGrade(averageScore, gradingModel?.model),
+        grade: this.calculateGrade(cumulativeAverageScore, gradingModel?.model),
       },
       gradingModel: (gradingModel?.model as Record<string, [number, number]>) || null,
       teacherComment: resultComment?.teacherComment ?? null,

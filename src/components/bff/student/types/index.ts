@@ -90,6 +90,9 @@ export interface StudentResultsData {
     totalScore: number;
     averageScore: number;
     grade?: string;
+    cumulativeTotal: number;
+    cumulativeAverage: number;
+    cumulativeGrade?: string;
     assessments: {
       id: string;
       name: string;
@@ -97,6 +100,16 @@ export interface StudentResultsData {
       maxScore: number;
       isExam: boolean;
       date: Date;
+    }[];
+  }[];
+  previousTerms: {
+    id: string;
+    name: string;
+    totalScore: number;
+    averageScore: number;
+    subjects: {
+      subjectId: string;
+      totalScore: number;
     }[];
   }[];
   assessmentStructures: {

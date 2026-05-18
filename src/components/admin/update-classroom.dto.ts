@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateClassroomDto {
@@ -21,13 +22,15 @@ export class UpdateClassroomDto {
   levelId?: string;
 
   @ApiProperty({
-    description: 'Class teacher ID (optional)',
+    description: 'Class teacher ID (optional). Pass null to unassign.',
     example: 'uuid-of-teacher',
     required: false,
+    nullable: true,
   })
+  @Transform(({ value }) => (value === '' ? null : value))
   @IsUUID()
   @IsOptional()
-  classTeacherId?: string;
+  classTeacherId?: string | null;
 
   @ApiProperty({
     description: 'Class captain ID (optional)',

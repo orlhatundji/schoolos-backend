@@ -105,9 +105,6 @@ export class AdminClassroomService {
             teachers: { where: { deletedAt: null } },
           },
         },
-        classArmTeachers: {
-          where: { deletedAt: null },
-        },
       },
     });
 
@@ -122,23 +119,22 @@ export class AdminClassroomService {
       );
     }
 
-    // Check if classroom has any teacher assignments
     const hasSubjectTeachers = classroom.classArmSubjects.some((cas) => cas.teachers.length > 0);
-    const hasClassTeachers = classroom.classArmTeachers.length > 0;
 
-    if (hasSubjectTeachers || hasClassTeachers) {
-      const reasons = [];
-      if (hasSubjectTeachers) reasons.push('subject teacher assignments');
-      if (hasClassTeachers) reasons.push('class teacher assignments');
-
+    if (hasSubjectTeachers) {
       throw new BadRequestException(
-        `Cannot delete classroom. It has active ${reasons.join(' and ')}. Please remove all teacher assignments first.`,
+        'Cannot delete classroom. It has active subject teacher assignments. Please remove all subject teacher assignments first.',
       );
     }
 
-    // Hard delete the classroom — safe because we've verified no students or teachers are assigned
-    await this.prisma.classArm.delete({
-      where: { id: classroomId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.classArmTeacher.deleteMany({
+        where: { classArmId: classroomId },
+      });
+
+      await tx.classArm.delete({
+        where: { id: classroomId },
+      });
     });
 
     return { message: 'Classroom deleted successfully' };

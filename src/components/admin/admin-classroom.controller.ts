@@ -62,7 +62,7 @@ export class AdminClassroomController {
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Cannot delete classroom with students or teacher assignments',
+    description: 'Cannot delete classroom with enrolled students or subject teacher assignments',
   })
   @ApiParam({ name: 'classroomId', description: 'Classroom ID' })
   async deleteClassroom(

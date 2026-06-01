@@ -6,7 +6,7 @@ export class SchoolsManagementService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSchools(params: { page?: number; limit?: number; search?: string; status?: string }) {
-    const { page = 1, limit = 10, search, status } = params;
+    const { page = 1, limit = 20, search, status } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {

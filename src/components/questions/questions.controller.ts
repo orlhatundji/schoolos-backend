@@ -54,14 +54,28 @@ export class QuestionsController {
   @ListMyQuestionsSwagger()
   async listMine(@GetCurrentUserId() userId: string, @Query() query: QuestionQueryDto) {
     const { items, total, page, limit } = await this.questionsService.list(userId, 'mine', query);
-    return new QuestionsListResult(items.map((q) => new QuestionResult(q)), total, page, limit);
+    return new QuestionsListResult(
+      items.map((q) => new QuestionResult(q)),
+      total,
+      page,
+      limit,
+    );
   }
 
   @Get('library')
   @ListLibraryQuestionsSwagger()
   async listLibrary(@GetCurrentUserId() userId: string, @Query() query: QuestionQueryDto) {
-    const { items, total, page, limit } = await this.questionsService.list(userId, 'library', query);
-    return new QuestionsListResult(items.map((q) => new QuestionResult(q)), total, page, limit);
+    const { items, total, page, limit } = await this.questionsService.list(
+      userId,
+      'library',
+      query,
+    );
+    return new QuestionsListResult(
+      items.map((q) => new QuestionResult(q)),
+      total,
+      page,
+      limit,
+    );
   }
 
   @Get(':id')

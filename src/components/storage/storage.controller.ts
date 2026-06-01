@@ -3,7 +3,7 @@ import { IsIn, IsString } from 'class-validator';
 import { StorageService, StorageFolder } from './storage.service';
 
 class PresignedUrlDto {
-  @IsIn(['avatars', 'logos', 'signatures'])
+  @IsIn(['avatars', 'logos', 'signatures', 'questions'])
   folder: StorageFolder;
 
   @IsString()

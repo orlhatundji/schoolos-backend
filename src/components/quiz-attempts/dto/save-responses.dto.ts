@@ -18,7 +18,7 @@ export class ResponseEntryDto {
     required: false,
     nullable: true,
     description:
-      "Per-type response shape. MCQ_SINGLE: { selectedOptionId }. MCQ_MULTI: { selectedOptionIds: string[] }. TRUE_FALSE: { value: boolean }. NUMERIC: { value: number, unit?: string }. SHORT_ANSWER: { text: string }. Pass null to clear an answer.",
+      "Per-type response shape. MCQ_SINGLE: { selectedOptionId }. MCQ_MULTI: { selectedOptionIds: string[] }. TRUE_FALSE: { value: boolean }. NUMERIC: { value: number, unit?: string }. SHORT_ANSWER/THEORY: { text: string }. Pass null to clear an answer.",
   })
   @IsOptional()
   @IsObject()

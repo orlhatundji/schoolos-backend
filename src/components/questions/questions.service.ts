@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { UserTypes } from '../users/constants';
 import {
   CreateQuestionDto,
@@ -30,6 +31,8 @@ const QUESTION_INCLUDE = {
   _count: { select: { quizUses: true } },
 } as const;
 
+const QUESTION_MEDIA_FOLDER = 'questions';
+
 interface CallerContext {
   userId: string;
   type: string;
@@ -38,7 +41,10 @@ interface CallerContext {
 
 @Injectable()
 export class QuestionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storageService: StorageService,
+  ) {}
 
   async list(callerUserId: string, scope: 'mine' | 'library', query: QuestionQueryDto) {
     const caller = await this.getCallerContext(callerUserId);
@@ -171,7 +177,8 @@ export class QuestionsService {
       }
     }
 
-    this.validateTypeSpecific(dto.type, dto.options, dto.config, dto.partialCreditMode);
+    this.validateTypeSpecific(dto.type, dto.options, dto.config);
+    this.validateQuestionMediaUrls(dto.mediaUrls);
     if (dto.popularExams) this.assertUniquePopularExamPairs(dto.popularExams);
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -213,7 +220,11 @@ export class QuestionsService {
     const existing = await this.findOwnedOrCurated(callerUserId, id);
     await this.assertEditable(existing.id, existing.status);
 
-    if (dto.subjectId !== undefined || dto.levelId !== undefined || dto.defaultTermId !== undefined) {
+    if (
+      dto.subjectId !== undefined ||
+      dto.levelId !== undefined ||
+      dto.defaultTermId !== undefined
+    ) {
       if (existing.ownerType === QuestionOwnerType.SCHOS_CURATED) {
         throw new BadRequestException(
           'Curated questions cannot bind to a school subject/level/term',
@@ -235,11 +246,11 @@ export class QuestionsService {
         nextType,
         dto.options ?? undefined,
         dto.config ?? (existing.config as Record<string, unknown> | null) ?? undefined,
-        dto.partialCreditMode ?? existing.partialCreditMode ?? undefined,
       );
     }
 
     if (dto.popularExams) this.assertUniquePopularExamPairs(dto.popularExams);
+    this.validateQuestionMediaUrls(dto.mediaUrls);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.question.update({
@@ -291,7 +302,7 @@ export class QuestionsService {
   }
 
   async softDelete(callerUserId: string, id: string) {
-    const existing = await this.findOwnedOrCurated(callerUserId, id);
+    await this.findOwnedOrCurated(callerUserId, id);
 
     const refCount = await this.prisma.quizQuestion.count({ where: { questionId: id } });
     if (refCount > 0) {
@@ -406,6 +417,19 @@ export class QuestionsService {
     return q;
   }
 
+  private validateQuestionMediaUrls(mediaUrls?: string[]) {
+    if (!mediaUrls) return;
+
+    const invalidUrl = mediaUrls.find(
+      (url) => !this.storageService.isPublicUrlInFolder(url, QUESTION_MEDIA_FOLDER),
+    );
+    if (invalidUrl) {
+      throw new BadRequestException(
+        'Question media must be uploaded through the question media endpoint',
+      );
+    }
+  }
+
   private async findOwnedOrCurated(callerUserId: string, id: string) {
     const caller = await this.getCallerContext(callerUserId);
     const question = await this.prisma.question.findFirst({
@@ -513,7 +537,6 @@ export class QuestionsService {
     type: QuestionType,
     options: QuestionOptionDto[] | undefined,
     config: Record<string, unknown> | null | undefined,
-    partialCreditMode: unknown,
   ) {
     switch (type) {
       case QuestionType.MCQ_SINGLE: {
@@ -549,7 +572,11 @@ export class QuestionsService {
         if (options && options.length > 0) {
           throw new BadRequestException('NUMERIC must not include options');
         }
-        const c = (config ?? {}) as { correctAnswer?: unknown; tolerance?: unknown; toleranceMode?: unknown };
+        const c = (config ?? {}) as {
+          correctAnswer?: unknown;
+          tolerance?: unknown;
+          toleranceMode?: unknown;
+        };
         if (typeof c.correctAnswer !== 'number') {
           throw new BadRequestException('NUMERIC requires config.correctAnswer (number)');
         }
@@ -557,7 +584,9 @@ export class QuestionsService {
           throw new BadRequestException('NUMERIC requires config.tolerance (non-negative number)');
         }
         if (c.toleranceMode !== 'ABSOLUTE' && c.toleranceMode !== 'PERCENT') {
-          throw new BadRequestException('NUMERIC requires config.toleranceMode of ABSOLUTE | PERCENT');
+          throw new BadRequestException(
+            'NUMERIC requires config.toleranceMode of ABSOLUTE | PERCENT',
+          );
         }
         return;
       }
@@ -574,6 +603,12 @@ export class QuestionsService {
           throw new BadRequestException(
             'SHORT_ANSWER requires config.acceptedAnswers (non-empty string array)',
           );
+        }
+        return;
+      }
+      case QuestionType.THEORY: {
+        if (options && options.length > 0) {
+          throw new BadRequestException('THEORY must not include options');
         }
         return;
       }

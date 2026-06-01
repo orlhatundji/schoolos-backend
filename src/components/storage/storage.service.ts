@@ -1,16 +1,17 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { randomUUID } from 'crypto';
 import { BaseService } from '../../common/base-service';
 
 const ALLOWED_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export const FOLDER_CONFIG = {
-  avatars: { maxSize: 50 * 1024 },
+  avatars: { maxSize: 100 * 1024 },
   logos: { maxSize: 500 * 1024 },
   signatures: { maxSize: 200 * 1024 },
+  questions: { maxSize: 100 * 1024 },
 } as const;
 
 export type StorageFolder = keyof typeof FOLDER_CONFIG;
@@ -44,7 +45,13 @@ export class StorageService extends BaseService {
   async generatePresignedUploadUrl(
     folder: StorageFolder,
     contentType: string,
-  ): Promise<{ uploadUrl: string; publicUrl: string; key: string }> {
+  ): Promise<{
+    uploadUrl: string;
+    fields: Record<string, string>;
+    publicUrl: string;
+    key: string;
+    maxSize: number;
+  }> {
     if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
       throw new BadRequestException(
         `Invalid content type. Allowed: ${ALLOWED_CONTENT_TYPES.join(', ')}`,
@@ -53,17 +60,24 @@ export class StorageService extends BaseService {
 
     const ext = contentType.split('/')[1] === 'jpeg' ? 'jpg' : contentType.split('/')[1];
     const key = `${this.envFolder}/${folder}/${randomUUID()}.${ext}`;
+    const maxSize = FOLDER_CONFIG[folder].maxSize;
 
-    const command = new PutObjectCommand({
+    const { url, fields } = await createPresignedPost(this.s3, {
       Bucket: this.bucket,
       Key: key,
-      ContentType: contentType,
+      Conditions: [
+        ['content-length-range', 0, maxSize],
+        ['eq', '$Content-Type', contentType],
+      ],
+      Fields: {
+        'Content-Type': contentType,
+      },
+      Expires: 300,
     });
 
-    const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn: 300 });
     const publicUrl = `${this.endpoint}/${this.bucket}/${key}`;
 
-    return { uploadUrl, publicUrl, key };
+    return { uploadUrl: url, fields, publicUrl, key, maxSize };
   }
 
   async deleteObject(key: string): Promise<void> {
@@ -86,5 +100,10 @@ export class StorageService extends BaseService {
       return url.slice(prefix.length);
     }
     return null;
+  }
+
+  isPublicUrlInFolder(url: string, folder: StorageFolder): boolean {
+    const key = this.extractKeyFromUrl(url);
+    return key?.startsWith(`${this.envFolder}/${folder}/`) ?? false;
   }
 }

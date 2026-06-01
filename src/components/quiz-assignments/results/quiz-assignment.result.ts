@@ -213,7 +213,9 @@ export class StudentMonitorRowResult {
   @ApiProperty() studentNo: string;
   @ApiProperty() firstName: string;
   @ApiProperty() lastName: string;
-  @ApiProperty({ enum: ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'GRADING', 'GRADED'] })
+  @ApiProperty({
+    enum: ['NOT_STARTED', 'IN_PROGRESS', 'SUBMITTED', 'GRADING', 'PENDING_MANUAL_GRADE', 'GRADED'],
+  })
   attemptStatus: 'NOT_STARTED' | QuizAttemptStatus;
   @ApiProperty() attemptCount: number;
   @ApiProperty({ required: false, nullable: true }) lastStartedAt: Date | null;
@@ -253,6 +255,7 @@ export class QuizAssignmentMonitorResult {
     inProgress: number;
     submitted: number;
     grading: number;
+    pendingManualGrade: number;
     graded: number;
   };
 
@@ -264,6 +267,7 @@ export class QuizAssignmentMonitorResult {
       inProgress: students.filter((s) => s.attemptStatus === 'IN_PROGRESS').length,
       submitted: students.filter((s) => s.attemptStatus === 'SUBMITTED').length,
       grading: students.filter((s) => s.attemptStatus === 'GRADING').length,
+      pendingManualGrade: students.filter((s) => s.attemptStatus === 'PENDING_MANUAL_GRADE').length,
       graded: students.filter((s) => s.attemptStatus === 'GRADED').length,
     };
   }
@@ -284,7 +288,7 @@ export class StudentResultRowResult {
   maxScore: string;
   @ApiProperty({ required: false, nullable: true, description: 'Decimal as string' })
   percentage: string | null;
-  @ApiProperty({ enum: ['SUBMITTED', 'GRADING', 'GRADED'] })
+  @ApiProperty({ enum: ['SUBMITTED', 'GRADING', 'PENDING_MANUAL_GRADE', 'GRADED'] })
   status: QuizAttemptStatus;
 
   constructor(

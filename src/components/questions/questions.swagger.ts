@@ -1,5 +1,5 @@
 import { applyDecorators } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 
 import { CreateQuestionDto, UpdateQuestionDto } from './dto';
 import {
@@ -18,7 +18,10 @@ export function CreateQuestionSwagger() {
     }),
     ApiBody({ type: CreateQuestionDto }),
     ApiResponse({ status: 201, type: CreateQuestionResult }),
-    ApiResponse({ status: 400, description: 'Validation failed (subject/level mismatch, type-specific config invalid)' }),
+    ApiResponse({
+      status: 400,
+      description: 'Validation failed (subject/level mismatch, type-specific config invalid)',
+    }),
     ApiResponse({ status: 403, description: 'User type not allowed to author questions' }),
   );
 }
@@ -51,7 +54,8 @@ export function GetQuestionSwagger() {
 export function UpdateQuestionSwagger() {
   return applyDecorators(
     ApiOperation({
-      summary: 'Update a question. Rejected if it is referenced by any PUBLISHED quiz — clone it instead.',
+      summary:
+        'Update a question. Rejected if it is referenced by any PUBLISHED quiz — clone it instead.',
     }),
     ApiParam({ name: 'id', description: 'Question id' }),
     ApiBody({ type: UpdateQuestionDto }),
@@ -83,4 +87,3 @@ export function CloneQuestionSwagger() {
     ApiResponse({ status: 404, description: 'Curated question not found' }),
   );
 }
-

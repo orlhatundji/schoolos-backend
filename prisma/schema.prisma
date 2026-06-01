@@ -429,6 +429,7 @@ model User {
   authoredQuestions        Question[]              @relation("QuestionAuthor")
   authoredQuizzes          Quiz[]                  @relation("QuizAuthor")
   triggeredSeedRuns        SeedRun[]               @relation("SeedRunTriggeredBy")
+  manuallyGradedResponses  QuestionResponse[]      @relation("QuestionResponseManualGrader")
 
   @@map("users")
 }
@@ -2155,23 +2156,31 @@ model QuizUsageEvent {
 /// *   TRUE_FALSE  : { value: boolean }
 /// *   NUMERIC     : { value: number, unit?: string }
 /// *   SHORT_ANSWER: { text: string }
+/// *   THEORY      : { text: string }
 model QuestionResponse {
-  id            String   @id @default(uuid())
-  attemptId     String
-  questionId    String
-  responseJson  Json?
-  weight        Decimal  @db.Decimal(10, 2)
-  pointsAwarded Decimal? @db.Decimal(10, 2)
-  isCorrect     Boolean?
-  autoGraded    Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  attemptId            String
+  questionId           String
+  responseJson         Json?
+  weight               Decimal  @db.Decimal(10, 2)
+  pointsAwarded        Decimal? @db.Decimal(10, 2)
+  isCorrect            Boolean?
+  autoGraded           Boolean  @default(false)
+  pendingGrade         Boolean  @default(false)
+  manualGradedByUserId String?
+  manualGradedAt       DateTime?
+  teacherFeedback      String?  @db.Text
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question Question    @relation(fields: [questionId], references: [id])
+  attempt            QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question           Question    @relation(fields: [questionId], references: [id])
+  manualGradedByUser User?       @relation("QuestionResponseManualGrader", fields: [manualGradedByUserId], references: [id])
 
   @@unique([attemptId, questionId])
   @@index([attemptId])
+  @@index([pendingGrade])
+  @@index([manualGradedByUserId])
   @@map("question_responses")
 }
 
@@ -2253,6 +2262,7 @@ enum QuestionType {
   TRUE_FALSE
   NUMERIC
   SHORT_ANSWER
+  THEORY
 }
 
 enum QuestionDifficulty {
@@ -2300,6 +2310,7 @@ enum QuizAttemptStatus {
   IN_PROGRESS
   SUBMITTED
   GRADING
+  PENDING_MANUAL_GRADE
   GRADED
 }
 

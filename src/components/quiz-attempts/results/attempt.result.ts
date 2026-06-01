@@ -108,6 +108,14 @@ export class StudentResponseResult {
   isCorrect?: boolean | null;
   @ApiProperty({ description: 'Decimal string', required: false })
   weight?: string;
+  @ApiProperty({ description: 'True while this response is waiting for teacher grading' })
+  pendingGrade: boolean;
+  @ApiProperty({ description: 'Whether this response was graded automatically' })
+  autoGraded: boolean;
+  @ApiProperty({ required: false, nullable: true, description: 'Only present when results are visible' })
+  teacherFeedback?: string | null;
+  @ApiProperty({ required: false, nullable: true, description: 'Only present when results are visible' })
+  manualGradedAt?: Date | null;
 
   constructor(
     response: QuestionResponse,
@@ -116,10 +124,14 @@ export class StudentResponseResult {
     this.questionId = response.questionId;
     this.responseJson = response.responseJson;
     this.weight = response.weight.toString();
+    this.pendingGrade = response.pendingGrade;
+    this.autoGraded = response.autoGraded;
     if (ctx.resultsVisible) {
       this.pointsAwarded =
         response.pointsAwarded !== null ? response.pointsAwarded.toString() : null;
       this.isCorrect = response.isCorrect;
+      this.teacherFeedback = response.teacherFeedback;
+      this.manualGradedAt = response.manualGradedAt;
     }
   }
 }

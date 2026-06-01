@@ -18,7 +18,7 @@ import { GetCurrentUserId } from '../../common/decorators';
 import { AssessmentsFeatureGuard } from '../../common/guards';
 import { StrategyEnum } from '../auth/strategies';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
-import { PageEventDto, SaveResponsesDto, StartAttemptDto } from './dto';
+import { ManualGradeResponseDto, PageEventDto, SaveResponsesDto, StartAttemptDto } from './dto';
 import { QuizAttemptsService } from './quiz-attempts.service';
 import {
   GetMyAttemptSwagger,
@@ -92,6 +92,28 @@ export class QuizAttemptsController {
       return new AttemptSummaryResult(a, resultsVisible);
     });
     return new AttemptsListResult(summaries, total, page, limit);
+  }
+
+  @Get('manual-grading/pending')
+  async listPendingManualGrades(
+    @GetCurrentUserId() userId: string,
+    @Query('quizAssignmentId') quizAssignmentId?: string,
+  ) {
+    return this.service.listPendingManualGrades(userId, { quizAssignmentId });
+  }
+
+  @Get(':id/manual-grading')
+  async getAttemptForManualGrading(@GetCurrentUserId() userId: string, @Param('id') id: string) {
+    return this.service.getAttemptForManualGrading(userId, id);
+  }
+
+  @Patch('responses/:responseId/manual-grade')
+  async manualGradeResponse(
+    @GetCurrentUserId() userId: string,
+    @Param('responseId') responseId: string,
+    @Body() dto: ManualGradeResponseDto,
+  ) {
+    return this.service.manualGradeResponse(userId, responseId, dto);
   }
 
   @Get(':id')

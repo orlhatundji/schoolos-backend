@@ -606,6 +606,12 @@ export class QuestionsService {
         }
         return;
       }
+      case QuestionType.THEORY: {
+        if (options && options.length > 0) {
+          throw new BadRequestException('THEORY must not include options');
+        }
+        return;
+      }
       default:
         throw new BadRequestException(`Unsupported question type: ${type}`);
     }

@@ -95,8 +95,8 @@ export class QuizzesController {
   @Delete(':id')
   @DeleteQuizSwagger()
   async delete(@GetCurrentUserId() userId: string, @Param('id') id: string) {
-    await this.quizzesService.softDelete(userId, id);
-    return new DeleteQuizResult();
+    const result = await this.quizzesService.softDelete(userId, id);
+    return new DeleteQuizResult(result.deletedArchivedQuestionCount);
   }
 
   @Post(':id/clone')

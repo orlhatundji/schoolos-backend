@@ -16,9 +16,11 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GetCurrentUserId } from '../../common/decorators';
 import { StrategyEnum } from '../auth/strategies';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
-import { CreateQuestionDto, QuestionQueryDto, UpdateQuestionDto } from './dto';
+import { BulkDeleteQuestionsDto, CreateQuestionDto, QuestionQueryDto, UpdateQuestionDto } from './dto';
 import { QuestionsService } from './questions.service';
 import {
+  ArchiveQuestionSwagger,
+  BulkDeleteQuestionsSwagger,
   CloneQuestionSwagger,
   CreateQuestionSwagger,
   DeleteQuestionSwagger,
@@ -28,6 +30,8 @@ import {
   UpdateQuestionSwagger,
 } from './questions.swagger';
 import {
+  ArchiveQuestionResult,
+  BulkDeleteQuestionsResult,
   CloneQuestionResult,
   CreateQuestionResult,
   DeleteQuestionResult,
@@ -54,14 +58,28 @@ export class QuestionsController {
   @ListMyQuestionsSwagger()
   async listMine(@GetCurrentUserId() userId: string, @Query() query: QuestionQueryDto) {
     const { items, total, page, limit } = await this.questionsService.list(userId, 'mine', query);
-    return new QuestionsListResult(items.map((q) => new QuestionResult(q)), total, page, limit);
+    return new QuestionsListResult(
+      items.map((q) => new QuestionResult(q)),
+      total,
+      page,
+      limit,
+    );
   }
 
   @Get('library')
   @ListLibraryQuestionsSwagger()
   async listLibrary(@GetCurrentUserId() userId: string, @Query() query: QuestionQueryDto) {
-    const { items, total, page, limit } = await this.questionsService.list(userId, 'library', query);
-    return new QuestionsListResult(items.map((q) => new QuestionResult(q)), total, page, limit);
+    const { items, total, page, limit } = await this.questionsService.list(
+      userId,
+      'library',
+      query,
+    );
+    return new QuestionsListResult(
+      items.map((q) => new QuestionResult(q)),
+      total,
+      page,
+      limit,
+    );
   }
 
   @Get(':id')
@@ -69,6 +87,13 @@ export class QuestionsController {
   async findById(@GetCurrentUserId() userId: string, @Param('id') id: string) {
     const question = await this.questionsService.findById(userId, id);
     return new QuestionResult(question);
+  }
+
+  @Patch(':id/archive')
+  @ArchiveQuestionSwagger()
+  async archive(@GetCurrentUserId() userId: string, @Param('id') id: string) {
+    await this.questionsService.archive(userId, id);
+    return new ArchiveQuestionResult();
   }
 
   @Patch(':id')
@@ -80,6 +105,13 @@ export class QuestionsController {
   ) {
     const question = await this.questionsService.update(userId, id, dto);
     return new UpdateQuestionResult(new QuestionResult(question));
+  }
+
+  @Delete('bulk')
+  @BulkDeleteQuestionsSwagger()
+  async bulkDelete(@GetCurrentUserId() userId: string, @Body() dto: BulkDeleteQuestionsDto) {
+    const counts = await this.questionsService.bulkSoftDelete(userId, dto.ids);
+    return new BulkDeleteQuestionsResult(counts);
   }
 
   @Delete(':id')

@@ -96,7 +96,11 @@ export class QuizzesService {
       where.canonicalTermName = { equals: query.canonicalTermName, mode: 'insensitive' };
     }
     if (query.difficulty) where.difficulty = query.difficulty;
-    if (query.status && !teacherLibraryView) where.status = query.status;
+    if (query.status && !teacherLibraryView) {
+      where.status = query.status;
+    } else if (!teacherLibraryView) {
+      where.status = { not: QuizStatus.ARCHIVED };
+    }
     if (query.search) where.title = { contains: query.search, mode: 'insensitive' };
     if (query.topicIds?.length) {
       where.topics = { some: { topicId: { in: query.topicIds } } };
@@ -148,7 +152,11 @@ export class QuizzesService {
   }
 
   async create(callerUserId: string, dto: CreateQuizDto) {
-    const caller = await this.getCallerContext(callerUserId);
+    return this.prisma.$transaction((tx) => this.createInTransaction(callerUserId, dto, tx));
+  }
+
+  async createInTransaction(callerUserId: string, dto: CreateQuizDto, tx: Prisma.TransactionClient) {
+    const caller = await this.getCallerContext(callerUserId, tx);
     const { ownerType, schoolId } = this.resolveOwnership(caller);
 
     let canonicalSubjectName = dto.canonicalSubjectName ?? null;
@@ -166,6 +174,7 @@ export class QuizzesService {
         dto.subjectId,
         dto.levelId,
         dto.defaultTermId,
+        tx,
       );
       canonicalSubjectName ??= refs.subject.name;
       canonicalLevelCode ??= refs.level.code;
@@ -183,33 +192,36 @@ export class QuizzesService {
       }
     }
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const quiz = await tx.quiz.create({
-        data: {
-          ownerType,
-          schoolId,
-          authorUserId: callerUserId,
-          title: dto.title,
-          description: dto.description,
-          instructions: dto.instructions,
-          subjectId: dto.subjectId ?? null,
-          levelId: dto.levelId ?? null,
-          defaultTermId: dto.defaultTermId ?? null,
-          canonicalSubjectName,
-          canonicalLevelCode,
-          canonicalTermName,
-          status: dto.status ?? QuizStatus.DRAFT,
-          estimatedMinutes: dto.estimatedMinutes,
-          passMarkPercent: dto.passMarkPercent,
-          difficulty: dto.difficulty,
-          defaultSettings: (dto.defaultSettings ?? null) as Prisma.InputJsonValue,
-        },
-      });
-      await this.replaceTopicTags(tx, quiz.id, dto.topicIds);
-      return quiz;
+    const created = await tx.quiz.create({
+      data: {
+        ownerType,
+        schoolId,
+        authorUserId: callerUserId,
+        title: dto.title,
+        description: dto.description,
+        instructions: dto.instructions,
+        subjectId: dto.subjectId ?? null,
+        levelId: dto.levelId ?? null,
+        defaultTermId: dto.defaultTermId ?? null,
+        canonicalSubjectName,
+        canonicalLevelCode,
+        canonicalTermName,
+        status: dto.status ?? QuizStatus.DRAFT,
+        estimatedMinutes: dto.estimatedMinutes,
+        passMarkPercent: dto.passMarkPercent,
+        difficulty: dto.difficulty,
+        defaultSettings: (dto.defaultSettings ?? null) as Prisma.InputJsonValue,
+      },
     });
 
-    return this.fetchById(created.id);
+    await this.replaceTopicTags(tx, created.id, dto.topicIds);
+
+    const quiz = await tx.quiz.findUnique({
+      where: { id: created.id },
+      include: QUIZ_DETAIL_INCLUDE,
+    });
+    if (!quiz) throw new NotFoundException('Quiz not found');
+    return quiz;
   }
 
   async update(callerUserId: string, id: string, dto: UpdateQuizDto) {
@@ -272,14 +284,46 @@ export class QuizzesService {
     });
     if (activeAssignments > 0) {
       throw new ConflictException(
-        `Cannot archive: ${activeAssignments} non-archived assignment(s) still reference this quiz. Close them first.`,
+        `Cannot delete: ${activeAssignments} non-archived assignment(s) still reference this quiz. Close them first.`,
       );
     }
 
-    await this.prisma.quiz.update({
-      where: { id },
-      data: { deletedAt: new Date(), status: QuizStatus.ARCHIVED },
+    const attachments = await this.prisma.quizQuestion.findMany({
+      where: { quizId: id },
+      select: { questionId: true },
     });
+    const attachedQuestionIds = attachments.map((q) => q.questionId);
+    const now = new Date();
+
+    const deletedArchivedQuestionCount = await this.prisma.$transaction(async (tx) => {
+      await tx.quizQuestion.deleteMany({ where: { quizId: id } });
+      await tx.quizTopic.deleteMany({ where: { quizId: id } });
+      await tx.quiz.update({
+        where: { id },
+        data: { deletedAt: now, status: QuizStatus.ARCHIVED },
+      });
+
+      if (attachedQuestionIds.length === 0) return 0;
+
+      const orphanArchivedQuestions = await tx.question.findMany({
+        where: {
+          id: { in: attachedQuestionIds },
+          deletedAt: null,
+          status: QuestionStatus.ARCHIVED,
+          quizUses: { none: {} },
+        },
+        select: { id: true },
+      });
+      if (orphanArchivedQuestions.length === 0) return 0;
+
+      const result = await tx.question.updateMany({
+        where: { id: { in: orphanArchivedQuestions.map((q) => q.id) } },
+        data: { deletedAt: now },
+      });
+      return result.count;
+    });
+
+    return { deletedArchivedQuestionCount };
   }
 
   async clone(callerUserId: string, id: string) {
@@ -548,8 +592,11 @@ export class QuizzesService {
     return quiz;
   }
 
-  private async getCallerContext(userId: string): Promise<CallerContext> {
-    const user = await this.prisma.user.findUnique({
+  private async getCallerContext(
+    userId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<CallerContext> {
+    const user = await db.user.findUnique({
       where: { id: userId },
       select: { id: true, type: true, schoolId: true },
     });
@@ -575,18 +622,19 @@ export class QuizzesService {
     subjectId: string,
     levelId: string,
     termId: string | undefined,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     const [subject, level, term] = await Promise.all([
-      this.prisma.subject.findFirst({
+      db.subject.findFirst({
         where: { id: subjectId, schoolId, deletedAt: null },
         select: { id: true, name: true },
       }),
-      this.prisma.level.findFirst({
+      db.level.findFirst({
         where: { id: levelId, schoolId, deletedAt: null },
         select: { id: true, code: true },
       }),
       termId
-        ? this.prisma.term.findFirst({
+        ? db.term.findFirst({
             where: { id: termId, deletedAt: null },
             select: { id: true, name: true },
           })

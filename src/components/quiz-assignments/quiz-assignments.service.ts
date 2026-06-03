@@ -313,7 +313,7 @@ export class QuizAssignmentsService {
     const attempts = await this.prisma.quizAttempt.findMany({
       where: {
         quizAssignmentId: id,
-        status: { in: ['SUBMITTED', 'GRADING', 'GRADED'] },
+        status: { in: ['SUBMITTED', 'GRADING', 'PENDING_MANUAL_GRADE', 'GRADED'] },
       },
       include: {
         student: { include: { user: { select: { firstName: true, lastName: true } } } },

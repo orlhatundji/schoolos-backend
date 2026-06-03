@@ -31,7 +31,7 @@ export class QuestionOptionResult {
   constructor(o: QuestionOption) {
     this.id = o.id;
     this.order = o.order;
-    this.label = o.label;
+    this.label = normalizeTipTapMath(o.label);
     this.labelPlainText = o.labelPlainText;
     this.isCorrect = o.isCorrect;
     this.mediaUrl = o.mediaUrl;
@@ -120,16 +120,16 @@ export class QuestionResult {
     this.canonicalLevelCode = q.canonicalLevelCode;
     this.canonicalTermName = q.canonicalTermName;
     this.type = q.type;
-    this.prompt = q.prompt;
+    this.prompt = normalizeTipTapMath(q.prompt);
     this.promptPlainText = q.promptPlainText;
     this.mediaUrls = q.mediaUrls;
-    this.explanation = q.explanation;
+    this.explanation = normalizeTipTapMath(q.explanation);
     this.weight = q.weight.toString();
     this.difficulty = q.difficulty;
     this.status = q.status;
     this.version = q.version;
     this.sourceQuestionId = q.sourceQuestionId;
-    this.config = q.config;
+    this.config = normalizeQuestionConfig(q.type, q.config);
     this.partialCreditMode = q.partialCreditMode;
     this.options = q.options
       .sort((a, b) => a.order - b.order)
@@ -140,6 +140,81 @@ export class QuestionResult {
     this.createdAt = q.createdAt;
     this.updatedAt = q.updatedAt;
   }
+}
+
+export function normalizeTipTapMath(value: unknown): unknown {
+  if (value == null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.flatMap((node) => normalizeTipTapNode(node));
+  return normalizeTipTapNode(value);
+}
+
+export function normalizeQuestionConfig(type: QuestionType, config: unknown): unknown {
+  if (type !== QuestionType.SHORT_ANSWER || config == null || typeof config !== 'object') {
+    return config;
+  }
+
+  const c = config as Record<string, unknown>;
+  if (!Array.isArray(c.acceptedAnswers)) return config;
+
+  return {
+    ...c,
+    acceptedAnswers: c.acceptedAnswers.map((answer) =>
+      typeof answer === 'string' ? stripMathDelimiters(answer) : answer,
+    ),
+  };
+}
+
+function normalizeTipTapNode(value: unknown): unknown | unknown[] {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  const node = value as Record<string, unknown>;
+  const type = node.type;
+  if (
+    (type === 'inlineMath' || type === 'mathInline' || type === 'math_inline') &&
+    node.attrs &&
+    typeof node.attrs === 'object'
+  ) {
+    return { ...node, type: 'math_inline' };
+  }
+
+  if (type === 'text' && typeof node.text === 'string' && node.text.includes('$')) {
+    return splitDollarMathTextNode(node);
+  }
+
+  if (Array.isArray(node.content)) {
+    return {
+      ...node,
+      content: node.content.flatMap((child) => normalizeTipTapNode(child)),
+    };
+  }
+
+  return node;
+}
+
+function splitDollarMathTextNode(node: Record<string, unknown>): unknown[] {
+  const text = node.text as string;
+  const parts: unknown[] = [];
+  const mathRegex = /\$(.+?)\$/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = mathRegex.exec(text))) {
+    if (match.index > cursor) {
+      parts.push({ ...node, text: text.slice(cursor, match.index) });
+    }
+    parts.push({ type: 'math_inline', attrs: { latex: match[1] } });
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    parts.push({ ...node, text: text.slice(cursor) });
+  }
+
+  return parts.length > 0 ? parts : [node];
+}
+
+function stripMathDelimiters(value: string) {
+  return value.replace(/\$(.+?)\$/g, '$1');
 }
 
 export class QuestionsListResult {
@@ -186,7 +261,40 @@ export class DeleteQuestionResult {
 
   constructor() {
     this.success = true;
+    this.message = 'Question deleted successfully';
+  }
+}
+
+export class ArchiveQuestionResult {
+  @ApiProperty({ default: true }) success: boolean;
+  @ApiProperty() message: string;
+
+  constructor() {
+    this.success = true;
     this.message = 'Question archived successfully';
+  }
+}
+
+export class BulkDeleteQuestionsResult {
+  @ApiProperty({ default: true }) success: boolean;
+  @ApiProperty() message: string;
+  @ApiProperty() deletedCount: number;
+  @ApiProperty() archivedCount: number;
+
+  constructor(counts: { deletedCount: number; archivedCount: number }) {
+    this.success = true;
+    this.deletedCount = counts.deletedCount;
+    this.archivedCount = counts.archivedCount;
+    this.message = [
+      counts.deletedCount > 0
+        ? `${counts.deletedCount} deleted`
+        : null,
+      counts.archivedCount > 0
+        ? `${counts.archivedCount} archived because ${counts.archivedCount === 1 ? 'it is' : 'they are'} used in quizzes`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(', ');
   }
 }
 

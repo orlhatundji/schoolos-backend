@@ -82,7 +82,11 @@ export class QuestionsService {
     }
     if (query.type) where.type = query.type;
     if (query.difficulty) where.difficulty = query.difficulty;
-    if (query.status && !teacherLibraryView) where.status = query.status;
+    if (query.status && !teacherLibraryView) {
+      where.status = query.status;
+    } else if (!teacherLibraryView) {
+      where.status = { not: QuestionStatus.ARCHIVED };
+    }
     if (query.search) {
       where.promptPlainText = { contains: query.search, mode: 'insensitive' };
     }
@@ -142,7 +146,15 @@ export class QuestionsService {
   }
 
   async create(callerUserId: string, dto: CreateQuestionDto) {
-    const caller = await this.getCallerContext(callerUserId);
+    return this.prisma.$transaction((tx) => this.createInTransaction(callerUserId, dto, tx));
+  }
+
+  async createInTransaction(
+    callerUserId: string,
+    dto: CreateQuestionDto,
+    tx: Prisma.TransactionClient,
+  ) {
+    const caller = await this.getCallerContext(callerUserId, tx);
     const { ownerType, schoolId } = this.resolveOwnership(caller);
 
     let canonicalSubjectName = dto.canonicalSubjectName ?? null;
@@ -160,6 +172,7 @@ export class QuestionsService {
         dto.subjectId,
         dto.levelId,
         dto.defaultTermId,
+        tx,
       );
       canonicalSubjectName ??= refs.subject.name;
       canonicalLevelCode ??= refs.level.code;
@@ -180,40 +193,42 @@ export class QuestionsService {
     this.validateTypeSpecific(dto.type, dto.options, dto.config);
     this.validateQuestionMediaUrls(dto.mediaUrls);
     if (dto.popularExams) this.assertUniquePopularExamPairs(dto.popularExams);
+    const config = this.normalizeTypeSpecificConfig(dto.type, dto.config);
 
-    const created = await this.prisma.$transaction(async (tx) => {
-      const q = await tx.question.create({
-        data: {
-          ownerType,
-          schoolId,
-          authorUserId: callerUserId,
-          subjectId: dto.subjectId ?? null,
-          levelId: dto.levelId ?? null,
-          defaultTermId: dto.defaultTermId ?? null,
-          canonicalSubjectName,
-          canonicalLevelCode,
-          canonicalTermName,
-          type: dto.type,
-          prompt: dto.prompt as Prisma.InputJsonValue,
-          promptPlainText: dto.promptPlainText,
-          mediaUrls: dto.mediaUrls ?? [],
-          explanation: (dto.explanation ?? null) as Prisma.InputJsonValue,
-          weight: dto.weight ?? 1,
-          difficulty: dto.difficulty,
-          status: dto.status ?? QuestionStatus.DRAFT,
-          config: (dto.config ?? null) as Prisma.InputJsonValue,
-          partialCreditMode: dto.partialCreditMode,
-        },
-      });
-
-      await this.replaceOptions(tx, q.id, dto.options);
-      await this.replaceTopicTags(tx, q.id, dto.topicIds);
-      await this.replacePopularExamTags(tx, q.id, dto.popularExams);
-
-      return q;
+    const created = await tx.question.create({
+      data: {
+        ownerType,
+        schoolId,
+        authorUserId: callerUserId,
+        subjectId: dto.subjectId ?? null,
+        levelId: dto.levelId ?? null,
+        defaultTermId: dto.defaultTermId ?? null,
+        canonicalSubjectName,
+        canonicalLevelCode,
+        canonicalTermName,
+        type: dto.type,
+        prompt: dto.prompt as Prisma.InputJsonValue,
+        promptPlainText: dto.promptPlainText,
+        mediaUrls: dto.mediaUrls ?? [],
+        explanation: (dto.explanation ?? null) as Prisma.InputJsonValue,
+        weight: dto.weight ?? 1,
+        difficulty: dto.difficulty,
+        status: dto.status ?? QuestionStatus.DRAFT,
+        config: (config ?? null) as Prisma.InputJsonValue,
+        partialCreditMode: dto.partialCreditMode,
+      },
     });
 
-    return this.fetchById(created.id);
+    await this.replaceOptions(tx, created.id, dto.options);
+    await this.replaceTopicTags(tx, created.id, dto.topicIds);
+    await this.replacePopularExamTags(tx, created.id, dto.popularExams);
+
+    const question = await tx.question.findUnique({
+      where: { id: created.id },
+      include: QUESTION_INCLUDE,
+    });
+    if (!question) throw new NotFoundException('Question not found');
+    return question;
   }
 
   async update(callerUserId: string, id: string, dto: UpdateQuestionDto) {
@@ -251,6 +266,8 @@ export class QuestionsService {
 
     if (dto.popularExams) this.assertUniquePopularExamPairs(dto.popularExams);
     this.validateQuestionMediaUrls(dto.mediaUrls);
+    const nextConfig =
+      dto.config !== undefined ? this.normalizeTypeSpecificConfig(nextType, dto.config) : undefined;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.question.update({
@@ -276,7 +293,7 @@ export class QuestionsService {
             canonicalLevelCode: dto.canonicalLevelCode,
           }),
           ...(dto.canonicalTermName !== undefined && { canonicalTermName: dto.canonicalTermName }),
-          ...(dto.config !== undefined && { config: dto.config as Prisma.InputJsonValue }),
+          ...(dto.config !== undefined && { config: nextConfig as Prisma.InputJsonValue }),
           ...(dto.partialCreditMode !== undefined && {
             partialCreditMode: dto.partialCreditMode,
           }),
@@ -307,7 +324,7 @@ export class QuestionsService {
     const refCount = await this.prisma.quizQuestion.count({ where: { questionId: id } });
     if (refCount > 0) {
       throw new ConflictException(
-        `Cannot archive: ${refCount} quiz(zes) reference this question. Detach it from those quizzes first.`,
+        `Cannot delete: ${refCount} quiz(zes) reference this question. Archive it instead.`,
       );
     }
 
@@ -317,6 +334,50 @@ export class QuestionsService {
         deletedAt: new Date(),
         status: QuestionStatus.ARCHIVED,
       },
+    });
+  }
+
+  async bulkSoftDelete(callerUserId: string, ids: string[]) {
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) {
+      throw new BadRequestException('At least one question id is required');
+    }
+
+    await Promise.all(uniqueIds.map((id) => this.findOwnedOrCurated(callerUserId, id)));
+
+    const referenced = await this.prisma.quizQuestion.findMany({
+      where: { questionId: { in: uniqueIds } },
+      select: { questionId: true },
+      distinct: ['questionId'],
+    });
+    const archivedIds = new Set(referenced.map((r) => r.questionId));
+    const deleteIds = uniqueIds.filter((id) => !archivedIds.has(id));
+    const archiveIds = uniqueIds.filter((id) => archivedIds.has(id));
+
+    const [deleted, archived] = await this.prisma.$transaction([
+      this.prisma.question.updateMany({
+        where: { id: { in: deleteIds }, deletedAt: null },
+        data: {
+          deletedAt: new Date(),
+          status: QuestionStatus.ARCHIVED,
+        },
+      }),
+      this.prisma.question.updateMany({
+        where: { id: { in: archiveIds }, deletedAt: null },
+        data: {
+          status: QuestionStatus.ARCHIVED,
+        },
+      }),
+    ]);
+
+    return { deletedCount: deleted.count, archivedCount: archived.count };
+  }
+
+  async archive(callerUserId: string, id: string) {
+    await this.findOwnedOrCurated(callerUserId, id);
+    await this.prisma.question.update({
+      where: { id },
+      data: { status: QuestionStatus.ARCHIVED },
     });
   }
 
@@ -475,8 +536,11 @@ export class QuestionsService {
     );
   }
 
-  private async getCallerContext(userId: string): Promise<CallerContext> {
-    const user = await this.prisma.user.findUnique({
+  private async getCallerContext(
+    userId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<CallerContext> {
+    const user = await db.user.findUnique({
       where: { id: userId },
       select: { id: true, type: true, schoolId: true },
     });
@@ -502,18 +566,19 @@ export class QuestionsService {
     subjectId: string,
     levelId: string,
     termId: string | undefined,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     const [subject, level, term] = await Promise.all([
-      this.prisma.subject.findFirst({
+      db.subject.findFirst({
         where: { id: subjectId, schoolId, deletedAt: null },
         select: { id: true, name: true },
       }),
-      this.prisma.level.findFirst({
+      db.level.findFirst({
         where: { id: levelId, schoolId, deletedAt: null },
         select: { id: true, code: true },
       }),
       termId
-        ? this.prisma.term.findFirst({
+        ? db.term.findFirst({
             where: { id: termId, deletedAt: null },
             select: { id: true, name: true },
           })
@@ -615,6 +680,22 @@ export class QuestionsService {
       default:
         throw new BadRequestException(`Unsupported question type: ${type}`);
     }
+  }
+
+  private normalizeTypeSpecificConfig(
+    type: QuestionType,
+    config: Record<string, unknown> | null | undefined,
+  ) {
+    if (type !== QuestionType.SHORT_ANSWER || !config) return config;
+    const acceptedAnswers = (config as { acceptedAnswers?: unknown }).acceptedAnswers;
+    if (!Array.isArray(acceptedAnswers)) return config;
+
+    return {
+      ...config,
+      acceptedAnswers: acceptedAnswers.map((answer) =>
+        typeof answer === 'string' ? answer.replace(/\$(.+?)\$/g, '$1') : answer,
+      ),
+    };
   }
 
   private assertUniquePopularExamPairs(tags: QuestionPopularExamTagDto[]) {

@@ -205,10 +205,18 @@ export class UpdateQuizResult {
 export class DeleteQuizResult {
   @ApiProperty({ default: true }) success: boolean;
   @ApiProperty() message: string;
+  @ApiProperty({
+    description: 'Archived questions that became orphaned after deleting this quiz and were deleted.',
+  })
+  deletedArchivedQuestionCount: number;
 
-  constructor() {
+  constructor(deletedArchivedQuestionCount: number) {
     this.success = true;
-    this.message = 'Quiz archived successfully';
+    this.deletedArchivedQuestionCount = deletedArchivedQuestionCount;
+    this.message =
+      deletedArchivedQuestionCount > 0
+        ? `Quiz deleted. ${deletedArchivedQuestionCount} archived question${deletedArchivedQuestionCount === 1 ? '' : 's'} also deleted.`
+        : 'Quiz deleted successfully';
   }
 }
 

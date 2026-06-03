@@ -10,6 +10,8 @@ import {
   QuizQuestion,
 } from '@prisma/client';
 
+import { normalizeQuestionConfig, normalizeTipTapMath } from '../../questions/results/question.result';
+
 export type AttemptForView = QuizAttempt & {
   responses: (QuestionResponse & {
     question: Question & { options: QuestionOption[]; quizUses: QuizQuestion[] };
@@ -38,7 +40,7 @@ export class StudentOptionResult {
   constructor(o: QuestionOption, includeCorrect: boolean) {
     this.id = o.id;
     this.order = o.order;
-    this.label = o.label;
+    this.label = normalizeTipTapMath(o.label);
     this.labelPlainText = o.labelPlainText;
     this.mediaUrl = o.mediaUrl;
     if (includeCorrect) this.isCorrect = o.isCorrect;
@@ -77,7 +79,7 @@ export class StudentQuestionResult {
     const reveal = ctx.resultsVisible && ctx.showCorrectAnswers;
     this.id = question.id;
     this.type = question.type;
-    this.prompt = question.prompt;
+    this.prompt = normalizeTipTapMath(question.prompt);
     this.promptPlainText = question.promptPlainText;
     this.mediaUrls = question.mediaUrls;
     this.weight = weightSnapshot;
@@ -85,8 +87,10 @@ export class StudentQuestionResult {
       .sort((a, b) => a.order - b.order)
       .map((o) => new StudentOptionResult(o, reveal));
     this.partialCreditMode = question.partialCreditMode;
-    this.config = reveal ? question.config : redactConfig(question.type, question.config);
-    if (reveal) this.explanation = question.explanation;
+    this.config = reveal
+      ? normalizeQuestionConfig(question.type, question.config)
+      : redactConfig(question.type, question.config);
+    if (reveal) this.explanation = normalizeTipTapMath(question.explanation);
   }
 }
 

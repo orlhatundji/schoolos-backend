@@ -99,7 +99,7 @@ export function gradeResponse(
       if (typeof text !== 'string') return 0;
 
       const normalize = (s: string) => {
-        let n = s;
+        let n = s.replace(/\$(.+?)\$/g, '$1');
         if (cfg.normalizeWhitespace !== false) n = n.trim().replace(/\s+/g, ' ');
         if (!cfg.caseSensitive) n = n.toLowerCase();
         return n;

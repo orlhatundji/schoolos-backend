@@ -69,7 +69,8 @@ export function UpdateQuizSwagger() {
 export function DeleteQuizSwagger() {
   return applyDecorators(
     ApiOperation({
-      summary: 'Soft-archive a quiz. Rejected if any non-archived assignment still references it.',
+      summary:
+        'Delete a quiz from reusable lists and clean up orphan archived questions attached only to this quiz.',
     }),
     ApiParam({ name: 'id', description: 'Quiz id' }),
     ApiResponse({ status: 200, type: DeleteQuizResult }),

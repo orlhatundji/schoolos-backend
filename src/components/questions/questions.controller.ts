@@ -16,9 +16,11 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GetCurrentUserId } from '../../common/decorators';
 import { StrategyEnum } from '../auth/strategies';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
-import { CreateQuestionDto, QuestionQueryDto, UpdateQuestionDto } from './dto';
+import { BulkDeleteQuestionsDto, CreateQuestionDto, QuestionQueryDto, UpdateQuestionDto } from './dto';
 import { QuestionsService } from './questions.service';
 import {
+  ArchiveQuestionSwagger,
+  BulkDeleteQuestionsSwagger,
   CloneQuestionSwagger,
   CreateQuestionSwagger,
   DeleteQuestionSwagger,
@@ -28,6 +30,8 @@ import {
   UpdateQuestionSwagger,
 } from './questions.swagger';
 import {
+  ArchiveQuestionResult,
+  BulkDeleteQuestionsResult,
   CloneQuestionResult,
   CreateQuestionResult,
   DeleteQuestionResult,
@@ -85,6 +89,13 @@ export class QuestionsController {
     return new QuestionResult(question);
   }
 
+  @Patch(':id/archive')
+  @ArchiveQuestionSwagger()
+  async archive(@GetCurrentUserId() userId: string, @Param('id') id: string) {
+    await this.questionsService.archive(userId, id);
+    return new ArchiveQuestionResult();
+  }
+
   @Patch(':id')
   @UpdateQuestionSwagger()
   async update(
@@ -94,6 +105,13 @@ export class QuestionsController {
   ) {
     const question = await this.questionsService.update(userId, id, dto);
     return new UpdateQuestionResult(new QuestionResult(question));
+  }
+
+  @Delete('bulk')
+  @BulkDeleteQuestionsSwagger()
+  async bulkDelete(@GetCurrentUserId() userId: string, @Body() dto: BulkDeleteQuestionsDto) {
+    const counts = await this.questionsService.bulkSoftDelete(userId, dto.ids);
+    return new BulkDeleteQuestionsResult(counts);
   }
 
   @Delete(':id')

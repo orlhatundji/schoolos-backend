@@ -453,6 +453,19 @@ export class TeacherService {
     return teacher;
   }
 
+  /** Resolve ClassArmSubject by class + subject name, excluding soft-deleted rows. */
+  private classArmSubjectByNameWhere(classArmId: string, subjectName: string, schoolId: string) {
+    return {
+      classArmId,
+      deletedAt: null,
+      subject: {
+        name: { equals: subjectName, mode: 'insensitive' as const },
+        schoolId,
+        deletedAt: null,
+      },
+    };
+  }
+
   // Get teacher profile information
   async getTeacherProfile(userId: string): Promise<TeacherProfile> {
     const teacher = await this.getTeacherWithRelations(userId);
@@ -1203,17 +1216,9 @@ export class TeacherService {
     const teacher = await this.getTeacherWithRelations(userId);
     const schoolId = teacher.user.schoolId;
 
-    // Find subject by name
-    const subject = await this.prisma.subject.findFirst({
-      where: { name: { equals: subjectName, mode: 'insensitive' }, schoolId },
-    });
-    if (!subject) {
-      throw new NotFoundException(`Subject "${subjectName}" not found`);
-    }
-
-    // Find ClassArmSubject with teachers
+    // Resolve via class curriculum (not a bare subject name lookup — avoids duplicate/deleted subjects)
     const classArmSubject = await this.prisma.classArmSubject.findFirst({
-      where: { classArmId, subjectId: subject.id, deletedAt: null },
+      where: this.classArmSubjectByNameWhere(classArmId, subjectName, schoolId),
       include: {
         classArm: { include: { level: true } },
         subject: true,
@@ -1227,6 +1232,8 @@ export class TeacherService {
     if (!classArmSubject) {
       throw new NotFoundException(`Subject "${subjectName}" is not assigned to this class`);
     }
+
+    const subject = classArmSubject.subject;
 
     // Verify authorization
     const isClassTeacher = classArmSubject.classArm.classTeacherId === teacher.id;
@@ -1505,17 +1512,13 @@ export class TeacherService {
     const classArmId = student.classArmStudents?.[0]?.classArmId;
     if (!classArmId) throw new Error('Student is not enrolled in any class');
 
-    // Find the subject
-    const subject = await this.prisma.subject.findFirst({
-      where: { name: { equals: createDto.subjectName, mode: 'insensitive' }, schoolId },
-    });
-    if (!subject) throw new Error(`Subject "${createDto.subjectName}" not found`);
-
-    // Resolve ClassArmSubject
-    const classArmSubject = await this.prisma.classArmSubject.findUnique({
-      where: { classArmId_subjectId: { classArmId, subjectId: subject.id } },
+    const classArmSubject = await this.prisma.classArmSubject.findFirst({
+      where: this.classArmSubjectByNameWhere(classArmId, createDto.subjectName, schoolId),
+      include: { subject: true },
     });
     if (!classArmSubject) throw new Error("This subject is not assigned to the student's class");
+
+    const subject = classArmSubject.subject;
 
     // Verify teacher authorization
     const authorized = await this.prisma.classArmSubjectTeacher.findFirst({
@@ -1825,7 +1828,11 @@ export class TeacherService {
     // ── 2. Resolve subject ──
     if (!subjectName) throw new Error('subjectName is required');
     const subject = await this.prisma.subject.findFirst({
-      where: { name: { equals: subjectName, mode: 'insensitive' }, schoolId },
+      where: {
+        name: { equals: subjectName, mode: 'insensitive' },
+        schoolId,
+        deletedAt: null,
+      },
     });
     if (!subject) throw new Error(`Subject "${subjectName}" not found`);
 

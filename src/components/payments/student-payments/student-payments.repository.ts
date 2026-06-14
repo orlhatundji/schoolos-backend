@@ -1,6 +1,38 @@
 import { Injectable } from '@nestjs/common';
+import { PaymentStatus, Prisma } from '@prisma/client';
+
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UpdateStudentPaymentDto } from './dto/update-student-payment.dto';
+
+const studentPaymentDetailInclude = {
+  student: {
+    include: {
+      user: true,
+      classArmStudents: {
+        where: { isActive: true },
+        include: {
+          classArm: {
+            include: {
+              level: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  paymentStructure: {
+    include: {
+      academicSession: true,
+      term: true,
+      level: true,
+      classArm: true,
+    },
+  },
+} satisfies Prisma.StudentPaymentInclude;
+
+export type StudentPaymentWithDetails = Prisma.StudentPaymentGetPayload<{
+  include: typeof studentPaymentDetailInclude;
+}>;
 
 @Injectable()
 export class StudentPaymentsRepository {
@@ -77,43 +109,17 @@ export class StudentPaymentsRepository {
     });
   }
 
-  async findOne(id: string, schoolId: string) {
+  async findOne(id: string, schoolId: string): Promise<StudentPaymentWithDetails | null> {
     return this.prisma.studentPayment.findFirst({
       where: {
         id,
         student: {
-          user: {
-            schoolId,
-          },
+          user: { schoolId },
           deletedAt: null,
         },
         deletedAt: null,
       },
-      include: {
-        student: {
-          include: {
-            user: true,
-            classArmStudents: {
-              where: { isActive: true },
-              include: {
-                classArm: {
-                  include: {
-                    level: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        paymentStructure: {
-          include: {
-            academicSession: true,
-            term: true,
-            level: true,
-            classArm: true,
-          },
-        },
-      },
+      include: studentPaymentDetailInclude,
     });
   }
 
@@ -219,7 +225,7 @@ export class StudentPaymentsRepository {
     );
 
     const overdueCount = payments.filter(
-      (payment) => payment.status === 'PENDING' && payment.dueDate < new Date(),
+      (payment) => payment.status === PaymentStatus.PENDING && payment.dueDate < new Date(),
     ).length;
 
     return {

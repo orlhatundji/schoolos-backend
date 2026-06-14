@@ -7,10 +7,13 @@ import {
 
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { PaystackService } from '../../../shared/services/paystack.service';
-import { FeeCalculationService } from '../../../shared/services/fee-calculation.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import { CurrentTermService } from '../../../shared/services/current-term.service';
+import {
+  PaymentEventOutcome,
+  PaymentTarget,
+} from '../../payments/domain/payment-event-result';
+import { PaymentService } from '../../payments/payment.service';
 import { PasswordHasher } from '../../../utils/hasher';
 import {
   StudentAttendanceData,
@@ -28,8 +31,7 @@ import { computeSubjectCumulative, PriorBySubjectByTerm } from './student-cumula
 export class StudentService extends BaseService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paystackService: PaystackService,
-    private readonly feeCalculationService: FeeCalculationService,
+    private readonly paymentService: PaymentService,
     private readonly templateService: AssessmentStructureTemplateService,
     private readonly currentTermService: CurrentTermService,
     private readonly passwordHasher: PasswordHasher,
@@ -1454,195 +1456,56 @@ export class StudentService extends BaseService {
     }));
   }
 
-  async initiatePayment(
-    userId: string,
-    paymentId: string,
-    amount?: number,
-  ): Promise<{
-    authorization_url: string;
-    access_code: string;
-    reference: string;
-    feeBreakdown: {
-      feeAmount: number;
-      platformFee: number;
-      paystackFee: number;
-      studentTotal: number;
-      schoolReceives: number;
-    };
-    bankAccountMissing: boolean;
-  }> {
-    const student = await this.getStudentByUserId(userId);
-
-    // Get the payment record
-    const payment = await this.prisma.studentPayment.findFirst({
-      where: {
-        id: paymentId,
-        studentId: student.id,
-        deletedAt: null,
-        status: {
-          in: ['PENDING', 'PARTIAL', 'OVERDUE'],
-        },
-      },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Payment not found or not available for payment');
-    }
-
-    // Calculate payment amount (the school fee portion)
-    const feeAmount = amount || Number(payment.amount) - Number(payment.paidAmount);
-
-    if (feeAmount <= 0) {
-      throw new BadRequestException('Payment amount must be greater than zero');
-    }
-
-    // Fetch school's bank account + subaccount code
-    const bankAccount = await this.prisma.schoolBankAccount.findUnique({
-      where: { schoolId: student.user.schoolId },
-    });
-
-    const bankAccountMissing = !bankAccount?.paystackSubaccountCode;
-
-    // Calculate fee breakdown
-    const breakdown = this.feeCalculationService.calculateStudentTotal(feeAmount);
-
-    // Generate reference
-    const reference = this.paystackService.generateReference('STU_PAY');
-
-    // Build Paystack request
-    const paystackRequest: any = {
-      amount: this.paystackService.convertToKobo(breakdown.studentTotal),
-      email: student.user.email || `${student.studentNo}@school.com`,
-      reference,
-      metadata: {
-        studentId: student.id,
-        paymentId: payment.id,
-        studentNo: student.studentNo,
-        paymentStructureId: payment.paymentStructureId,
-        feeAmount,
-        platformFee: breakdown.platformFee,
-        paystackFee: breakdown.paystackFee,
-        studentTotal: breakdown.studentTotal,
-      },
-    };
-
-    // If school has a subaccount, route payment to them
-    if (!bankAccountMissing) {
-      paystackRequest.subaccount = bankAccount.paystackSubaccountCode;
-      paystackRequest.transaction_charge = this.paystackService.convertToKobo(
-        breakdown.platformFee,
-      );
-    }
-
-    // Initialize payment with Paystack
-    const paystackResponse = await this.paystackService.initializePayment(paystackRequest);
-
-    // Store payment reference in database for verification
-    await this.prisma.studentPayment.update({
-      where: { id: paymentId },
-      data: {
-        notes: `Payment initiated with reference: ${reference}`,
-      },
-    });
-
-    // Create PlatformTransaction record
-    await this.prisma.platformTransaction.create({
-      data: {
-        schoolId: student.user.schoolId,
-        studentPaymentId: payment.id,
-        paymentReference: reference,
-        totalCharged: breakdown.studentTotal,
-        feeAmount: feeAmount,
-        platformCommission: breakdown.platformFee,
-        paystackFee: breakdown.paystackFee,
-        status: 'PENDING',
-      },
-    });
-
-    return {
-      authorization_url: paystackResponse.data.authorization_url,
-      access_code: paystackResponse.data.access_code,
-      reference: paystackResponse.data.reference,
-      feeBreakdown: {
-        feeAmount,
-        platformFee: breakdown.platformFee,
-        paystackFee: breakdown.paystackFee,
-        studentTotal: breakdown.studentTotal,
-        schoolReceives: breakdown.schoolReceives,
-      },
-      bankAccountMissing,
-    };
+  async initiatePayment(userId: string, paymentId: string, amount?: number) {
+    return this.paymentService.initializeStudentPayment({ userId, paymentId, amount });
   }
 
   async verifyPayment(
     userId: string,
     reference: string,
   ): Promise<{ success: boolean; message: string; payment?: StudentPaymentData }> {
-    const student = await this.getStudentByUserId(userId);
-
     try {
-      // Verify payment with Paystack
-      const paystackResponse = await this.paystackService.verifyPayment(reference);
+      const result = await this.paymentService.verifyStudentPayment(userId, reference);
 
-      if (paystackResponse.data.status !== 'success') {
+      if (result.outcome === PaymentEventOutcome.IGNORED || result.outcome === PaymentEventOutcome.PAYMENT_FAILURE_RECORDED) {
         return {
           success: false,
-          message: 'Payment verification failed',
+          message: 'Payment verification failed' 
         };
       }
 
-      const paymentData = paystackResponse.data;
-      const amountPaid = this.paystackService.convertFromKobo(paymentData.amount);
+      const studentPaymentId =
+        result.outcome === PaymentEventOutcome.PAYMENT_PROCESSED &&
+        result.target === PaymentTarget.STUDENT_PAYMENT
+          ? result.studentPaymentId
+          : await this.studentPaymentIdForReference(reference);
 
-      // Find the payment record
-      const payment = await this.prisma.studentPayment.findFirst({
-        where: {
-          studentId: student.id,
-          notes: {
-            contains: reference,
-          },
-          deletedAt: null,
-        },
-        include: {
-          paymentStructure: true,
-        },
-      });
-
-      if (!payment) {
-        return {
-          success: false,
-          message: 'Payment record not found',
-        };
+      if (!studentPaymentId) {
+        return { success: false, message: 'StudentPayment record not found' };
       }
 
-      // Update payment status
-      const newPaidAmount = Number(payment.paidAmount) + amountPaid;
-      const totalAmount = Number(payment.amount);
-      const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
-
-      const updatedPayment = await this.prisma.studentPayment.update({
-        where: { id: payment.id },
-        data: {
-          paidAmount: newPaidAmount,
-          status: newStatus,
-          paidAt: new Date(),
-          notes: `Payment verified via Paystack. Reference: ${reference}. Amount: ${amountPaid}`,
-        },
-        include: {
-          paymentStructure: true,
-        },
+      const updatedPayment = await this.prisma.studentPayment.findUnique({
+        where: { id: studentPaymentId },
+        include: { paymentStructure: true },
       });
+      
+      if (!updatedPayment) {
+        return { success: false, message: 'Payment record not found' };
+      }
 
       return {
         success: true,
-        message: 'Payment verified successfully',
+        message:
+          result.outcome === PaymentEventOutcome.DUPLICATE_EVENT
+            ? 'Payment was already verified'
+            : 'Payment verified successfully',
         payment: {
           id: updatedPayment.id,
           studentId: updatedPayment.studentId,
           paymentStructureId: updatedPayment.paymentStructureId,
           amount: Number(updatedPayment.amount),
           currency: updatedPayment.currency,
-          status: updatedPayment.status as any,
+          status: updatedPayment.status as StudentPaymentData['status'],
           dueDate: updatedPayment.dueDate,
           paidAmount: Number(updatedPayment.paidAmount),
           paidAt: updatedPayment.paidAt,
@@ -1659,12 +1522,49 @@ export class StudentService extends BaseService {
         },
       };
     } catch (error) {
-      this.logger.error(`Payment verification failed: ${error.message}`, error.stack);
-      return {
-        success: false,
-        message: 'Payment verification failed',
-      };
+      this.logger.error(
+        `Payment verification failed: ${(error as Error).message}`,
+        (error as Error).stack,
+      );
+      return { success: false, message: 'Payment verification failed' };
     }
+  }
+
+  async getTransactionsForOwnedPayment(userId: string, paymentId: string) {
+    const student = await this.getStudentByUserId(userId);
+    const owned = await this.prisma.studentPayment.findFirst({
+      where: { id: paymentId, studentId: student.id, deletedAt: null },
+      select: { id: true },
+    });
+    if (!owned) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    const rows = await this.prisma.platformTransaction.findMany({
+      where: { operationType: 'STUDENT_PAYMENT', operationId: paymentId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        paymentReference: true,
+        totalCharged: true,
+        feeAmount: true,
+        currency: true,
+        status: true,
+        settledAt: true,
+        receiptUrl: true,
+        createdAt: true,
+      },
+    });
+    return rows;
+  }
+
+  private async studentPaymentIdForReference(reference: string): Promise<string | null> {
+    const platformTx = await this.prisma.platformTransaction.findUnique({
+      where: { paymentReference: reference },
+      select: { operationType: true, operationId: true },
+    });
+    if (!platformTx || platformTx.operationType !== 'STUDENT_PAYMENT') return null;
+    return platformTx.operationId;
   }
 
   private async getStudentByUserId(userId: string) {

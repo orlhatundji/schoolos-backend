@@ -127,13 +127,10 @@ export class FeeBreakdownDto {
   feeAmount: number;
 
   @ApiProperty()
-  platformFee: number;
-
-  @ApiProperty()
   paystackFee: number;
 
   @ApiProperty()
-  studentTotal: number;
+  totalCharged: number;
 
   @ApiProperty()
   schoolReceives: number;

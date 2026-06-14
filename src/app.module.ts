@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
@@ -17,6 +18,7 @@ import { AllExceptionsFilter } from './utils/exception-filter';
 @Module({
   imports: [
     ...AppModuleList,
+    ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       useFactory: async (configService: ConfigService) => ({
         connection: {

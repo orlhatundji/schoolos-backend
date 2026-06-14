@@ -108,6 +108,10 @@ model School {
   bankAccount                  SchoolBankAccount?
   platformTransactions         PlatformTransaction[]
   commentTemplates             CommentTemplate[]
+  /// Per-school override of the platform service fee rate (naira per active student per term).
+  /// NULL means use the env default `SCHOS_SERVICE_FEE_NAIRA`.
+  serviceFeeOverride           Decimal?                      @db.Decimal(10, 2)
+  schoolInvoices               SchoolInvoice[]
   /// Non-null when the school's super-admin has requested deletion and it
   /// has not yet been cancelled or executed. Used as a fast check on login.
   deletionRequestedAt          DateTime?
@@ -281,6 +285,7 @@ model Term {
   quizzesByDefault      Quiz[]                      @relation("QuizDefaultTerm")
   quizAssignments       QuizAssignment[]
   quizScoreAggregations QuizScoreAggregation[]
+  schoolInvoices        SchoolInvoice[]
 
   @@map("terms")
 }
@@ -429,6 +434,9 @@ model User {
   authoredQuestions        Question[]              @relation("QuestionAuthor")
   authoredQuizzes          Quiz[]                  @relation("QuizAuthor")
   triggeredSeedRuns        SeedRun[]               @relation("SeedRunTriggeredBy")
+  invoicesWaived           SchoolInvoice[]         @relation("SchoolInvoiceWaivedBy")
+  invoicesCancelled        SchoolInvoice[]         @relation("SchoolInvoiceCancelledBy")
+  invoicesEdited           SchoolInvoice[]         @relation("SchoolInvoiceEditedBy")
   manuallyGradedResponses  QuestionResponse[]      @relation("QuestionResponseManualGrader")
 
   @@map("users")
@@ -1020,25 +1028,24 @@ model PaymentStructure {
 /// * Links payment structures to individual students, creating specific payment obligations.
 /// * This allows for tracking individual student payment status and history.
 model StudentPayment {
-  id                   String                @id @default(uuid())
-  studentId            String
-  paymentStructureId   String
-  amount               Decimal               @db.Decimal(10, 2)
-  currency             String                @default("NGN")
-  status               PaymentStatus         @default(PENDING)
-  dueDate              DateTime
-  paidAmount           Decimal               @default(0) @db.Decimal(10, 2)
-  paidAt               DateTime?
-  notes                String?
-  waivedBy             String?
-  waivedAt             DateTime?
-  waiverReason         String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  deletedAt            DateTime?
-  paymentStructure     PaymentStructure      @relation(fields: [paymentStructureId], references: [id])
-  student              Student               @relation(fields: [studentId], references: [id])
-  platformTransactions PlatformTransaction[]
+  id                 String           @id @default(uuid())
+  studentId          String
+  paymentStructureId String
+  amount             Decimal          @db.Decimal(10, 2)
+  currency           String           @default("NGN")
+  status             PaymentStatus    @default(PENDING)
+  dueDate            DateTime
+  paidAmount         Decimal          @default(0) @db.Decimal(10, 2)
+  paidAt             DateTime?
+  notes              String?
+  waivedBy           String?
+  waivedAt           DateTime?
+  waiverReason       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  deletedAt          DateTime?
+  paymentStructure   PaymentStructure @relation(fields: [paymentStructureId], references: [id])
+  student            Student          @relation(fields: [studentId], references: [id])
 
   @@index([studentId])
   @@index([paymentStructureId])
@@ -1354,26 +1361,28 @@ model SchoolBankAccount {
 /// * Records the breakdown of charges: total charged to student, original fee, platform commission,
 /// * and Paystack processing fees. Used for financial reconciliation and reporting.
 model PlatformTransaction {
-  id                 String            @id @default(uuid())
-  schoolId           String
-  studentPaymentId   String?
-  paymentReference   String            @unique
-  totalCharged       Decimal           @db.Decimal(10, 2)
-  feeAmount          Decimal           @db.Decimal(10, 2)
-  platformCommission Decimal           @db.Decimal(10, 2)
-  paystackFee        Decimal           @db.Decimal(10, 2)
-  commissionRate     Decimal           @default(0.01) @db.Decimal(5, 4)
-  currency           String            @default("NGN")
-  status             TransactionStatus @default(PENDING)
-  settledAt          DateTime?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  school             School            @relation(fields: [schoolId], references: [id])
-  studentPayment     StudentPayment?   @relation(fields: [studentPaymentId], references: [id])
+  id               String                       @id @default(uuid())
+  schoolId         String
+  paymentReference String                       @unique
+  totalCharged     Decimal                      @db.Decimal(10, 2)
+  feeAmount        Decimal                      @db.Decimal(10, 2)
+  paystackFee      Decimal                      @db.Decimal(10, 2)
+  currency         String                       @default("NGN")
+  status           TransactionStatus            @default(PENDING)
+  /// Polymorphic target — which domain object this transaction settles.
+  /// Pair with `operationId` to load the actual row. No DB-level FK on
+  /// `operationId` by design; application code validates the target on write.
+  operationType    PlatformTransactionOperation
+  operationId      String
+  settledAt        DateTime?
+  receiptUrl       String?
+  receiptSentAt    DateTime?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  school           School                       @relation(fields: [schoolId], references: [id])
 
-  @@index([schoolId])
-  @@index([status])
-  @@index([paymentReference])
+  @@index([schoolId, status])
+  @@index([operationType, operationId])
   @@map("platform_transactions")
 }
 
@@ -1382,6 +1391,128 @@ enum TransactionStatus {
   SETTLED
   FAILED
   REFUNDED
+}
+
+enum PlatformTransactionOperation {
+  STUDENT_PAYMENT
+  SCHOOL_INVOICE
+}
+
+/// *
+/// * SchoolInvoice
+/// * -------------
+/// * One row per school per term representing Schos's per-student service fee
+/// * (₦500 × active-students by default, override via `School.serviceFeeOverride`).
+/// * The unique (schoolId, termId) constraint is the idempotency guard for the
+/// * daily generation cron.
+///
+/// * Status meanings:
+/// *   ISSUED    — sent to school; awaiting payment.
+/// *   PAID      — settled (via Paystack online or marked paid manually).
+/// *   WAIVED    — debt was real and forgiven. `waivedById = NULL` denotes a
+/// *               system-issued waiver (currently only the welcome offer).
+/// *   CANCELLED — invoice was issued in error and should be ignored.
+model SchoolInvoice {
+  id           String              @id @default(uuid())
+  schoolId     String
+  termId       String
+  type         SchoolInvoiceType   @default(PLATFORM_SERVICE)
+  status       SchoolInvoiceStatus @default(ISSUED)
+  title        String?
+  description  String?
+  /// Snapshot of the active-student count at issuance time.
+  studentCount Int
+  /// Snapshot of the per-student rate (naira) at issuance time.
+  unitFee      Decimal             @db.Decimal(10, 2)
+  /// studentCount × unitFee. Stored for fast queries; recomputed on edit.
+  totalAmount  Decimal             @db.Decimal(10, 2)
+  issuedAt     DateTime            @default(now())
+
+  paidAt   DateTime?
+  paidVia  SchoolInvoicePaidVia?
+  /// Free-text note used when paidVia = EXTERNAL (e.g. "Bank transfer ref XYZ").
+  paidNote String?
+
+  waivedAt     DateTime?
+  /// NULL = system-issued waiver (welcome offer). Non-null = human Schos admin.
+  waivedById   String?
+  waiverReason String?
+
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelReason  String?
+
+  editedAt   DateTime?
+  editedById String?
+  editReason String?
+
+  /// S3 URL of the issued-invoice PDF. Regenerated on every edit.
+  pdfUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school      School @relation(fields: [schoolId], references: [id])
+  term        Term   @relation(fields: [termId], references: [id])
+  waivedBy    User?  @relation("SchoolInvoiceWaivedBy", fields: [waivedById], references: [id])
+  cancelledBy User?  @relation("SchoolInvoiceCancelledBy", fields: [cancelledById], references: [id])
+  editedBy    User?  @relation("SchoolInvoiceEditedBy", fields: [editedById], references: [id])
+
+  // Idempotency on PLATFORM_SERVICE invoices is enforced by a partial unique
+  // index on (schoolId, termId) WHERE type = 'PLATFORM_SERVICE'. Created via
+  // raw SQL in the migration — Prisma can't model partial unique constraints.
+  @@index([status])
+  @@index([schoolId, status])
+  @@index([schoolId, termId, type])
+  @@map("school_invoices")
+}
+
+enum SchoolInvoiceType {
+  PLATFORM_SERVICE
+  CUSTOM
+}
+
+enum SchoolInvoiceStatus {
+  ISSUED
+  PAID
+  WAIVED
+  CANCELLED
+}
+
+enum SchoolInvoicePaidVia {
+  ONLINE
+  EXTERNAL
+}
+
+/// *
+/// * PaystackEvent
+/// * -------------
+/// * Records every Paystack webhook event we receive.
+/// * The unique constraint on `paystackEventId` is the idempotency guard:
+/// * inserting a row that already exists is how we detect duplicate deliveries.
+/// * Also serves as an audit log for forensics, replay, and disputes.
+model PaystackEvent {
+  id              String              @id @default(uuid())
+  paystackEventId BigInt              @unique
+  eventType       String
+  reference       String?
+  payload         Json
+  status          PaystackEventStatus @default(RECEIVED)
+  processedAt     DateTime?
+  error           String?
+  createdAt       DateTime            @default(now())
+
+  @@index([reference])
+  @@index([eventType])
+  @@index([status])
+  @@map("paystack_events")
+}
+
+enum PaystackEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
 }
 
 enum AttendanceStatus {
@@ -1719,18 +1850,18 @@ model SymbolLibraryItem {
 /// * on the seeds page and to trace bad seed deploys after the fact. Status
 /// * lifecycles: RUNNING -> SUCCEEDED | FAILED.
 model SeedRun {
-  id           String          @id @default(uuid())
-  seedSlug     String
-  status       SeedRunStatus
-  startedAt    DateTime        @default(now())
-  finishedAt   DateTime?
-  upserted     Int             @default(0)
-  skipped      Int             @default(0)
-  durationMs   Int?
-  notes        String?
-  errorMessage String?
+  id            String        @id @default(uuid())
+  seedSlug      String
+  status        SeedRunStatus
+  startedAt     DateTime      @default(now())
+  finishedAt    DateTime?
+  upserted      Int           @default(0)
+  skipped       Int           @default(0)
+  durationMs    Int?
+  notes         String?
+  errorMessage  String?
   triggeredById String?
-  triggeredBy  User?           @relation("SeedRunTriggeredBy", fields: [triggeredById], references: [id])
+  triggeredBy   User?         @relation("SeedRunTriggeredBy", fields: [triggeredById], references: [id])
 
   @@index([seedSlug, startedAt])
   @@index([status])
@@ -2123,19 +2254,19 @@ model QuizAttempt {
 /// * Keyed @unique on quizAttemptId so refresh-resilient attempt-start does
 /// * not produce duplicate events.
 model QuizUsageEvent {
-  id               String      @id @default(uuid())
+  id               String   @id @default(uuid())
   schoolId         String
-  quizAttemptId    String      @unique
+  quizAttemptId    String   @unique
   quizAssignmentId String
   studentId        String
   durationMinutes  Int
   questionCount    Int
-  chargeableUnits  Decimal     @db.Decimal(10, 2)
-  unitRateSnapshot Decimal     @db.Decimal(10, 4)
+  chargeableUnits  Decimal  @db.Decimal(10, 2)
+  unitRateSnapshot Decimal  @db.Decimal(10, 4)
   amountKobo       Int
-  isWaived         Boolean     @default(false)
+  isWaived         Boolean  @default(false)
   waiverReason     String?
-  recordedAt       DateTime    @default(now())
+  recordedAt       DateTime @default(now())
 
   school      School      @relation(fields: [schoolId], references: [id])
   quizAttempt QuizAttempt @relation(fields: [quizAttemptId], references: [id])

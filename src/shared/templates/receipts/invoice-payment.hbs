@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Receipt · {{transaction.reference}}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+        color: #1a1a1a;
+        background: #fafafa;
+        margin: 0;
+        padding: 24px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .container {
+        max-width: 720px;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .header {
+        padding: 24px 28px 20px;
+        border-bottom: 1px solid #e5e5e5;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .brand-block { font-size: 18px; font-weight: 600; color: #111; }
+      .brand-sub { font-size: 11px; color: #666; margin-top: 4px; }
+      .hero {
+        padding: 28px;
+        text-align: center;
+        background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
+      }
+      .hero h1 {
+        margin: 0;
+        font-size: 36px;
+        font-weight: 700;
+        color: #111;
+        letter-spacing: -0.5px;
+      }
+      .hero .badge {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #047857;
+        background: #d1fae5;
+        border-radius: 999px;
+        letter-spacing: 0.4px;
+      }
+      .hero .at { font-size: 12px; color: #666; margin-top: 6px; }
+      .section { padding: 18px 28px; border-top: 1px solid #f0f0f0; }
+      .section-title { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; margin: 0 0 8px; }
+      .kv-table { width: 100%; border-collapse: collapse; }
+      .kv-table td { padding: 4px 0; vertical-align: top; }
+      .kv-table td.k { color: #666; }
+      .kv-table td.v { color: #1a1a1a; font-weight: 500; text-align: right; }
+      .kv-table td.v.mono { font-family: monospace; }
+      .footer {
+        padding: 14px 28px;
+        background: #fafafa;
+        color: #888;
+        font-size: 11px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div>
+          <div class="brand-block">Schos</div>
+          <div class="brand-sub">School operating system</div>
+        </div>
+        <div>
+          <div style="font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.6px; text-align: right;">Receipt</div>
+          <div style="font-size: 13px; color: #1a1a1a; margin-top: 2px;">{{transaction.reference}}</div>
+        </div>
+      </div>
+
+      <div class="hero">
+        <h1>{{transaction.amountDisplay}}</h1>
+        <div class="badge">PAID</div>
+        <div class="at">{{transaction.paidAtDisplay}}</div>
+      </div>
+
+      <div class="section">
+        <p class="section-title">Paid by</p>
+        <div style="font-weight: 600;">{{school.name}}</div>
+      </div>
+
+      <div class="section">
+        <p class="section-title">For</p>
+        <div>Schos term service · {{invoice.termLabel}}</div>
+        <div style="color:#666; font-size:12px; margin-top:4px;">{{invoice.studentCount}} active students × {{invoice.unitFeeDisplay}}/student</div>
+      </div>
+
+      <div class="section">
+        <p class="section-title">Transaction</p>
+        <table class="kv-table">
+          <tr>
+            <td class="k">Method</td>
+            <td class="v">{{transaction.methodDisplay}}</td>
+          </tr>
+          <tr>
+            <td class="k">Reference</td>
+            <td class="v mono">{{transaction.reference}}</td>
+          </tr>
+          <tr>
+            <td class="k">Total paid</td>
+            <td class="v">{{transaction.amountDisplay}}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="footer">
+        Powered by Schos · This is an automated receipt. Keep for your records.
+      </div>
+    </div>
+  </body>
+</html>

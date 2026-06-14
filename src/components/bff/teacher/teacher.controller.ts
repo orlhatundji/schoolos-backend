@@ -332,17 +332,6 @@ export class TeacherController {
     return this.teacherService.getColorSchemePaymentStatus(userId);
   }
 
-  @Post('color-scheme/payment/verify')
-  @ApiOperation({ summary: 'Verify color scheme payment' })
-  @ApiResponse({ status: 200, description: 'Payment verified successfully' })
-  @ApiResponse({ status: 400, description: 'Payment verification failed' })
-  async verifyColorSchemePayment(
-    @GetCurrentUserId() userId: string,
-    @Body() body: { reference: string },
-  ) {
-    return this.teacherService.verifyColorSchemePayment(userId, body.reference);
-  }
-
   // Student Assessment Score Management Endpoints
   @Patch('student-assessment-scores/:id')
   @ApiOperation({ summary: 'Update an existing student assessment score' })

@@ -1,74 +1,71 @@
 import { Injectable } from '@nestjs/common';
 
-export interface FeeBreakdown {
-  studentTotal: number; // What the student pays
-  platformFee: number; // Platform's commission
-  paystackFee: number; // Paystack processing fee
-  schoolReceives: number; // = feeAmount (school gets exact amount)
+export interface PaystackBreakdownAdditive {
+  baseAmount: number;
+  paystackFee: number;
+  totalCharged: number;
 }
 
-// Block-tier platform fee table (NGN). Each row covers feeAmount up to
-// and including `maxAmount`; the final row (Infinity) is the cap.
-const PLATFORM_FEE_TIERS: ReadonlyArray<{ maxAmount: number; fee: number }> = [
-  { maxAmount: 5_000, fee: 250 },
-  { maxAmount: 20_000, fee: 500 },
-  { maxAmount: 50_000, fee: 750 },
-  { maxAmount: 100_000, fee: 1_000 },
-  { maxAmount: 150_000, fee: 1_500 },
-  { maxAmount: 300_000, fee: 2_000 },
-  { maxAmount: Infinity, fee: 3_000 },
-];
+export interface PaystackBreakdownInclusive {
+  totalCharged: number;
+  paystackFee: number;
+  recipientReceives: number;
+}
 
 @Injectable()
 export class FeeCalculationService {
   /**
-   * Calculate the total amount a student pays, ensuring the school
-   * receives the exact fee amount after all deductions.
-   *
-   * Paystack fee structure (NGN):
-   * - 1.5% + NGN100 flat fee
-   * - Capped at NGN2,000
-   * - For transactions < NGN2,500: no NGN100 flat fee, just 1.5%
-   *
-   * We reverse-calculate so that after Paystack takes its fee,
-   * the school still receives the original fee amount.
+   * Paystack processing fee for an amount actually charged.
+   * 1.5% + ₦100, capped at ₦2,000. Under ₦2,500 the flat ₦100 doesn't apply.
    */
-  calculateStudentTotal(feeAmount: number): FeeBreakdown {
-    const platformFee = this.calculatePlatformFee(feeAmount);
-    const baseAmount = feeAmount + platformFee;
+  computePaystackFee(totalCharged: number): number {
+    if (totalCharged < 2500) {
+      return Math.ceil(totalCharged * 0.015);
+    }
+    const fee = Math.ceil(totalCharged * 0.015 + 100);
+    return Math.min(fee, 2000);
+  }
 
-    let studentTotal: number;
-    let paystackFee: number;
-
-    // Try uncapped calculation first: total = (base + 100) / 0.985
+  /**
+   * Payer bears the Paystack fee on top of the base amount.
+   * Used for student payments: parent pays `totalCharged`; school's
+   * Paystack subaccount nets the full `baseAmount` after Paystack's cut.
+   *
+   * Reverse-solves for the gross amount such that Paystack's fee on that
+   * gross leaves the school with `baseAmount` exactly. `paystackFee` in the
+   * return is the displayed/breakdown value (= totalCharged - baseAmount).
+   */
+  calculatePaystackBreakdownAdditive(baseAmount: number): PaystackBreakdownAdditive {
     const uncappedTotal = (baseAmount + 100) / 0.985;
-    const uncappedPaystackFee = uncappedTotal * 0.015 + 100;
+    const uncappedFee = uncappedTotal * 0.015 + 100;
 
-    if (uncappedPaystackFee > 2000) {
-      // Paystack fee is capped at NGN2,000
-      studentTotal = baseAmount + 2000;
-      paystackFee = 2000;
+    let totalCharged: number;
+    if (uncappedFee > 2000) {
+      totalCharged = baseAmount + 2000;
     } else if (uncappedTotal < 2500) {
-      // For amounts under NGN2,500, no flat NGN100 fee — just 1.5%
-      studentTotal = Math.ceil(baseAmount / 0.985);
-      paystackFee = Math.ceil(studentTotal * 0.015);
+      totalCharged = Math.ceil(baseAmount / 0.985);
     } else {
-      studentTotal = Math.ceil(uncappedTotal);
-      paystackFee = Math.ceil(studentTotal * 0.015 + 100);
+      totalCharged = Math.ceil(uncappedTotal);
     }
 
     return {
-      studentTotal,
-      platformFee,
-      paystackFee,
-      schoolReceives: feeAmount,
+      baseAmount,
+      paystackFee: totalCharged - baseAmount,
+      totalCharged,
     };
   }
 
-  private calculatePlatformFee(feeAmount: number): number {
-    for (const tier of PLATFORM_FEE_TIERS) {
-      if (feeAmount <= tier.maxAmount) return tier.fee;
-    }
-    return PLATFORM_FEE_TIERS[PLATFORM_FEE_TIERS.length - 1].fee;
+  /**
+   * Recipient absorbs the Paystack fee out of the flat total.
+   * Used for school-invoice payments: school pays `totalCharged` exactly
+   * (= invoice.totalAmount); Schos nets `recipientReceives` after Paystack's cut.
+   */
+  calculatePaystackBreakdownInclusive(totalCharged: number): PaystackBreakdownInclusive {
+    const paystackFee = this.computePaystackFee(totalCharged);
+    return {
+      totalCharged,
+      paystackFee,
+      recipientReceives: totalCharged - paystackFee,
+    };
   }
 }

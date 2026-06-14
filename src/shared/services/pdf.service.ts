@@ -4,6 +4,7 @@ import * as Handlebars from 'handlebars';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { StudentResultsData } from '../../components/bff/student/types';
+import { ReceiptTemplateData } from '../../components/payments/receipts/receipt-template-data';
 
 @Injectable()
 export class PdfService implements OnModuleInit, OnModuleDestroy {
@@ -150,6 +151,130 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async generateReceiptPDF(data: ReceiptTemplateData): Promise<Buffer> {
+    await this.ensureBrowser();
+    const template = this.getReceiptTemplate();
+    const html = template(data);
+
+    const page = await this.browser.newPage();
+    try {
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdf = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
+      });
+      return Buffer.from(pdf);
+    } finally {
+      await page.close();
+    }
+  }
+
+  /**
+   * Render the receipt HTML without producing a PDF. Used to inline the same
+   * content in the email body so the recipient sees it without opening the
+   * attachment.
+   */
+  renderReceiptHtml(data: ReceiptTemplateData): string {
+    return this.getReceiptTemplate()(data);
+  }
+
+  async generateInvoicePDF(data: unknown): Promise<Buffer> {
+    return this.generateFromHbs(this.getInvoiceTemplate(), data);
+  }
+
+  renderInvoiceHtml(data: unknown): string {
+    return this.getInvoiceTemplate()(data);
+  }
+
+  async generateInvoicePaymentReceiptPDF(data: unknown): Promise<Buffer> {
+    return this.generateFromHbs(this.getInvoicePaymentReceiptTemplate(), data);
+  }
+
+  renderInvoicePaymentReceiptHtml(data: unknown): string {
+    return this.getInvoicePaymentReceiptTemplate()(data);
+  }
+
+  async generateInvoiceCorrectedHtml(data: unknown): Promise<string> {
+    return this.getInvoiceCorrectedTemplate()(data);
+  }
+
+  private async generateFromHbs(
+    template: HandlebarsTemplateDelegate,
+    data: unknown,
+  ): Promise<Buffer> {
+    await this.ensureBrowser();
+    const html = template(data);
+    const page = await this.browser.newPage();
+    try {
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      const pdf = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
+      });
+      return Buffer.from(pdf);
+    } finally {
+      await page.close();
+    }
+  }
+
+  private getInvoiceTemplate(): HandlebarsTemplateDelegate {
+    return this.loadHbsTemplate('invoices', 'invoice');
+  }
+
+  private getInvoicePaymentReceiptTemplate(): HandlebarsTemplateDelegate {
+    return this.loadHbsTemplate('receipts', 'invoice-payment');
+  }
+
+  private getInvoiceCorrectedTemplate(): HandlebarsTemplateDelegate {
+    return this.loadHbsTemplate('invoices', 'invoice-corrected');
+  }
+
+  private loadHbsTemplate(folder: string, name: string): HandlebarsTemplateDelegate {
+    const cacheKey = `${folder}:${name}`;
+    if (this.templateCache.has(cacheKey)) {
+      return this.templateCache.get(cacheKey)!;
+    }
+    const candidates = [
+      join(__dirname, '..', 'templates', folder, `${name}.hbs`),
+      join(__dirname, '..', '..', '..', 'shared', 'templates', folder, `${name}.hbs`),
+      join(process.cwd(), 'dist', 'shared', 'templates', folder, `${name}.hbs`),
+      join(process.cwd(), 'dist', 'src', 'shared', 'templates', folder, `${name}.hbs`),
+      join(process.cwd(), 'src', 'shared', 'templates', folder, `${name}.hbs`),
+    ];
+    const templatePath = candidates.find((p) => existsSync(p));
+    if (!templatePath) {
+      throw new Error(`Template ${folder}/${name} not found. Searched: ${candidates.join(', ')}`);
+    }
+    const source = readFileSync(templatePath, 'utf8');
+    const compiled = Handlebars.compile(source);
+    this.templateCache.set(cacheKey, compiled);
+    return compiled;
+  }
+
+  private getReceiptTemplate(): HandlebarsTemplateDelegate {
+    const cacheKey = 'receipt:standard';
+    if (this.templateCache.has(cacheKey)) {
+      return this.templateCache.get(cacheKey)!;
+    }
+    const candidates = [
+      join(__dirname, '..', 'templates', 'receipts', 'standard.hbs'),
+      join(__dirname, '..', '..', '..', 'shared', 'templates', 'receipts', 'standard.hbs'),
+      join(process.cwd(), 'dist', 'shared', 'templates', 'receipts', 'standard.hbs'),
+      join(process.cwd(), 'dist', 'src', 'shared', 'templates', 'receipts', 'standard.hbs'),
+      join(process.cwd(), 'src', 'shared', 'templates', 'receipts', 'standard.hbs'),
+    ];
+    const templatePath = candidates.find((p) => existsSync(p));
+    if (!templatePath) {
+      throw new Error(`Receipt template not found. Searched: ${candidates.join(', ')}`);
+    }
+    const source = readFileSync(templatePath, 'utf8');
+    const compiled = Handlebars.compile(source);
+    this.templateCache.set(cacheKey, compiled);
+    return compiled;
+  }
+
   private getTemplate(templateId: string): HandlebarsTemplateDelegate {
     if (this.templateCache.has(templateId)) {
       return this.templateCache.get(templateId)!;
@@ -211,6 +336,22 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
     Handlebars.registerHelper('or', (a: any, b: any) => a || b);
 
     Handlebars.registerHelper('json', (context: any) => JSON.stringify(context));
+
+    Handlebars.registerHelper('formatNaira', (amount: number) => {
+      if (typeof amount !== 'number' || Number.isNaN(amount)) return '0.00';
+      return amount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    });
+
+    Handlebars.registerHelper('statusLabel', (status: string) => {
+      switch (status) {
+        case 'PAID':
+          return 'PAID IN FULL';
+        case 'PARTIAL':
+          return 'PARTIAL PAYMENT';
+        default:
+          return status;
+      }
+    });
   }
 
   private formatDate(date: Date): string {

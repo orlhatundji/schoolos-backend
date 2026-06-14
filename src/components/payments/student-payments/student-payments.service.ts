@@ -1,10 +1,21 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { PaymentStatus, PlatformTransactionOperation } from '@prisma/client';
 
 import { PrismaService } from '../../../prisma/prisma.service';
-import { PaystackService } from '../../../shared/services/paystack.service';
+import { assertCanTransition } from '../domain/payment-status.machine';
+import { PaymentEventOutcome, PaymentTarget } from '../domain/payment-event-result';
+import { PaymentService } from '../payment.service';
 import { RequestPaymentDto } from './dto/request-payment.dto';
 import { UpdateStudentPaymentDto } from './dto/update-student-payment.dto';
-import { StudentPaymentsRepository } from './student-payments.repository';
+import {
+  StudentPaymentsRepository,
+  StudentPaymentWithDetails,
+} from './student-payments.repository';
 
 @Injectable()
 export class StudentPaymentsService {
@@ -13,212 +24,108 @@ export class StudentPaymentsService {
   constructor(
     private readonly studentPaymentsRepository: StudentPaymentsRepository,
     private readonly prisma: PrismaService,
-    private readonly paystackService: PaystackService,
+    private readonly paymentService: PaymentService,
   ) {}
 
-  async getAllStudentPayments(userId: string, filters?: any) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    return this.studentPaymentsRepository.findAll(user.schoolId, filters);
+  getAllStudentPayments(schoolId: string, filters?: Record<string, unknown>) {
+    return this.studentPaymentsRepository.findAll(schoolId, filters);
   }
 
-  async getStudentPaymentById(userId: string, id: string) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    const studentPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
-
+  async getStudentPaymentById(schoolId: string, id: string) {
+    const studentPayment = await this.studentPaymentsRepository.findOne(id, schoolId);
     if (!studentPayment) {
       throw new NotFoundException('Student payment not found or access denied');
     }
-
     return studentPayment;
   }
 
-  async getStudentPaymentsByStudent(userId: string, studentId: string) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Verify the student belongs to the user's school
+  async getStudentPaymentsByStudent(schoolId: string, studentId: string) {
     const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        user: {
-          schoolId: user.schoolId,
-        },
-        deletedAt: null,
-      },
+      where: { id: studentId, user: { schoolId }, deletedAt: null },
+      select: { id: true },
     });
-
     if (!student) {
       throw new NotFoundException('Student not found or access denied');
     }
-
-    return this.studentPaymentsRepository.findByStudent(studentId, user.schoolId);
+    return this.studentPaymentsRepository.findByStudent(studentId, schoolId);
   }
 
   async updateStudentPayment(
-    userId: string,
+    schoolId: string,
     id: string,
-    updateStudentPaymentDto: UpdateStudentPaymentDto,
+    dto: UpdateStudentPaymentDto,
   ) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
+    const existingPayment = await this.requireOwnedPayment(id, schoolId);
+    this.validatePaymentUpdate(existingPayment, dto);
+
+    return this.studentPaymentsRepository.update(id, {
+      ...dto,
+      ...(dto.waivedBy && { waivedBy: dto.waivedBy }),
+      ...(dto.waivedAt && { waivedAt: dto.waivedAt }),
     });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Verify the student payment belongs to the user's school
-    const existingPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
-
-    if (!existingPayment) {
-      throw new NotFoundException('Student payment not found or access denied');
-    }
-
-    // Validate payment updates
-    await this.validatePaymentUpdate(existingPayment, updateStudentPaymentDto);
-
-    // Update the student payment
-    const studentPayment = await this.studentPaymentsRepository.update(id, {
-      ...updateStudentPaymentDto,
-      ...(updateStudentPaymentDto.waivedBy && { waivedBy: updateStudentPaymentDto.waivedBy }),
-      ...(updateStudentPaymentDto.waivedAt && { waivedAt: updateStudentPaymentDto.waivedAt }),
-    });
-
-    return studentPayment;
   }
 
-  async markPaymentAsPaid(userId: string, id: string, paidAmount: number, paidAt?: string) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
+  async markPaymentAsPaid(
+    schoolId: string,
+    id: string,
+    paidAmount: number,
+    paidAt?: string,
+  ) {
+    const existingPayment = await this.requireOwnedPayment(id, schoolId);
 
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Verify the student payment belongs to the user's school
-    const existingPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
-
-    if (!existingPayment) {
-      throw new NotFoundException('Student payment not found or access denied');
-    }
-
-    // Validate paid amount
     if (paidAmount <= 0) {
       throw new BadRequestException('Paid amount must be greater than 0');
     }
-
     if (paidAmount > Number(existingPayment.amount)) {
       throw new BadRequestException('Paid amount cannot exceed the total amount');
     }
 
-    // Determine payment status
-    let status = 'PARTIAL';
-    if (Number(paidAmount) >= Number(existingPayment.amount)) {
-      status = 'PAID';
-    }
+    const newStatus: PaymentStatus =
+      paidAmount >= Number(existingPayment.amount) ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+    assertCanTransition(existingPayment.status, newStatus);
 
-    // Update the payment
-    const studentPayment = await this.studentPaymentsRepository.update(id, {
+    return this.studentPaymentsRepository.update(id, {
       paidAmount,
-      status: status as any,
-      paidAt: paidAt || new Date().toISOString(),
+      status: newStatus,
+      paidAt: paidAt ?? new Date().toISOString(),
     });
-
-    return studentPayment;
   }
 
-  async requestPayment(userId: string, requestPaymentDto: RequestPaymentDto) {
-    const { studentId, paymentStructureId, dueDate, notes } = requestPaymentDto;
+  async requestPayment(schoolId: string, dto: RequestPaymentDto) {
+    const { studentId, paymentStructureId, dueDate, notes } = dto;
 
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Verify the student belongs to the user's school
     const student = await this.prisma.student.findFirst({
-      where: {
-        id: studentId,
-        user: { schoolId: user.schoolId },
-        deletedAt: null,
-      },
+      where: { id: studentId, user: { schoolId }, deletedAt: null },
+      select: { id: true },
     });
-
     if (!student) {
       throw new NotFoundException('Student not found or access denied');
     }
 
-    // Fetch the payment structure and verify it belongs to the same school
     const paymentStructure = await this.prisma.paymentStructure.findFirst({
-      where: {
-        id: paymentStructureId,
-        schoolId: user.schoolId,
-        deletedAt: null,
-      },
+      where: { id: paymentStructureId, schoolId, deletedAt: null },
     });
-
     if (!paymentStructure) {
       throw new NotFoundException('Payment structure not found or access denied');
     }
 
-    // Check for duplicate payment
-    const existingPayment = await this.prisma.studentPayment.findFirst({
-      where: {
-        studentId,
-        paymentStructureId,
-        deletedAt: null,
-      },
+    const duplicate = await this.prisma.studentPayment.findFirst({
+      where: { studentId, paymentStructureId, deletedAt: null },
+      select: { id: true },
     });
-
-    if (existingPayment) {
+    if (duplicate) {
       throw new BadRequestException(
         'A payment for this structure already exists for this student',
       );
     }
 
-    // Create the student payment
-    const studentPayment = await this.prisma.studentPayment.create({
+    return this.prisma.studentPayment.create({
       data: {
         studentId,
         paymentStructureId,
         amount: paymentStructure.amount,
         currency: paymentStructure.currency,
-        dueDate: dueDate ? new Date(dueDate) : paymentStructure.dueDate || new Date(),
+        dueDate: dueDate ? new Date(dueDate) : paymentStructure.dueDate ?? new Date(),
         notes,
       },
       include: {
@@ -227,251 +134,160 @@ export class StudentPaymentsService {
             user: true,
             classArmStudents: {
               where: { isActive: true },
-              include: {
-                classArm: {
-                  include: { level: true },
-                },
-              },
-            },
-          },
-        },
-        paymentStructure: {
-          include: {
-            academicSession: true,
-            term: true,
-            level: true,
-            classArm: true,
-          },
-        },
-      },
-    });
-
-    return studentPayment;
-  }
-
-  async waivePayment(userId: string, id: string, waiverReason: string) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Verify the student payment belongs to the user's school
-    const existingPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
-
-    if (!existingPayment) {
-      throw new NotFoundException('Student payment not found or access denied');
-    }
-
-    if (existingPayment.status === 'PAID') {
-      throw new BadRequestException('Cannot waive a payment that has already been paid');
-    }
-
-    // Update the payment
-    const studentPayment = await this.studentPaymentsRepository.update(id, {
-      status: 'WAIVED',
-      waivedBy: userId,
-      waivedAt: new Date().toISOString(),
-      waiverReason,
-    });
-
-    return studentPayment;
-  }
-
-  async unwaivePayment(userId: string, id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    const existingPayment = await this.studentPaymentsRepository.findOne(id, user.schoolId);
-
-    if (!existingPayment) {
-      throw new NotFoundException('Student payment not found or access denied');
-    }
-
-    if (existingPayment.status !== 'WAIVED') {
-      throw new BadRequestException('Only waived payments can be unwaived');
-    }
-
-    const studentPayment = await this.studentPaymentsRepository.update(id, {
-      status: 'PENDING',
-      waivedBy: null,
-      waivedAt: null,
-      waiverReason: null,
-    });
-
-    return studentPayment;
-  }
-
-  async getPaymentStatistics(userId: string) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    return this.studentPaymentsRepository.getPaymentStatistics(user.schoolId);
-  }
-
-  async verifyPaymentByReference(userId: string, reference: string) {
-    // Get user's school ID
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { schoolId: true },
-    });
-
-    if (!user?.schoolId) {
-      throw new BadRequestException('User not associated with a school');
-    }
-
-    // Verify with Paystack
-    const paystackResponse = await this.paystackService.verifyPayment(reference);
-
-    if (paystackResponse.data.status !== 'success') {
-      throw new BadRequestException(
-        `Payment not successful on Paystack. Status: ${paystackResponse.data.status}`,
-      );
-    }
-
-    // Find the student payment by reference in notes
-    const studentPayment = await this.prisma.studentPayment.findFirst({
-      where: {
-        notes: { contains: reference },
-        student: { user: { schoolId: user.schoolId } },
-        deletedAt: null,
-      },
-      include: {
-        student: {
-          include: {
-            user: true,
-            classArmStudents: {
-              where: { isActive: true },
               include: { classArm: { include: { level: true } } },
             },
           },
         },
-        paymentStructure: true,
+        paymentStructure: {
+          include: { academicSession: true, term: true, level: true, classArm: true },
+        },
       },
     });
+  }
 
-    if (!studentPayment) {
+  async waivePayment(
+    schoolId: string,
+    userId: string,
+    id: string,
+    waiverReason: string,
+  ) {
+    const existingPayment = await this.requireOwnedPayment(id, schoolId);
+    assertCanTransition(existingPayment.status, PaymentStatus.WAIVED);
+
+    return this.studentPaymentsRepository.update(id, {
+      status: PaymentStatus.WAIVED,
+      waivedBy: userId,
+      waivedAt: new Date().toISOString(),
+      waiverReason,
+    });
+  }
+
+  async unwaivePayment(schoolId: string, id: string) {
+    const existingPayment = await this.requireOwnedPayment(id, schoolId);
+    if (existingPayment.status !== PaymentStatus.WAIVED) {
+      throw new BadRequestException('Only waived payments can be unwaived');
+    }
+    assertCanTransition(existingPayment.status, PaymentStatus.PENDING);
+
+    return this.studentPaymentsRepository.update(id, {
+      status: PaymentStatus.PENDING,
+      waivedBy: null,
+      waivedAt: null,
+      waiverReason: null,
+    });
+  }
+
+  getPaymentStatistics(schoolId: string) {
+    return this.studentPaymentsRepository.getPaymentStatistics(schoolId);
+  }
+
+  async getTransactionsForPayment(schoolId: string, id: string) {
+    await this.requireOwnedPayment(id, schoolId);
+    return this.prisma.platformTransaction.findMany({
+      where: { operationType: PlatformTransactionOperation.STUDENT_PAYMENT, operationId: id, schoolId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        paymentReference: true,
+        totalCharged: true,
+        feeAmount: true,
+        paystackFee: true,
+        currency: true,
+        status: true,
+        settledAt: true,
+        receiptUrl: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async verifyPaymentByReference(schoolId: string, reference: string) {
+    const result = await this.paymentService.adminVerifyPaymentByReference(schoolId, reference);
+
+    const studentPaymentId =
+      (result.outcome === PaymentEventOutcome.PAYMENT_PROCESSED &&
+      result.target === PaymentTarget.STUDENT_PAYMENT
+        ? result.studentPaymentId
+        : null) ??
+      (result.outcome === PaymentEventOutcome.DUPLICATE_EVENT
+        ? await (async () => {
+            const tx = await this.prisma.platformTransaction.findUnique({
+              where: { paymentReference: reference },
+              select: { operationType: true, operationId: true },
+            });
+            return tx?.operationType === PlatformTransactionOperation.STUDENT_PAYMENT ? tx.operationId : null;
+          })()
+        : null);
+
+    if (!studentPaymentId) {
       throw new NotFoundException(
         `No payment record found for reference "${reference}" in your school`,
       );
     }
 
-    // Check if already fully paid
-    if (studentPayment.status === 'PAID') {
+    const payment = await this.studentPaymentsRepository.findOne(studentPaymentId, schoolId);
+    if (!payment) {
+      throw new NotFoundException('Student payment not found after verification');
+    }
+
+    if (result.outcome === PaymentEventOutcome.DUPLICATE_EVENT) {
       return {
         message: 'Payment was already marked as paid',
         alreadyProcessed: true,
-        payment: studentPayment,
+        payment,
       };
     }
 
-    // Use PlatformTransaction feeAmount if available, otherwise convert from kobo
-    const platformTx = await this.prisma.platformTransaction.findUnique({
-      where: { paymentReference: reference },
-    });
-
-    const amountToCredit = platformTx
-      ? Number(platformTx.feeAmount)
-      : this.paystackService.convertFromKobo(paystackResponse.data.amount);
-
-    const newPaidAmount = Number(studentPayment.paidAmount) + amountToCredit;
-    const totalAmount = Number(studentPayment.amount);
-    const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
-
-    const updatedPayment = await this.prisma.studentPayment.update({
-      where: { id: studentPayment.id },
-      data: {
-        paidAmount: newPaidAmount,
-        status: newStatus,
-        paidAt: new Date(),
-        notes: `Payment verified manually by admin. Reference: ${reference}. Amount credited: ${amountToCredit}`,
-      },
-      include: {
-        student: {
-          include: {
-            user: true,
-            classArmStudents: {
-              where: { isActive: true },
-              include: { classArm: { include: { level: true } } },
-            },
-          },
-        },
-        paymentStructure: true,
-      },
-    });
-
-    // Update PlatformTransaction if exists
-    if (platformTx && platformTx.status !== 'SETTLED') {
-      await this.prisma.platformTransaction.update({
-        where: { id: platformTx.id },
-        data: { status: 'SETTLED', settledAt: new Date() },
-      });
+    if (
+      result.outcome === PaymentEventOutcome.PAYMENT_PROCESSED &&
+      result.target === PaymentTarget.STUDENT_PAYMENT
+    ) {
+      this.logger.log(
+        `Admin verify for ${reference} → processed (${result.studentPaymentId}, ${result.status})`,
+      );
+      return {
+        message: `Payment verified and credited successfully. Status: ${result.status}`,
+        alreadyProcessed: false,
+        amountCredited: result.amountNaira,
+        payment,
+      };
     }
 
-    this.logger.log(
-      `Admin ${userId} manually verified payment ${studentPayment.id} with reference ${reference}. Credited: ${amountToCredit}`,
+    throw new BadRequestException(
+      `Unexpected verification outcome: ${result.outcome}`,
     );
-
-    return {
-      message: `Payment verified and credited successfully. Status: ${newStatus}`,
-      alreadyProcessed: false,
-      amountCredited: amountToCredit,
-      payment: updatedPayment,
-    };
   }
 
-  private async validatePaymentUpdate(existingPayment: any, updateDto: UpdateStudentPaymentDto) {
-    // Validate status transitions
-    if (updateDto.status) {
-      const validTransitions = {
-        PENDING: ['PAID', 'PARTIAL', 'WAIVED'],
-        PARTIAL: ['PAID', 'WAIVED'],
-        PAID: [], // Cannot change from PAID
-        OVERDUE: ['PAID', 'PARTIAL', 'WAIVED'],
-        WAIVED: ['PENDING'], // Allow reversing a waiver
-      };
+  private async requireOwnedPayment(
+    id: string,
+    schoolId: string,
+  ): Promise<StudentPaymentWithDetails> {
+    const payment = await this.studentPaymentsRepository.findOne(id, schoolId);
+    if (!payment) {
+      throw new NotFoundException('Student payment not found or access denied');
+    }
+    return payment;
+  }
 
-      const currentStatus = existingPayment.status;
-      const newStatus = updateDto.status;
-
-      if (!validTransitions[currentStatus]?.includes(newStatus)) {
-        throw new BadRequestException(
-          `Invalid status transition from ${currentStatus} to ${newStatus}`,
-        );
-      }
+  private validatePaymentUpdate(
+    existingPayment: StudentPaymentWithDetails,
+    dto: UpdateStudentPaymentDto,
+  ): void {
+    if (dto.status) {
+      assertCanTransition(existingPayment.status, dto.status);
     }
 
-    // Validate paid amount
-    if (updateDto.paidAmount !== undefined) {
-      if (updateDto.paidAmount < 0) {
+    if (dto.paidAmount !== undefined) {
+      if (dto.paidAmount < 0) {
         throw new BadRequestException('Paid amount cannot be negative');
       }
-
-      if (updateDto.paidAmount > Number(existingPayment.amount)) {
+      if (dto.paidAmount > Number(existingPayment.amount)) {
         throw new BadRequestException('Paid amount cannot exceed the total amount');
       }
     }
 
-    // Validate waiver fields
-    if (updateDto.waivedBy || updateDto.waivedAt || updateDto.waiverReason) {
-      if (!updateDto.waivedBy || !updateDto.waiverReason) {
+    if (dto.waivedBy || dto.waivedAt || dto.waiverReason) {
+      if (!dto.waivedBy || !dto.waiverReason) {
         throw new BadRequestException(
           'Both waivedBy and waiverReason are required when waiving a payment',
         );

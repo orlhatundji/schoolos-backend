@@ -43,7 +43,9 @@ const getConfiguration = () => ({
   paystack: {
     secretKey: process.env.PAYSTACK_SECRET_KEY,
     publicKey: process.env.PAYSTACK_PUBLIC_KEY,
-    webhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET,
+  },
+  schos: {
+    serviceFeeNaira: parseInt(process.env.SCHOS_SERVICE_FEE_NAIRA, 10) || 500,
   },
   grafana: {
     lokiHost: process.env.GRAFANA_LOKI_HOST,

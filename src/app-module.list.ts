@@ -11,6 +11,7 @@ import { AssessmentStructuresModule } from './components/assessment-structures/a
 import { AssessmentsModule } from './components/assessments/assessments.module';
 import { AuthModule } from './components/auth/auth.module';
 import { BffAdminModule } from './components/bff/admin/bff-admin.module';
+import { BillingModule } from './components/billing/billing.module';
 import { StudentModule } from './components/bff/student/student.module';
 import { TeacherModule } from './components/bff/teacher/teacher.module';
 import { CanonicalReferencesModule } from './components/canonical-references/canonical-references.module';
@@ -87,6 +88,7 @@ export const AppModuleList = [
   AssessmentsModule,
   AssessmentStructuresModule,
   PaymentsModule,
+  BillingModule,
   PlatformModule,
   PopularExamsModule,
   QuestionsModule,

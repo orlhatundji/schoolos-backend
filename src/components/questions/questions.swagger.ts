@@ -1,8 +1,10 @@
 import { applyDecorators } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 
-import { CreateQuestionDto, UpdateQuestionDto } from './dto';
+import { BulkDeleteQuestionsDto, CreateQuestionDto, UpdateQuestionDto } from './dto';
 import {
+  ArchiveQuestionResult,
+  BulkDeleteQuestionsResult,
   CloneQuestionResult,
   CreateQuestionResult,
   DeleteQuestionResult,
@@ -18,7 +20,10 @@ export function CreateQuestionSwagger() {
     }),
     ApiBody({ type: CreateQuestionDto }),
     ApiResponse({ status: 201, type: CreateQuestionResult }),
-    ApiResponse({ status: 400, description: 'Validation failed (subject/level mismatch, type-specific config invalid)' }),
+    ApiResponse({
+      status: 400,
+      description: 'Validation failed (subject/level mismatch, type-specific config invalid)',
+    }),
     ApiResponse({ status: 403, description: 'User type not allowed to author questions' }),
   );
 }
@@ -51,7 +56,8 @@ export function GetQuestionSwagger() {
 export function UpdateQuestionSwagger() {
   return applyDecorators(
     ApiOperation({
-      summary: 'Update a question. Rejected if it is referenced by any PUBLISHED quiz — clone it instead.',
+      summary:
+        'Update a question. Rejected if it is referenced by any PUBLISHED quiz — clone it instead.',
     }),
     ApiParam({ name: 'id', description: 'Question id' }),
     ApiBody({ type: UpdateQuestionDto }),
@@ -64,11 +70,34 @@ export function UpdateQuestionSwagger() {
 export function DeleteQuestionSwagger() {
   return applyDecorators(
     ApiOperation({
-      summary: 'Soft-archive a question. Rejected if any quiz still references it.',
+      summary: 'Delete a question that is not attached to any quiz.',
     }),
     ApiParam({ name: 'id', description: 'Question id' }),
     ApiResponse({ status: 200, type: DeleteQuestionResult }),
-    ApiResponse({ status: 409, description: 'Question is referenced by quizzes; detach first' }),
+    ApiResponse({ status: 409, description: 'Question is referenced by quizzes; archive instead' }),
+  );
+}
+
+export function BulkDeleteQuestionsSwagger() {
+  return applyDecorators(
+    ApiOperation({
+      summary:
+        'Delete multiple questions, archiving selected questions that are already attached to quizzes.',
+    }),
+    ApiBody({ type: BulkDeleteQuestionsDto }),
+    ApiResponse({ status: 200, type: BulkDeleteQuestionsResult }),
+    ApiResponse({ status: 403, description: 'You can only modify your own questions' }),
+  );
+}
+
+export function ArchiveQuestionSwagger() {
+  return applyDecorators(
+    ApiOperation({
+      summary: 'Archive a question so it no longer appears in reusable question lists.',
+    }),
+    ApiParam({ name: 'id', description: 'Question id' }),
+    ApiResponse({ status: 200, type: ArchiveQuestionResult }),
+    ApiResponse({ status: 403, description: 'You can only modify your own questions' }),
   );
 }
 
@@ -83,4 +112,3 @@ export function CloneQuestionSwagger() {
     ApiResponse({ status: 404, description: 'Curated question not found' }),
   );
 }
-

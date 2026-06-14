@@ -22,7 +22,7 @@ export class SignupApprovalService {
   ) {}
 
   async getSignupRequests(params: { page?: number; limit?: number; status?: string }) {
-    const { page = 1, limit = 10, status } = params;
+    const { page = 1, limit = 20, status } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -53,13 +53,16 @@ export class SignupApprovalService {
       this.prisma.schoolSignupRequest.count({ where }),
     ]);
 
+    const pages = Math.ceil(total / limit);
+
     return {
       requests,
       pagination: {
         page,
         limit,
         total,
-        pages: Math.ceil(total / limit),
+        pages,
+        totalPages: pages,
       },
     };
   }

@@ -10,6 +10,8 @@ import {
   QuizQuestion,
 } from '@prisma/client';
 
+import { normalizeQuestionConfig, normalizeTipTapMath } from '../../questions/results/question.result';
+
 export type AttemptForView = QuizAttempt & {
   responses: (QuestionResponse & {
     question: Question & { options: QuestionOption[]; quizUses: QuizQuestion[] };
@@ -38,7 +40,7 @@ export class StudentOptionResult {
   constructor(o: QuestionOption, includeCorrect: boolean) {
     this.id = o.id;
     this.order = o.order;
-    this.label = o.label;
+    this.label = normalizeTipTapMath(o.label);
     this.labelPlainText = o.labelPlainText;
     this.mediaUrl = o.mediaUrl;
     if (includeCorrect) this.isCorrect = o.isCorrect;
@@ -77,7 +79,7 @@ export class StudentQuestionResult {
     const reveal = ctx.resultsVisible && ctx.showCorrectAnswers;
     this.id = question.id;
     this.type = question.type;
-    this.prompt = question.prompt;
+    this.prompt = normalizeTipTapMath(question.prompt);
     this.promptPlainText = question.promptPlainText;
     this.mediaUrls = question.mediaUrls;
     this.weight = weightSnapshot;
@@ -85,8 +87,10 @@ export class StudentQuestionResult {
       .sort((a, b) => a.order - b.order)
       .map((o) => new StudentOptionResult(o, reveal));
     this.partialCreditMode = question.partialCreditMode;
-    this.config = reveal ? question.config : redactConfig(question.type, question.config);
-    if (reveal) this.explanation = question.explanation;
+    this.config = reveal
+      ? normalizeQuestionConfig(question.type, question.config)
+      : redactConfig(question.type, question.config);
+    if (reveal) this.explanation = normalizeTipTapMath(question.explanation);
   }
 }
 
@@ -108,6 +112,14 @@ export class StudentResponseResult {
   isCorrect?: boolean | null;
   @ApiProperty({ description: 'Decimal string', required: false })
   weight?: string;
+  @ApiProperty({ description: 'True while this response is waiting for teacher grading' })
+  pendingGrade: boolean;
+  @ApiProperty({ description: 'Whether this response was graded automatically' })
+  autoGraded: boolean;
+  @ApiProperty({ required: false, nullable: true, description: 'Only present when results are visible' })
+  teacherFeedback?: string | null;
+  @ApiProperty({ required: false, nullable: true, description: 'Only present when results are visible' })
+  manualGradedAt?: Date | null;
 
   constructor(
     response: QuestionResponse,
@@ -116,10 +128,14 @@ export class StudentResponseResult {
     this.questionId = response.questionId;
     this.responseJson = response.responseJson;
     this.weight = response.weight.toString();
+    this.pendingGrade = response.pendingGrade;
+    this.autoGraded = response.autoGraded;
     if (ctx.resultsVisible) {
       this.pointsAwarded =
         response.pointsAwarded !== null ? response.pointsAwarded.toString() : null;
       this.isCorrect = response.isCorrect;
+      this.teacherFeedback = response.teacherFeedback;
+      this.manualGradedAt = response.manualGradedAt;
     }
   }
 }

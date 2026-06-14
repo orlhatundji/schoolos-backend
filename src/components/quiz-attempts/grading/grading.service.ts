@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma, QuizAttemptStatus } from '@prisma/client';
+import { Prisma, QuestionType, QuizAttemptStatus } from '@prisma/client';
 
 import { PrismaService } from '../../../prisma/prisma.service';
 import { gradeResponse } from './graders';
@@ -54,16 +54,38 @@ export class GradingService {
     });
 
     let totalScore = 0;
+    let hasPendingManualGrade = false;
     const updates: Array<Promise<unknown>> = [];
 
     for (const response of attempt.responses) {
+      const weight = Number(response.weight.toString());
+      if (response.question.type === QuestionType.THEORY) {
+        if (response.manualGradedAt && response.pointsAwarded !== null) {
+          totalScore += Number(response.pointsAwarded.toString());
+          continue;
+        }
+
+        hasPendingManualGrade = true;
+        updates.push(
+          this.prisma.questionResponse.update({
+            where: { id: response.id },
+            data: {
+              pointsAwarded: null,
+              isCorrect: null,
+              autoGraded: false,
+              pendingGrade: true,
+            },
+          }),
+        );
+        continue;
+      }
+
       const fraction = gradeResponse(response.responseJson, {
         type: response.question.type,
         options: response.question.options,
         config: response.question.config as Record<string, unknown> | null,
         partialCreditMode: response.question.partialCreditMode,
       });
-      const weight = Number(response.weight.toString());
       const pointsAwarded = +(weight * fraction).toFixed(2);
       totalScore += pointsAwarded;
 
@@ -74,6 +96,7 @@ export class GradingService {
             pointsAwarded,
             isCorrect: fraction === 1,
             autoGraded: true,
+            pendingGrade: false,
           },
         }),
       );
@@ -89,7 +112,9 @@ export class GradingService {
       data: {
         totalScore: new Prisma.Decimal(totalScore.toFixed(2)),
         percentage: new Prisma.Decimal(percentage.toFixed(2)),
-        status: QuizAttemptStatus.GRADED,
+        status: hasPendingManualGrade
+          ? QuizAttemptStatus.PENDING_MANUAL_GRADE
+          : QuizAttemptStatus.GRADED,
       },
     });
 

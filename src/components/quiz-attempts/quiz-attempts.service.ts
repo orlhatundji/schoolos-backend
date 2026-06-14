@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   Prisma,
+  QuestionType,
   Quiz,
   QuizAttemptOverride,
   QuizAttemptStatus,
@@ -19,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UserTypes } from '../users/constants';
 import {
   PageEventDto,
+  ManualGradeResponseDto,
   SaveResponsesDto,
   StartAttemptDto,
 } from './dto';
@@ -296,6 +298,116 @@ export class QuizAttemptsService {
     return this.fetchView(attemptId, callerUserId);
   }
 
+  async listPendingManualGrades(callerUserId: string, query: { quizAssignmentId?: string }) {
+    const caller = await this.requireTeacher(callerUserId);
+
+    return this.prisma.questionResponse.findMany({
+      where: {
+        pendingGrade: true,
+        question: { type: QuestionType.THEORY },
+        attempt: {
+          quizAssignmentId: query.quizAssignmentId,
+          quizAssignment: {
+            deletedAt: null,
+            OR: await this.teacherAssignmentVisibility(caller.teacherId),
+          },
+        },
+      },
+      include: {
+        question: true,
+        attempt: {
+          include: {
+            student: { include: { user: { select: { firstName: true, lastName: true } } } },
+            quizAssignment: {
+              select: {
+                id: true,
+                quizId: true,
+                quiz: { select: { title: true } },
+                classArmSubject: {
+                  select: {
+                    classArm: { select: { name: true } },
+                    subject: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ attempt: { submittedAt: 'asc' } }, { createdAt: 'asc' }],
+    });
+  }
+
+  async getAttemptForManualGrading(callerUserId: string, attemptId: string) {
+    const caller = await this.requireTeacher(callerUserId);
+    const attempt = await this.prisma.quizAttempt.findUnique({
+      where: { id: attemptId },
+      include: {
+        responses: {
+          include: {
+            question: { include: { options: true, quizUses: true } },
+            manualGradedByUser: { select: { firstName: true, lastName: true } },
+          },
+        },
+        student: { include: { user: { select: { firstName: true, lastName: true } } } },
+        quizAssignment: {
+          include: {
+            quiz: { select: { id: true, title: true } },
+            classArmSubject: {
+              include: {
+                classArm: { select: { name: true } },
+                subject: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found');
+    await this.assertTeacherCanManageAssignment(caller.teacherId, attempt.quizAssignment);
+    return attempt;
+  }
+
+  async manualGradeResponse(callerUserId: string, responseId: string, dto: ManualGradeResponseDto) {
+    const caller = await this.requireTeacher(callerUserId);
+    const response = await this.prisma.questionResponse.findUnique({
+      where: { id: responseId },
+      include: {
+        question: { select: { type: true } },
+        attempt: { include: { quizAssignment: true } },
+      },
+    });
+    if (!response) throw new NotFoundException('Question response not found');
+    if (response.question.type !== QuestionType.THEORY) {
+      throw new BadRequestException('Only THEORY responses can be manually graded');
+    }
+    await this.assertTeacherCanManageAssignment(caller.teacherId, response.attempt.quizAssignment);
+
+    const maxPoints = Number(response.weight.toString());
+    if (dto.pointsAwarded > maxPoints) {
+      throw new BadRequestException(`pointsAwarded cannot exceed ${maxPoints}`);
+    }
+
+    await this.prisma.questionResponse.update({
+      where: { id: responseId },
+      data: {
+        pointsAwarded: new Prisma.Decimal(dto.pointsAwarded.toFixed(2)),
+        isCorrect: dto.pointsAwarded === maxPoints,
+        autoGraded: false,
+        pendingGrade: false,
+        manualGradedByUserId: caller.userId,
+        manualGradedAt: new Date(),
+        teacherFeedback: dto.teacherFeedback?.trim() || null,
+      },
+    });
+
+    await this.recomputeAttemptScore(response.attemptId);
+    return this.prisma.questionResponse.findUniqueOrThrow({
+      where: { id: responseId },
+      include: { question: true },
+    });
+  }
+
   // ---------- helpers used by processor / cron ----------
 
   /** Used by AUTO_SUBMIT_TICK processor to find expired in-progress attempts. */
@@ -383,10 +495,11 @@ export class QuizAttemptsService {
       throw new ForbiddenException('Not your attempt');
     }
 
-    const { resultsVisible, showCorrectAnswers } = this.resolveVisibility(attempt.quizAssignment);
+    const visibility = this.resolveVisibility(attempt.quizAssignment);
+    const resultsVisible = visibility.resultsVisible && attempt.status === QuizAttemptStatus.GRADED;
     return {
       attempt,
-      ctx: { resultsVisible, showCorrectAnswers },
+      ctx: { resultsVisible, showCorrectAnswers: visibility.showCorrectAnswers },
       quizId: attempt.quizAssignment.quizId,
     };
   }
@@ -461,6 +574,69 @@ export class QuizAttemptsService {
       throw new ForbiddenException('Only students can use this endpoint');
     }
     return user.student.id;
+  }
+
+  private async requireTeacher(userId: string): Promise<{ userId: string; teacherId: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, type: true, teacher: { select: { id: true } } },
+    });
+    if (!user || user.type !== UserTypes.TEACHER || !user.teacher) {
+      throw new ForbiddenException('Only teachers can use this endpoint');
+    }
+    return { userId: user.id, teacherId: user.teacher.id };
+  }
+
+  private async teacherAssignmentVisibility(teacherId: string): Promise<Prisma.QuizAssignmentWhereInput[]> {
+    const teachingClassArmSubjects = await this.prisma.classArmSubjectTeacher.findMany({
+      where: { teacherId, deletedAt: null },
+      select: { classArmSubjectId: true },
+    });
+    return [
+      { assignedByTeacherId: teacherId },
+      ...(teachingClassArmSubjects.length > 0
+        ? [{ classArmSubjectId: { in: teachingClassArmSubjects.map((t) => t.classArmSubjectId) } }]
+        : []),
+    ];
+  }
+
+  private async assertTeacherCanManageAssignment(
+    teacherId: string,
+    assignment: { assignedByTeacherId: string; classArmSubjectId: string },
+  ) {
+    if (assignment.assignedByTeacherId === teacherId) return;
+    const link = await this.prisma.classArmSubjectTeacher.findFirst({
+      where: {
+        teacherId,
+        classArmSubjectId: assignment.classArmSubjectId,
+        deletedAt: null,
+      },
+    });
+    if (!link) throw new ForbiddenException('You cannot grade this assignment');
+  }
+
+  private async recomputeAttemptScore(attemptId: string) {
+    const attempt = await this.prisma.quizAttempt.findUnique({
+      where: { id: attemptId },
+      include: { responses: true },
+    });
+    if (!attempt) throw new NotFoundException('Attempt not found');
+
+    const totalScore = attempt.responses.reduce((sum, response) => {
+      return sum + (response.pointsAwarded ? Number(response.pointsAwarded.toString()) : 0);
+    }, 0);
+    const maxScore = Number(attempt.maxScore.toString());
+    const percentage = maxScore > 0 ? +((totalScore / maxScore) * 100).toFixed(2) : 0;
+    const hasPending = attempt.responses.some((response) => response.pendingGrade);
+
+    await this.prisma.quizAttempt.update({
+      where: { id: attemptId },
+      data: {
+        totalScore: new Prisma.Decimal(totalScore.toFixed(2)),
+        percentage: new Prisma.Decimal(percentage.toFixed(2)),
+        status: hasPending ? QuizAttemptStatus.PENDING_MANUAL_GRADE : QuizAttemptStatus.GRADED,
+      },
+    });
   }
 
   private async assertEnrolled(studentId: string, classArmId: string) {

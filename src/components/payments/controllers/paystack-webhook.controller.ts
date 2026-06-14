@@ -12,11 +12,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { SkipThrottle } from '@nestjs/throttler';
 
 import { PaystackWebhookService } from '../services/paystack-webhook.service';
 import { PaystackWebhookEventDto, WebhookResponseDto } from '../dto/paystack-webhook.dto';
+import { PaystackEventType } from '../paystack/paystack-event.constants';
+import { PaystackSignatureVerifier } from '../paystack/paystack-signature.verifier';
 import { Public } from '../../../common/decorators';
 
 @Controller('webhooks/paystack')
@@ -28,7 +29,7 @@ export class PaystackWebhookController {
 
   constructor(
     private readonly webhookService: PaystackWebhookService,
-    private readonly configService: ConfigService,
+    private readonly signatureVerifier: PaystackSignatureVerifier,
   ) {}
 
   @Post()
@@ -63,7 +64,7 @@ export class PaystackWebhookController {
       throw new BadRequestException('Webhook request missing signature or body');
     }
 
-    const isValid = this.webhookService.verifySignature(rawBody, signature);
+    const isValid = this.signatureVerifier.verify(rawBody, signature);
 
     if (!isValid) {
       this.logger.error('Invalid Paystack webhook signature');
@@ -78,11 +79,11 @@ export class PaystackWebhookController {
         throw new BadRequestException('Malformed webhook event data');
       }
 
-      const result = await this.webhookService.handleWebhookEvent(event);
+      const result = await this.webhookService.handle(event);
 
       return {
         success: true,
-        message: result.message,
+        message: result.outcome,
       };
     } catch (error) {
       this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
@@ -107,9 +108,9 @@ export class PaystackWebhookController {
     try {
       // Create a mock webhook event for testing
       const mockWebhookEvent: PaystackWebhookEventDto = {
-        event: 'charge.success',
+        event: PaystackEventType.CHARGE_SUCCESS,
         data: {
-          id: 123456789,
+          id: testData.id ?? Date.now(),
           domain: 'test',
           status: 'success',
           reference: testData.reference || 'test_reference_123',
@@ -127,11 +128,11 @@ export class PaystackWebhookController {
         },
       };
 
-      const result = await this.webhookService.handleWebhookEvent(mockWebhookEvent);
+      const result = await this.webhookService.handle(mockWebhookEvent);
 
       return {
-        success: result.success,
-        message: `Test webhook: ${result.message}`,
+        success: true,
+        message: `Test webhook: ${result.outcome}`,
       };
     } catch (error) {
       this.logger.error(`Test webhook failed: ${error.message}`, error.stack);

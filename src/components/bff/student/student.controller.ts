@@ -284,6 +284,22 @@ export class StudentController {
     };
   }
 
+  @Get('payments/:id/transactions')
+  @ApiOperation({ summary: 'List underlying transactions for one of the student\'s payments' })
+  @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Payment not found or not owned by student' })
+  async getPaymentTransactions(
+    @GetCurrentUserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    const transactions = await this.studentService.getTransactionsForOwnedPayment(userId, id);
+    return {
+      success: true,
+      message: 'Transactions retrieved successfully',
+      data: transactions,
+    };
+  }
+
   @Get('payments/history')
   @ApiOperation({ summary: 'Get student payment history' })
   @ApiResponse({

@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
-import { StudentPaymentsController } from './student-payments.controller';
-import { StudentPaymentsService } from './student-payments.service';
-import { StudentPaymentsRepository } from './student-payments.repository';
+
 import { PrismaModule } from '../../../prisma/prisma.module';
+import { Encryptor } from '../../../utils/encryptor';
 import { AuthModule } from '../../auth/auth.module';
 import { RolesManagerModule } from '../../roles-manager/roles-manager.module';
-import { SharedServicesModule } from '../../../shared/shared-services.module';
-import { Encryptor } from '../../../utils/encryptor';
+import { PaymentModule } from '../payment.module';
+import { StudentPaymentsController } from './student-payments.controller';
+import { StudentPaymentsRepository } from './student-payments.repository';
+import { StudentPaymentsService } from './student-payments.service';
 
 @Module({
-  imports: [PrismaModule, AuthModule, RolesManagerModule, SharedServicesModule],
+  imports: [PrismaModule, AuthModule, RolesManagerModule, PaymentModule],
   controllers: [StudentPaymentsController],
   providers: [StudentPaymentsService, StudentPaymentsRepository, Encryptor],
   exports: [StudentPaymentsService],

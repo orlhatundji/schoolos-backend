@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Receipt — {{transaction.reference}}</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #f4f5f7;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        color: #111827;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+        page-break-inside: avoid;
+      }
+      .header {
+        padding: 18px 24px;
+        display: table;
+        width: 100%;
+        border-bottom: 1px solid #eef0f3;
+      }
+      .header-logo {
+        display: table-cell;
+        vertical-align: middle;
+        width: 64px;
+      }
+      .header-logo img {
+        width: 56px;
+        height: 56px;
+        border-radius: 8px;
+        object-fit: contain;
+        background: #f4f5f7;
+        display: block;
+        font-size: 0;        /* hide alt text if image fails */
+        color: transparent;
+      }
+      .header-text {
+        display: table-cell;
+        vertical-align: middle;
+        padding-left: 16px;
+      }
+      .school-name {
+        margin: 0 0 4px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+      }
+      .school-meta {
+        margin: 0;
+        font-size: 12px;
+        color: #6b7280;
+        line-height: 1.5;
+      }
+      .hero {
+        padding: 24px 24px 20px;
+        text-align: left;
+      }
+      .hero-eyebrow {
+        margin: 0 0 8px 0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #6b7280;
+      }
+      .hero-amount {
+        margin: 0;
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #111827;
+      }
+      .hero-meta {
+        margin: 8px 0 0 0;
+        font-family: 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        color: #4f46e5;
+      }
+      .section {
+        padding: 14px 24px;
+        border-top: 1px solid #eef0f3;
+      }
+      .section-grid {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .section-grid td {
+        vertical-align: top;
+        padding: 0;
+        width: 50%;
+      }
+      .field-label {
+        margin: 0 0 4px 0;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #9ca3af;
+      }
+      .field-value {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: #111827;
+      }
+      .field-sub {
+        margin: 0 0 10px 0;
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .section-title {
+        margin: 0 0 14px 0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #9ca3af;
+      }
+      .breakdown {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .breakdown td {
+        padding: 6px 0;
+        font-size: 13px;
+        color: #4b5563;
+        border-bottom: 1px solid #f3f4f6;
+      }
+      .breakdown td.amount {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: #111827;
+      }
+      .breakdown tr.total td {
+        border-top: 2px solid #111827;
+        border-bottom: none;
+        padding-top: 12px;
+        font-weight: 600;
+        font-size: 14px;
+        color: #111827;
+      }
+      .status-pill {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .status-paid {
+        background: #dcfce7;
+        color: #15803d;
+      }
+      .status-partial {
+        background: #fef3c7;
+        color: #b45309;
+      }
+      .status-line {
+        margin: 0;
+        font-size: 13px;
+        color: #4b5563;
+        line-height: 1.6;
+      }
+      .footer {
+        padding: 14px 24px;
+        background: #fafbfc;
+        border-top: 1px solid #eef0f3;
+        font-size: 11px;
+        color: #6b7280;
+        text-align: center;
+        line-height: 1.6;
+      }
+      .footer a {
+        color: #4f46e5;
+        text-decoration: none;
+      }
+      @media (max-width: 480px) {
+        .section-grid td {
+          display: block;
+          width: 100% !important;
+        }
+        .hero-amount { font-size: 32px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+
+        <div class="header">
+          <div class="header-logo">
+            <img src="{{school.logoSrc}}" alt="" />
+          </div>
+          <div class="header-text">
+            <p class="school-name">{{school.name}}</p>
+            <p class="school-meta">
+              {{#if school.addressLine}}{{school.addressLine}}<br />{{/if}}
+              {{#if school.phone}}{{school.phone}}{{/if}}
+              {{#if school.email}}{{#if school.phone}} · {{/if}}{{school.email}}{{/if}}
+              {{#if school.website}}{{#if school.email}} · {{/if}}{{school.website}}{{/if}}
+            </p>
+          </div>
+        </div>
+
+        <div class="hero">
+          <p class="hero-eyebrow">Payment Receipt</p>
+          <p class="hero-amount">₦{{formatNaira transaction.breakdown.totalNaira}}</p>
+          <p class="hero-meta">{{statusLabel payment.overallStatus}} · {{transaction.paidAtDisplay}}</p>
+        </div>
+
+        <div class="section">
+          <table class="section-grid">
+            <tr>
+              <td>
+                <p class="field-label">Paid For</p>
+                <p class="field-value">{{student.fullName}}</p>
+                <p class="field-sub">Student #: {{student.studentNo}}</p>
+              </td>
+              <td>
+                <p class="field-label">Class</p>
+                <p class="field-value">{{#if student.className}}{{student.className}}{{else}}—{{/if}}</p>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <p class="field-label">Payment</p>
+                <p class="field-value">{{payment.structureName}}</p>
+              </td>
+              <td>
+                <p class="field-label">Session / Term</p>
+                <p class="field-value">
+                  {{#if payment.sessionName}}{{payment.sessionName}}{{else}}—{{/if}}
+                  {{#if payment.termName}} · {{payment.termName}}{{/if}}
+                </p>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <p class="section-title">Transaction Details</p>
+          <table class="section-grid">
+            <tr>
+              <td>
+                <p class="field-label">Date</p>
+                <p class="field-value">{{transaction.paidAtDisplay}}</p>
+              </td>
+              <td>
+                <p class="field-label">Method</p>
+                <p class="field-value">{{transaction.methodDisplay}}</p>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2">
+                <p class="field-label">Reference</p>
+                <p class="field-value" style="font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;">{{transaction.reference}}</p>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <p class="section-title">This transaction</p>
+          <table class="breakdown">
+            <tr>
+              <td>School fees portion</td>
+              <td class="amount">₦{{formatNaira transaction.breakdown.schoolFeesNaira}}</td>
+            </tr>
+            <tr>
+              <td>Payment gateway fee</td>
+              <td class="amount">₦{{formatNaira transaction.breakdown.paystackFeeNaira}}</td>
+            </tr>
+            <tr class="total">
+              <td>Total paid now</td>
+              <td class="amount">₦{{formatNaira transaction.breakdown.totalNaira}}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <p class="section-title">Payment progress</p>
+          <table class="breakdown">
+            <tr>
+              <td>Total fee</td>
+              <td class="amount">₦{{formatNaira payment.totalFeeNaira}}</td>
+            </tr>
+            {{#if payment.previouslyPaidNaira}}
+            <tr>
+              <td>Previously paid</td>
+              <td class="amount">₦{{formatNaira payment.previouslyPaidNaira}}</td>
+            </tr>
+            {{/if}}
+            <tr>
+              <td>Paid to date <span style="color: #6b7280; font-weight: 400;">(including this transaction)</span></td>
+              <td class="amount">₦{{formatNaira payment.paidToDateNaira}}</td>
+            </tr>
+            <tr class="total">
+              <td>Outstanding balance</td>
+              <td class="amount">₦{{formatNaira payment.outstandingNaira}}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <p class="section-title">Payment status</p>
+          {{#if (eq payment.overallStatus "PAID")}}
+            <span class="status-pill status-paid">Paid in full</span>
+            <p class="status-line" style="margin-top: 10px;">This fee is now fully settled.</p>
+          {{else}}
+            <span class="status-pill status-partial">Partial</span>
+            <p class="status-line" style="margin-top: 10px;">
+              Outstanding balance on this fee:
+              <strong style="color: #111827;">₦{{formatNaira payment.outstandingNaira}}</strong>
+            </p>
+          {{/if}}
+        </div>
+
+        <div class="footer">
+          Powered by Schos · This is an automated receipt. Keep for your records.
+          {{#if school.email}}<br />Questions? Contact <a href="mailto:{{school.email}}">{{school.email}}</a>.{{/if}}
+        </div>
+
+      </div>
+    </div>
+  </body>
+</html>

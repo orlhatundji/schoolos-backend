@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-import { GetCurrentUserId } from '../../../common/decorators/get-current-user-id.decorator';
+import { GetCurrentUserId, SchoolId } from '../../../common/decorators';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
 import { CheckPolicies } from '../../roles-manager/policies/check-policies.decorator';
 import { PoliciesGuard } from '../../roles-manager/policies/policies.guard';
@@ -39,8 +39,8 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 200, description: 'Student payments retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  findAll(@GetCurrentUserId() userId: string, @Query() filters: any) {
-    return this.studentPaymentsService.getAllStudentPayments(userId, filters);
+  findAll(@SchoolId() schoolId: string, @Query() filters: any) {
+    return this.studentPaymentsService.getAllStudentPayments(schoolId, filters);
   }
 
   @Get('statistics')
@@ -49,8 +49,19 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 200, description: 'Payment statistics retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  getStatistics(@GetCurrentUserId() userId: string) {
-    return this.studentPaymentsService.getPaymentStatistics(userId);
+  getStatistics(@SchoolId() schoolId: string) {
+    return this.studentPaymentsService.getPaymentStatistics(schoolId);
+  }
+
+  @Get(':id/transactions')
+  @CheckPolicies()
+  @ApiOperation({ summary: 'List the underlying PlatformTransactions for a student payment' })
+  @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Student payment not found' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  getTransactions(@SchoolId() schoolId: string, @Param('id') id: string) {
+    return this.studentPaymentsService.getTransactionsForPayment(schoolId, id);
   }
 
   @Get(':id')
@@ -60,8 +71,8 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 404, description: 'Student payment not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  findOne(@GetCurrentUserId() userId: string, @Param('id') id: string) {
-    return this.studentPaymentsService.getStudentPaymentById(userId, id);
+  findOne(@SchoolId() schoolId: string, @Param('id') id: string) {
+    return this.studentPaymentsService.getStudentPaymentById(schoolId, id);
   }
 
   @Get('student/:studentId')
@@ -71,8 +82,8 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 404, description: 'Student not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  findByStudent(@GetCurrentUserId() userId: string, @Param('studentId') studentId: string) {
-    return this.studentPaymentsService.getStudentPaymentsByStudent(userId, studentId);
+  findByStudent(@SchoolId() schoolId: string, @Param('studentId') studentId: string) {
+    return this.studentPaymentsService.getStudentPaymentsByStudent(schoolId, studentId);
   }
 
   @Patch(':id')
@@ -84,11 +95,11 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   update(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Param('id') id: string,
     @Body() updateStudentPaymentDto: UpdateStudentPaymentDto,
   ) {
-    return this.studentPaymentsService.updateStudentPayment(userId, id, updateStudentPaymentDto);
+    return this.studentPaymentsService.updateStudentPayment(schoolId, id, updateStudentPaymentDto);
   }
 
   @Post('request')
@@ -100,10 +111,10 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   requestPayment(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Body() requestPaymentDto: RequestPaymentDto,
   ) {
-    return this.studentPaymentsService.requestPayment(userId, requestPaymentDto);
+    return this.studentPaymentsService.requestPayment(schoolId, requestPaymentDto);
   }
 
   @Post(':id/mark-paid')
@@ -115,11 +126,11 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   markAsPaid(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Param('id') id: string,
     @Body() body: { paidAmount: number; paidAt?: string },
   ) {
-    return this.studentPaymentsService.markPaymentAsPaid(userId, id, body.paidAmount, body.paidAt);
+    return this.studentPaymentsService.markPaymentAsPaid(schoolId, id, body.paidAmount, body.paidAt);
   }
 
   @Post('verify-reference')
@@ -131,10 +142,10 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   verifyByReference(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Body() body: { reference: string },
   ) {
-    return this.studentPaymentsService.verifyPaymentByReference(userId, body.reference);
+    return this.studentPaymentsService.verifyPaymentByReference(schoolId, body.reference);
   }
 
   @Post(':id/waive')
@@ -146,11 +157,12 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   waivePayment(
+    @SchoolId() schoolId: string,
     @GetCurrentUserId() userId: string,
     @Param('id') id: string,
     @Body() body: { waiverReason: string },
   ) {
-    return this.studentPaymentsService.waivePayment(userId, id, body.waiverReason);
+    return this.studentPaymentsService.waivePayment(schoolId, userId, id, body.waiverReason);
   }
 
   @Post(':id/unwaive')
@@ -162,9 +174,9 @@ export class StudentPaymentsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   unwaivePayment(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Param('id') id: string,
   ) {
-    return this.studentPaymentsService.unwaivePayment(userId, id);
+    return this.studentPaymentsService.unwaivePayment(schoolId, id);
   }
 }

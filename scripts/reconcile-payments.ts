@@ -33,21 +33,22 @@ async function reconcilePayments() {
 
   console.log('Starting bulk payment reconciliation...\n');
 
-  // Find all PENDING platform transactions (payments initiated but not confirmed)
   const pendingTxns = await prisma.platformTransaction.findMany({
-    where: { status: 'PENDING' },
-    include: {
-      studentPayment: {
-        include: {
-          student: {
-            include: { user: { select: { firstName: true, lastName: true } } },
-          },
-          paymentStructure: { select: { name: true } },
-        },
-      },
-    },
+    where: { status: 'PENDING', operationType: 'STUDENT_PAYMENT' },
     orderBy: { createdAt: 'asc' },
   });
+
+  const studentPaymentIds = pendingTxns.map((t) => t.operationId);
+  const studentPayments = await prisma.studentPayment.findMany({
+    where: { id: { in: studentPaymentIds } },
+    include: {
+      student: {
+        include: { user: { select: { firstName: true, lastName: true } } },
+      },
+      paymentStructure: { select: { name: true } },
+    },
+  });
+  const studentPaymentById = new Map(studentPayments.map((sp) => [sp.id, sp]));
 
   console.log(`Found ${pendingTxns.length} pending transaction(s) to reconcile.\n`);
 
@@ -60,7 +61,7 @@ async function reconcilePayments() {
 
   for (const tx of pendingTxns) {
     const ref = tx.paymentReference;
-    const studentPayment = tx.studentPayment;
+    const studentPayment = studentPaymentById.get(tx.operationId) ?? null;
     const studentName = studentPayment
       ? `${studentPayment.student.user.firstName} ${studentPayment.student.user.lastName}`
       : 'Unknown';

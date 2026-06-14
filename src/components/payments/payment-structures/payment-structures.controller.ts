@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-import { GetCurrentUserId } from '../../../common/decorators/get-current-user-id.decorator';
+import { SchoolId } from '../../../common/decorators';
 import { AccessTokenGuard } from '../../auth/strategies/jwt/guards/access-token.guard';
 import { CheckPolicies } from '../../roles-manager/policies/check-policies.decorator';
 import { PoliciesGuard } from '../../roles-manager/policies/policies.guard';
@@ -25,10 +25,10 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   create(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Body() createPaymentStructureDto: CreatePaymentStructureDto,
   ) {
-    return this.paymentStructuresService.createPaymentStructure(userId, createPaymentStructureDto);
+    return this.paymentStructuresService.createPaymentStructure(schoolId, createPaymentStructureDto);
   }
 
   @Get()
@@ -37,8 +37,8 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 200, description: 'Payment structures retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  findAll(@GetCurrentUserId() userId: string) {
-    return this.paymentStructuresService.getAllPaymentStructures(userId);
+  findAll(@SchoolId() schoolId: string) {
+    return this.paymentStructuresService.getAllPaymentStructures(schoolId);
   }
 
   @Get(':id')
@@ -48,8 +48,8 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 404, description: 'Payment structure not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  findOne(@GetCurrentUserId() userId: string, @Param('id') id: string) {
-    return this.paymentStructuresService.getPaymentStructureById(userId, id);
+  findOne(@SchoolId() schoolId: string, @Param('id') id: string) {
+    return this.paymentStructuresService.getPaymentStructureById(schoolId, id);
   }
 
   @Patch(':id')
@@ -61,12 +61,12 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   update(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Param('id') id: string,
     @Body() updatePaymentStructureDto: UpdatePaymentStructureDto,
   ) {
     return this.paymentStructuresService.updatePaymentStructure(
-      userId,
+      schoolId,
       id,
       updatePaymentStructureDto,
     );
@@ -80,8 +80,8 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 400, description: 'Cannot delete - has associated student payments' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  remove(@GetCurrentUserId() userId: string, @Param('id') id: string) {
-    return this.paymentStructuresService.deletePaymentStructure(userId, id);
+  remove(@SchoolId() schoolId: string, @Param('id') id: string) {
+    return this.paymentStructuresService.deletePaymentStructure(schoolId, id);
   }
 
   @Post(':id/generate-payments')
@@ -92,10 +92,10 @@ export class PaymentStructuresController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   generateStudentPayments(
-    @GetCurrentUserId() userId: string,
+    @SchoolId() schoolId: string,
     @Param('id') id: string,
     @Body() generatePaymentsDto: GeneratePaymentsDto,
   ) {
-    return this.paymentStructuresService.generateStudentPayments(userId, id, generatePaymentsDto);
+    return this.paymentStructuresService.generateStudentPayments(schoolId, id, generatePaymentsDto);
   }
 }

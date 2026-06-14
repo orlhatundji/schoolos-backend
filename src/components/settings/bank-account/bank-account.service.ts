@@ -1,14 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+
 import { BaseService } from '../../../common/base-service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { PaystackService } from '../../../shared/services/paystack.service';
+import { PaymentService } from '../../payments/payment.service';
 import { AddBankAccountDto, VerifyBankAccountDto } from './dto/add-bank-account.dto';
 
 @Injectable()
 export class BankAccountService extends BaseService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly paystackService: PaystackService,
+    private readonly paymentService: PaymentService,
   ) {
     super(BankAccountService.name);
   }
@@ -38,7 +39,7 @@ export class BankAccountService extends BaseService {
   }
 
   async listBanks() {
-    const banks = await this.paystackService.listBanks();
+    const banks = await this.paymentService.listSupportedBanks();
     return banks
       .filter((bank) => bank.active)
       .map((bank) => ({
@@ -49,7 +50,7 @@ export class BankAccountService extends BaseService {
   }
 
   async verifyAccount(dto: VerifyBankAccountDto) {
-    const resolved = await this.paystackService.resolveAccountNumber(
+    const resolved = await this.paymentService.resolveBankAccount(
       dto.accountNumber,
       dto.bankCode,
     );
@@ -64,8 +65,7 @@ export class BankAccountService extends BaseService {
   async addOrUpdateBankAccount(userId: string, dto: AddBankAccountDto) {
     const school = await this.getSchoolForUser(userId);
 
-    // Verify the account first
-    const resolved = await this.paystackService.resolveAccountNumber(
+    const resolved = await this.paymentService.resolveBankAccount(
       dto.accountNumber,
       dto.bankCode,
     );
@@ -75,23 +75,20 @@ export class BankAccountService extends BaseService {
     });
 
     if (existingAccount) {
-      // Update existing account
       let subaccountCode = existingAccount.paystackSubaccountCode;
 
       if (subaccountCode) {
-        // Update existing Paystack subaccount
-        await this.paystackService.updateSubaccount(subaccountCode, {
+        await this.paymentService.updateSchoolSubaccount(subaccountCode, {
           settlement_bank: dto.bankCode,
           account_number: dto.accountNumber,
         });
       } else {
-        // Create new Paystack subaccount
         const contactEmail = school.email || school.adminUser.email;
-        const subaccount = await this.paystackService.createSubaccount(
+        const subaccount = await this.paymentService.createSchoolSubaccount(
           school.name,
           dto.bankCode,
           dto.accountNumber,
-          0, // We use transaction_charge per payment, not percentage
+          0,
           contactEmail
             ? {
                 email: contactEmail,
@@ -128,9 +125,8 @@ export class BankAccountService extends BaseService {
       };
     }
 
-    // Create new account + Paystack subaccount
     const contactEmail = school.email || school.adminUser.email;
-    const subaccount = await this.paystackService.createSubaccount(
+    const subaccount = await this.paymentService.createSchoolSubaccount(
       school.name,
       dto.bankCode,
       dto.accountNumber,

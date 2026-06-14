@@ -5,10 +5,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-
 import { PrismaService } from '../../../prisma';
 import { PasswordHasher } from '../../../utils/hasher';
-import { PaystackService } from '../../../shared/services/paystack.service';
+import { PaymentService } from '../../payments/payment.service';
 import { AssessmentStructureTemplateService } from '../../assessment-structures/assessment-structure-template.service';
 import { ClassroomBroadsheetBuilder } from '../../../utils/classroom-broadsheet.util';
 import { CurrentTermService } from '../../../shared/services/current-term.service';
@@ -31,13 +30,17 @@ import { BulkStudentAssessmentScoreResult } from './results/bulk-student-assessm
 import { MarkClassAttendanceDto } from './dto/mark-class-attendance.dto';
 import { MarkSubjectAttendanceDto } from './dto/mark-subject-attendance.dto';
 import { ClassAttendanceResult, SubjectAttendanceResult } from './results/attendance-result';
+import {
+  InitiateColorSchemePaymentDto,
+  UpdateUserPreferencesDto,
+} from './dto';
 
 @Injectable()
 export class TeacherService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwordHasher: PasswordHasher,
-    private readonly paystackService: PaystackService,
+    private readonly paymentService: PaymentService,
     private readonly templateService: AssessmentStructureTemplateService,
     private readonly currentTermService: CurrentTermService,
     private readonly classroomBroadsheetBuilder: ClassroomBroadsheetBuilder,
@@ -590,8 +593,10 @@ export class TeacherService {
   }
 
   // Update user preferences
-  async updateUserPreferences(userId: string, updateData: any) {
-    // Check if user has paid for custom color scheme if trying to use custom colors
+  async updateUserPreferences(
+    userId: string,
+    updateData: UpdateUserPreferencesDto,
+  ) {
     if (updateData.colorSchemeType === 'CUSTOM') {
       const hasValidPayment = await this.prisma.colorSchemePayment.findFirst({
         where: {
@@ -600,7 +605,6 @@ export class TeacherService {
           expiresAt: { gt: new Date() },
         },
       });
-
       if (!hasValidPayment) {
         throw new ConflictException(
           'Custom color scheme requires payment. Please initiate payment first.',
@@ -608,126 +612,21 @@ export class TeacherService {
       }
     }
 
-    const preferences = await this.prisma.userPreferences.upsert({
+    const data = { ...updateData } as Record<string, unknown>;
+    return this.prisma.userPreferences.upsert({
       where: { userId },
-      update: updateData,
-      create: {
-        userId,
-        ...updateData,
-      },
+      update: data,
+      create: { userId, ...data },
     });
-
-    return preferences;
   }
 
-  // Initiate color scheme payment
-  async initiateColorSchemePayment(userId: string, colorData: any) {
-    // Get user information
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, firstName: true, lastName: true },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Check if user already has a valid paid payment
-    const validPaidPayment = await this.prisma.colorSchemePayment.findFirst({
-      where: {
-        userId,
-        status: 'PAID',
-        expiresAt: { gt: new Date() },
-      },
-    });
-
-    if (validPaidPayment) {
-      throw new ConflictException('You already have an active custom color scheme subscription');
-    }
-
-    // Check for existing pending payment
-    const existingPendingPayment = await this.prisma.colorSchemePayment.findFirst({
-      where: {
-        userId,
-        status: 'PENDING',
-      },
-    });
-
-    // If there's a pending payment, check if it's still valid (30 minutes)
-    if (existingPendingPayment) {
-      const paymentAge = Date.now() - existingPendingPayment.createdAt.getTime();
-      // const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
-
-      if (paymentAge < 0) {
-        // Payment is still valid, return the existing authorization URL
-        return {
-          paymentId: existingPendingPayment.id,
-          paymentReference: existingPendingPayment.paymentReference,
-          amount: Number(existingPendingPayment.amount),
-          currency: existingPendingPayment.currency,
-          expiresAt: existingPendingPayment.expiresAt,
-          authorizationUrl: existingPendingPayment.authorizationUrl,
-        };
-      } else {
-        // Payment has expired, mark it as expired and create a new one
-        await this.prisma.colorSchemePayment.update({
-          where: { id: existingPendingPayment.id },
-          data: { status: 'EXPIRED' },
-        });
-      }
-    }
-
-    // Generate payment reference
-    const paymentReference = this.paystackService.generateReference('CS_PAY');
-
-    // Initialize payment with Paystack
-    try {
-      const paystackResponse = await this.paystackService.initializePayment({
-        amount: this.paystackService.convertToKobo(500), // 500 NGN in kobo
-        email: user.email,
-        reference: paymentReference,
-        metadata: {
-          userId,
-          paymentType: 'COLOR_SCHEME',
-          customPrimaryColor: colorData.customPrimaryColor,
-          customSecondaryColor: colorData.customSecondaryColor,
-          customAccentColor: colorData.customAccentColor,
-        },
-      });
-
-      // Paystack response received
-
-      if (!paystackResponse.data || !paystackResponse.data.authorization_url) {
-        throw new Error('Failed to get authorization URL from Paystack');
-      }
-
-      // Create payment record
-      const payment = await this.prisma.colorSchemePayment.create({
-        data: {
-          userId,
-          amount: 500, // 500 NGN
-          currency: 'NGN',
-          status: 'PENDING',
-          paymentReference,
-          authorizationUrl: paystackResponse.data.authorization_url,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-        },
-      });
-
-      return {
-        paymentId: payment.id,
-        paymentReference,
-        amount: 500,
-        currency: 'NGN',
-        expiresAt: payment.expiresAt,
-        authorizationUrl: paystackResponse.data.authorization_url,
-      };
-    } catch (error) {
-      throw new Error(`Failed to initialize payment: ${error.message}`);
-    }
+  async initiateColorSchemePayment(
+    userId: string,
+    colorData: InitiateColorSchemePaymentDto,
+  ) {
+    return this.paymentService.initializeColorSchemePayment(userId, colorData);
   }
 
-  // Get color scheme payment status
   async getColorSchemePaymentStatus(userId: string) {
     const payment = await this.prisma.colorSchemePayment.findFirst({
       where: { userId },
@@ -735,15 +634,11 @@ export class TeacherService {
     });
 
     if (!payment) {
-      return {
-        hasPayment: false,
-        status: null,
-        canUseCustomColors: false,
-      };
+      return { hasPayment: false, status: null, canUseCustomColors: false };
     }
 
     const canUseCustomColors =
-      payment.status === 'PAID' && payment.expiresAt && payment.expiresAt > new Date();
+      payment.status === 'PAID' && !!payment.expiresAt && payment.expiresAt > new Date();
 
     return {
       hasPayment: true,
@@ -752,58 +647,6 @@ export class TeacherService {
       expiresAt: payment.expiresAt,
       paymentReference: payment.paymentReference,
     };
-  }
-
-  // Verify color scheme payment
-  async verifyColorSchemePayment(userId: string, reference: string) {
-    try {
-      // Verify payment with Paystack
-      const paystackResponse = await this.paystackService.verifyPayment(reference);
-
-      if (paystackResponse.data.status !== 'success') {
-        return {
-          success: false,
-          message: 'Payment verification failed',
-        };
-      }
-
-      // Find the payment record
-      const payment = await this.prisma.colorSchemePayment.findFirst({
-        where: {
-          userId,
-          paymentReference: reference,
-          status: 'PENDING',
-        },
-      });
-
-      if (!payment) {
-        return {
-          success: false,
-          message: 'Payment record not found',
-        };
-      }
-
-      // Update payment status to PAID
-      await this.prisma.colorSchemePayment.update({
-        where: { id: payment.id },
-        data: {
-          status: 'PAID',
-          paidAt: new Date(),
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Payment verified successfully',
-        paymentId: payment.id,
-        status: 'PAID',
-      };
-    } catch {
-      return {
-        success: false,
-        message: 'Payment verification failed',
-      };
-    }
   }
 
   // Helper method to get current session

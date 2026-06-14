@@ -11,6 +11,8 @@ export const FOLDER_CONFIG = {
   avatars: { maxSize: 50 * 1024 },
   logos: { maxSize: 500 * 1024 },
   signatures: { maxSize: 200 * 1024 },
+  receipts: { maxSize: 2 * 1024 * 1024 },
+  invoices: { maxSize: 2 * 1024 * 1024 },
 } as const;
 
 export type StorageFolder = keyof typeof FOLDER_CONFIG;
@@ -64,6 +66,36 @@ export class StorageService extends BaseService {
     const publicUrl = `${this.endpoint}/${this.bucket}/${key}`;
 
     return { uploadUrl, publicUrl, key };
+  }
+
+  /**
+   * Server-side upload for files we generate (e.g. receipt PDFs).
+   * Use `key` to make the object addressable by a stable name (overwrites on re-upload);
+   * omit it to get a random UUID-suffixed key.
+   */
+  async uploadBuffer(
+    folder: StorageFolder,
+    contentType: string,
+    body: Buffer,
+    key?: string,
+  ): Promise<{ publicUrl: string; key: string }> {
+    const objectKey =
+      key ?? `${this.envFolder}/${folder}/${randomUUID()}`;
+    const finalKey = key
+      ? `${this.envFolder}/${folder}/${key}`
+      : objectKey;
+
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: finalKey,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+
+    const publicUrl = `${this.endpoint}/${this.bucket}/${finalKey}`;
+    return { publicUrl, key: finalKey };
   }
 
   async deleteObject(key: string): Promise<void> {

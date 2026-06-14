@@ -453,7 +453,7 @@ export class SchoolDeletionService extends BaseService {
             A member of our team will be in touch regarding final data retention steps.
           </p>
           <p style="color:#666;font-size:13px;margin-top:20px">
-            Questions? Reply to this email or contact <a href="mailto:support@schos.ng">support@schos.ng</a>.
+            Questions? Email <a href="mailto:support@schos.ng">support@schos.ng</a>.
           </p>
         </div>
       `,

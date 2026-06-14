@@ -1,448 +1,87 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../../prisma/prisma.service';
-import { PaystackService } from '../../../shared/services/paystack.service';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+
 import { PaystackWebhookEventDto } from '../dto/paystack-webhook.dto';
-import * as crypto from 'crypto';
+import { IgnoreReason, PaymentEventOutcome } from '../domain/payment-event-result';
+import {
+  PaymentService,
+  PaymentEventResult,
+  PaystackChargeData,
+  PaystackTransferData,
+} from '../payment.service';
+import {
+  isPaystackEventType,
+  PaystackEventType,
+} from '../paystack/paystack-event.constants';
 
 @Injectable()
 export class PaystackWebhookService {
   private readonly logger = new Logger(PaystackWebhookService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly paystackService: PaystackService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly paymentService: PaymentService) {}
 
-  verifySignature(rawBody: Buffer, signature: string): boolean {
-    try {
-      const secret = this.configService.get<string>('PAYSTACK_SECRET_KEY');
-      if (!secret) {
-        this.logger.error('PAYSTACK_SECRET_KEY is not configured.');
-        return false;
-      }
-
-      const hash = crypto.createHmac('sha512', secret).update(rawBody).digest('hex');
-      const trusted = Buffer.from(hash, 'hex');
-      const untrusted = Buffer.from(signature, 'hex');
-
-      if (trusted.length !== untrusted.length) {
-        return false;
-      }
-
-      return crypto.timingSafeEqual(trusted, untrusted);
-    } catch (error) {
-      this.logger.error('Error verifying webhook signature:', error);
-      return false;
+  async handle(event: PaystackWebhookEventDto): Promise<PaymentEventResult> {
+    if (!event?.event || !event.data) {
+      throw new BadRequestException('Malformed webhook event');
     }
-  }
 
-  async handleWebhookEvent(
-    webhookEvent: PaystackWebhookEventDto,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      switch (webhookEvent.event) {
-        case 'charge.success':
-          return await this.handleChargeSuccess(webhookEvent.data);
-        case 'charge.failed':
-          return await this.handleChargeFailed(webhookEvent.data);
-        case 'transfer.success':
-          return await this.handleTransferSuccess(webhookEvent.data);
-        case 'transfer.failed':
-          return await this.handleTransferFailed(webhookEvent.data);
-        default:
-          this.logger.warn(`Unhandled webhook event: ${webhookEvent.event}`);
-          return { success: true, message: 'Event received but not processed' };
-      }
-    } catch (error) {
-      this.logger.error(`Error handling webhook event: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to process webhook event');
+    if (!isPaystackEventType(event.event)) {
+      this.logger.warn(`Unhandled Paystack event type: ${event.event}`);
+      return {
+        outcome: PaymentEventOutcome.IGNORED,
+        reason: IgnoreReason.UNHANDLED_EVENT_TYPE,
+      };
     }
-  }
 
-  private async handleChargeSuccess(
-    transactionData: any,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const { reference, amount } = transactionData;
+    const rawPayload = event as unknown as Prisma.InputJsonValue;
 
-      // First, try to find a student payment
-      const studentPayment = await this.prisma.studentPayment.findFirst({
-        where: {
-          notes: {
-            contains: reference,
-          },
-          deletedAt: null,
-        },
-        include: {
-          student: {
-            include: {
-              user: true,
-            },
-          },
-        },
-      });
-
-      if (studentPayment) {
-        // Handle student payment — use original fee amount from PlatformTransaction if available
-        const platformTx = await this.prisma.platformTransaction.findUnique({
-          where: { paymentReference: reference },
-        });
-
-        // If we have a PlatformTransaction, use the recorded feeAmount so the
-        // StudentPayment reflects the actual school fee (not the inflated total)
-        const amountToCredit = platformTx
-          ? Number(platformTx.feeAmount)
-          : this.paystackService.convertFromKobo(amount);
-
-        const newPaidAmount = Number(studentPayment.paidAmount) + amountToCredit;
-        const totalAmount = Number(studentPayment.amount);
-        const newStatus = newPaidAmount >= totalAmount ? 'PAID' : 'PARTIAL';
-
-        await this.prisma.studentPayment.update({
-          where: { id: studentPayment.id },
-          data: {
-            paidAmount: newPaidAmount,
-            status: newStatus,
-            paidAt: new Date(),
-            notes: `Payment completed via webhook. Reference: ${reference}. Amount: ${amountToCredit}`,
-          },
-        });
-
-        // Update PlatformTransaction to SETTLED
-        if (platformTx) {
-          await this.prisma.platformTransaction.update({
-            where: { id: platformTx.id },
-            data: {
-              status: 'SETTLED',
-              settledAt: new Date(),
-            },
-          });
-        }
-
-        const studentName = `${studentPayment.student.user.firstName} ${studentPayment.student.user.lastName}`;
-        const formattedAmount = this.formatNaira(amountToCredit);
-        const studentDescription =
-          newStatus === 'PAID'
-            ? `Payment of ${formattedAmount} completed (Ref: ${reference})`
-            : `Partial payment of ${formattedAmount} received (Ref: ${reference})`;
-        const adminDescription =
-          newStatus === 'PAID'
-            ? `${studentName} paid ${formattedAmount} (Ref: ${reference})`
-            : `${studentName} made partial payment of ${formattedAmount} (Ref: ${reference})`;
-
-        await this.logPaymentActivity(
-          studentPayment.student.userId,
-          'PAYMENT_COMPLETED',
-          {
-            paymentId: studentPayment.id,
-            amount: amountToCredit,
-            reference,
-            status: newStatus,
-            platformCommission: platformTx ? Number(platformTx.platformCommission) : 0,
-          },
-          studentDescription,
-          adminDescription,
+    switch (event.event) {
+      case PaystackEventType.CHARGE_SUCCESS:
+        return this.paymentService.handleChargeSuccess(
+          this.toChargeData(event.data),
+          rawPayload,
         );
-
-        return { success: true, message: 'Student payment processed successfully' };
-      }
-
-      // If not a student payment, try to find a color scheme payment
-      const colorSchemePayment = await this.prisma.colorSchemePayment.findFirst({
-        where: {
-          paymentReference: reference,
-          status: 'PENDING',
-        },
-        include: {
-          user: true,
-        },
-      });
-
-      if (colorSchemePayment) {
-        // Handle color scheme payment
-        await this.prisma.colorSchemePayment.update({
-          where: { id: colorSchemePayment.id },
-          data: {
-            status: 'PAID',
-            paidAt: new Date(),
-          },
-        });
-
-        const csAmount = Number(colorSchemePayment.amount);
-        const csUserName = `${colorSchemePayment.user.firstName} ${colorSchemePayment.user.lastName}`;
-        const csFormatted = this.formatNaira(csAmount);
-
-        await this.logPaymentActivity(
-          colorSchemePayment.userId,
-          'COLOR_SCHEME_PAYMENT_COMPLETED',
-          {
-            paymentId: colorSchemePayment.id,
-            amount: csAmount,
-            reference,
-            status: 'PAID',
-          },
-          `Color scheme payment of ${csFormatted} completed (Ref: ${reference})`,
-          `${csUserName} paid ${csFormatted} for color scheme (Ref: ${reference})`,
+      case PaystackEventType.CHARGE_FAILED:
+        return this.paymentService.handleChargeFailed(
+          this.toChargeData(event.data),
+          rawPayload,
         );
-
-        return { success: true, message: 'Color scheme payment processed successfully' };
-      }
-
-      this.logger.warn(`Payment not found for reference: ${reference}`);
-      return { success: false, message: 'Payment record not found' };
-    } catch (error) {
-      this.logger.error(`Error handling charge success: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to process successful payment');
-    }
-  }
-
-  private async handleChargeFailed(
-    transactionData: any,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const { reference, gateway_response } = transactionData;
-
-      // First, try to find a student payment
-      const studentPayment = await this.prisma.studentPayment.findFirst({
-        where: {
-          notes: {
-            contains: reference,
-          },
-          deletedAt: null,
-        },
-        include: {
-          student: {
-            include: {
-              user: true,
-            },
-          },
-        },
-      });
-
-      if (studentPayment) {
-        await this.prisma.studentPayment.update({
-          where: { id: studentPayment.id },
-          data: {
-            notes: `Payment failed via webhook. Reference: ${reference}. Reason: ${gateway_response}`,
-          },
-        });
-
-        // Update PlatformTransaction to FAILED
-        const platformTx = await this.prisma.platformTransaction.findUnique({
-          where: { paymentReference: reference },
-        });
-        if (platformTx) {
-          await this.prisma.platformTransaction.update({
-            where: { id: platformTx.id },
-            data: { status: 'FAILED' },
-          });
-        }
-
-        const failedStudentName = `${studentPayment.student.user.firstName} ${studentPayment.student.user.lastName}`;
-        const failureReason = gateway_response || 'unknown reason';
-
-        await this.logPaymentActivity(
-          studentPayment.student.userId,
-          'PAYMENT_FAILED',
-          {
-            paymentId: studentPayment.id,
-            reference,
-            reason: gateway_response,
-          },
-          `Payment failed: ${failureReason} (Ref: ${reference})`,
-          `${failedStudentName}'s payment failed: ${failureReason} (Ref: ${reference})`,
+      case PaystackEventType.TRANSFER_SUCCESS:
+        return this.paymentService.handleTransferSuccess(
+          this.toTransferData(event.data),
+          rawPayload,
         );
-
-        return { success: true, message: 'Student payment failure logged' };
-      }
-
-      // If not a student payment, try to find a color scheme payment
-      const colorSchemePayment = await this.prisma.colorSchemePayment.findFirst({
-        where: {
-          paymentReference: reference,
-          status: 'PENDING',
-        },
-        include: {
-          user: true,
-        },
-      });
-
-      if (colorSchemePayment) {
-        // Mark color scheme payment as failed (we could add a FAILED status or just log it)
-        const failedCsUserName = `${colorSchemePayment.user.firstName} ${colorSchemePayment.user.lastName}`;
-        const csFailureReason = gateway_response || 'unknown reason';
-
-        await this.logPaymentActivity(
-          colorSchemePayment.userId,
-          'COLOR_SCHEME_PAYMENT_FAILED',
-          {
-            paymentId: colorSchemePayment.id,
-            reference,
-            reason: gateway_response,
-          },
-          `Color scheme payment failed: ${csFailureReason} (Ref: ${reference})`,
-          `${failedCsUserName}'s color scheme payment failed: ${csFailureReason} (Ref: ${reference})`,
+      case PaystackEventType.TRANSFER_FAILED:
+        return this.paymentService.handleTransferFailed(
+          this.toTransferData(event.data),
+          rawPayload,
         );
-
-        return { success: true, message: 'Color scheme payment failure logged' };
-      }
-
-      this.logger.warn(`Payment not found for failed reference: ${reference}`);
-      return { success: false, message: 'Payment record not found' };
-    } catch (error) {
-      this.logger.error(`Error handling charge failure: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to process payment failure');
     }
   }
 
-  private async handleTransferSuccess(
-    transferData: any,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const { reference, amount, reason } = transferData;
-
-      await this.logPaymentActivity(null, 'TRANSFER_SUCCESS', {
-        reference,
-        amount: this.paystackService.convertFromKobo(amount),
-        reason,
-      });
-
-      return { success: true, message: 'Transfer processed successfully' };
-    } catch (error) {
-      this.logger.error(`Error handling transfer success: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to process transfer success');
-    }
+  private toChargeData(data: PaystackWebhookEventDto['data']): PaystackChargeData {
+    return {
+      id: data.id,
+      reference: data.reference,
+      amount: data.amount,
+      status: data.status,
+      gateway_response: data.gateway_response,
+    };
   }
 
-  private async handleTransferFailed(
-    transferData: any,
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const { reference, amount, reason } = transferData;
-
-      await this.logPaymentActivity(null, 'TRANSFER_FAILED', {
-        reference,
-        amount: this.paystackService.convertFromKobo(amount),
-        reason,
-      });
-
-      return { success: true, message: 'Transfer failure processed' };
-    } catch (error) {
-      this.logger.error(`Error handling transfer failure: ${error.message}`, error.stack);
-      throw new BadRequestException('Failed to process transfer failure');
-    }
-  }
-
-  private async logPaymentActivity(
-    userId: string | null,
-    action: string,
-    details: Record<string, any>,
-    description?: string,
-    adminDescription?: string,
-  ): Promise<void> {
-    try {
-      if (userId) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { schoolId: true },
-        });
-
-        if (user?.schoolId) {
-          await this.prisma.userActivity.create({
-            data: {
-              userId,
-              schoolId: user.schoolId,
-              action,
-              entityType: 'PAYMENT',
-              description: description ?? this.toFriendlyAction(action),
-              details: details,
-              ipAddress: 'webhook',
-              userAgent: 'paystack-webhook',
-              category: 'FINANCIAL',
-            },
-          });
-
-          await this.logActivityForSchoolAdmins(
-            user.schoolId,
-            action,
-            details,
-            adminDescription ?? description,
-          );
-        }
-      }
-    } catch (error) {
-      this.logger.error(`Error logging payment activity: ${error.message}`, error.stack);
-    }
-  }
-
-  private async logActivityForSchoolAdmins(
-    schoolId: string,
-    action: string,
-    details: Record<string, any>,
-    description?: string,
-  ): Promise<void> {
-    try {
-      const schoolAdmins = await this.prisma.user.findMany({
-        where: {
-          schoolId: schoolId,
-          type: {
-            in: ['ADMIN', 'SUPER_ADMIN', 'SYSTEM_ADMIN'],
-          },
-        },
-        select: { id: true },
-      });
-
-      for (const admin of schoolAdmins) {
-        await this.prisma.userActivity.create({
-          data: {
-            userId: admin.id,
-            schoolId: schoolId,
-            action,
-            entityType: 'PAYMENT',
-            description: description ?? this.toFriendlyAction(action),
-            details: {
-              ...details,
-              loggedFor: 'school_admin',
-            },
-            ipAddress: 'webhook',
-            userAgent: 'paystack-webhook',
-            category: 'FINANCIAL',
-          },
-        });
-      }
-    } catch (error) {
-      this.logger.error(`Error logging activity for school admins: ${error.message}`, error.stack);
-    }
-  }
-
-  private formatNaira(amount: number): string {
-    return `₦${amount.toLocaleString('en-NG')}`;
-  }
-
-  private toFriendlyAction(action: string): string {
-    const lower = action.toLowerCase().replace(/_/g, ' ');
-    return lower.charAt(0).toUpperCase() + lower.slice(1);
-  }
-
-  async getWebhookEvents(limit: number = 50): Promise<any[]> {
-    try {
-      return await this.prisma.userActivity.findMany({
-        where: {
-          entityType: 'PAYMENT',
-          action: {
-            in: ['PAYMENT_COMPLETED', 'PAYMENT_FAILED', 'TRANSFER_SUCCESS', 'TRANSFER_FAILED'],
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        take: limit,
-      });
-    } catch (error) {
-      this.logger.error(`Error fetching webhook events: ${error.message}`, error.stack);
-      return [];
-    }
+  private toTransferData(data: PaystackWebhookEventDto['data']): PaystackTransferData {
+    const rawData = data as unknown as {
+      reason?: string;
+      recipient?: PaystackTransferData['recipient'];
+      subaccount?: PaystackTransferData['subaccount'];
+    };
+    return {
+      id: data.id,
+      reference: data.reference,
+      amount: data.amount,
+      reason: rawData.reason,
+      recipient: rawData.recipient,
+      subaccount: rawData.subaccount,
+    };
   }
 }

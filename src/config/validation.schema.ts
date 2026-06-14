@@ -33,4 +33,9 @@ export const ConfigValidationSchema = Joi.object({
   AWS_S3_BUCKET: Joi.string().required(),
   AWS_S3_ENDPOINT: Joi.string().required(),
   AWS_S3_FOLDER: Joi.string().required(),
+
+  PAYSTACK_SECRET_KEY: Joi.string().required(),
+  PAYSTACK_PUBLIC_KEY: Joi.string().required(),
+
+  SCHOS_SERVICE_FEE_NAIRA: Joi.number().default(500),
 });

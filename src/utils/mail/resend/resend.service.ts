@@ -21,6 +21,13 @@ export class ResendService extends BaseService implements IMailService {
       to: [input.recipientAddress],
       subject: input.subject,
       html: input.html,
+      ...(input.attachments?.length && {
+        attachments: input.attachments.map((a) => ({
+          filename: a.filename,
+          content: Buffer.from(a.contentBase64, 'base64'),
+          contentType: a.contentType,
+        })),
+      }),
     });
 
     if (response.error) {

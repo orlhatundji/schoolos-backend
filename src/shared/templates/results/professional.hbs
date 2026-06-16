@@ -3,30 +3,40 @@
 <head>
 <meta charset="utf-8">
 <style>
+  :root {
+    --theme-color: {{themeColor}};
+    --theme-text-color: {{themeTextColor}};
+    --theme-row-bg: {{themeRowBg}};
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; }
-  body { font-family: 'Segoe UI', 'Calibri', Arial, sans-serif; font-size: 12px; color: #2c2c2c; background: #fff; display: flex; flex-direction: column; min-height: 100vh; }
+  body { font-family: 'Segoe UI', 'Calibri', Arial, sans-serif; font-size: 12px; color: #2c2c2c; background: #fff; display: flex; flex-direction: column; }
+  #report-root { width: 100%; min-height: {{paperContentMinHeight}}; display: flex; flex-direction: column; box-sizing: border-box; }
+  .report-body { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 15px 20px; }
+  .table-bottom-spacer { flex: 1 1 auto; min-height: 18px; }
+  .report-bottom { flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
 
   .header {
-    background: #f7f7f7; border-bottom: 3px solid #333;
+    background: #f7f7f7; border-bottom: 3px solid var(--theme-color);
     padding: 15px 25px; display: flex; align-items: center; gap: 15px;
   }
   .logo-box {
-    width: 50px; height: 50px; border: 2px solid #555;
+    width: 64px; height: 64px; border: 2px solid #555;
     overflow: hidden; background: #fff; flex-shrink: 0;
   }
   .logo-box img { width: 100%; height: 100%; object-fit: contain; padding: 2px; }
   .header-text { flex: 1; }
   .school-name { font-size: 20px; font-weight: 700; color: #1a1a1a; text-transform: uppercase; letter-spacing: 1px; }
   .school-details { font-size: 10px; color: #666; margin-top: 2px; }
+  .school-address { font-size: 10px; color: #666; margin-top: 2px; }
+  .school-phone { font-size: 10px; color: #666; margin-top: 2px; }
   .report-label {
     text-align: right; font-size: 11px; font-weight: 600;
     color: #555; text-transform: uppercase; letter-spacing: 2px;
-    border-left: 3px solid #333; padding-left: 12px;
+    border-left: 3px solid var(--theme-color); padding-left: 12px;
   }
   .report-label-main { font-size: 14px; color: #1a1a1a; }
 
-  .content { padding: 15px 20px; flex: 1; display: flex; flex-direction: column; }
+  .content { padding: 15px 20px; }
 
   .info-table { width: 100%; margin-bottom: 12px; }
   .info-table td { padding: 3px 0; font-size: 10px; vertical-align: top; }
@@ -34,11 +44,26 @@
   .info-table .value { color: #1a1a1a; font-weight: 600; }
   .info-table .divider { width: 20px; }
 
+  .student-info-block {
+    display: grid; grid-template-columns: 1fr 1fr auto;
+    gap: 12px; align-items: start; margin-bottom: 12px;
+  }
+  .student-info-col { display: flex; flex-direction: column; gap: 3px; }
+  .info-pair { display: flex; font-size: 10px; padding: 0; line-height: 1.35; }
+  .info-pair .label { font-weight: 600; color: #555; min-width: 120px; text-transform: uppercase; font-size: 9px; }
+  .info-pair .value { color: #1a1a1a; font-weight: 600; }
+  .student-photo {
+    width: 72px; height: 72px; aspect-ratio: 1 / 1;
+    background: #fff; overflow: hidden;
+    flex-shrink: 0;
+  }
+  .student-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
   .section-divider { height: 1px; background: #ddd; margin: 8px 0; }
 
   .results-table { width: 100%; border-collapse: collapse; }
   .results-table thead th {
-    background: #333; color: #fff;
+    background: var(--theme-color); color: var(--theme-text-color);
     padding: 7px 4px; font-size: 9px; text-align: center;
     text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600;
   }
@@ -46,7 +71,7 @@
     padding: 6px 4px; text-align: center; font-size: 10px;
     border-bottom: 1px solid #eee;
   }
-  .results-table tbody tr:nth-child(even) { background: #fafafa; }
+  .results-table tbody tr:nth-child(even) { background: var(--theme-row-bg); }
   .subject-name { text-align: left !important; font-weight: 600; padding-left: 8px !important; color: #1a1a1a; }
   .total-cell { font-weight: 700; }
 
@@ -56,7 +81,7 @@
   }
 
   .summary-bar {
-    margin-top: 12px; background: #f7f7f7; border: 1px solid #ddd;
+    background: #f7f7f7; border: 1px solid #ddd;
     display: flex; padding: 0;
   }
   .summary-cell {
@@ -67,12 +92,12 @@
   .summary-cell .label { font-size: 8px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; }
   .summary-cell .value { font-size: 15px; font-weight: 700; color: #1a1a1a; }
 
-  .grading-key { margin-top: 10px; }
+  .grading-key { margin-top: 0; }
   .grading-key table { border-collapse: collapse; font-size: 9px; }
-  .grading-key th { background: #333; color: #fff; padding: 3px 8px; }
+  .grading-key th { background: var(--theme-color); color: var(--theme-text-color); padding: 3px 8px; }
   .grading-key td { border: 1px solid #ddd; padding: 3px 8px; text-align: center; background: #fafafa; }
 
-  .remarks-section { margin-top: 12px; }
+  .remarks-section { margin-top: 0; }
   .remark-block {
     padding: 8px 0; border-bottom: 1px solid #eee;
   }
@@ -83,15 +108,15 @@
   .remark-underline { border-bottom: 1px solid #ccc; height: 16px; }
 
   .signature-grid {
-    margin-top: 15px; display: flex; justify-content: space-between; gap: 30px;
+    margin-top: 0; display: flex; justify-content: space-between; gap: 30px;
   }
   .sig-block { flex: 1; text-align: center; }
-  .sig-line { border-bottom: 1px solid #333; height: 25px; margin-bottom: 4px; }
+  .sig-line { border-bottom: 1px solid var(--theme-color); height: 25px; margin-bottom: 4px; }
   .sig-title { font-size: 9px; font-weight: 600; text-transform: uppercase; color: #555; letter-spacing: 0.3px; }
 
   .footer {
-    margin-top: 15px; padding: 6px 20px;
-    background: #333; color: #ccc;
+    margin-top: 0; padding: 6px 20px;
+    background: var(--theme-color); color: var(--theme-text-color);
     display: flex; justify-content: space-between;
     font-size: 8px; letter-spacing: 0.3px;
   }
@@ -99,16 +124,16 @@
 </head>
 <body>
 
+<div id="report-root">
 <div class="header">
   <div class="logo-box">
     <img src="{{logoSrc}}" alt="Logo">
   </div>
   <div class="header-text">
     <div class="school-name">{{school.name}}</div>
-    <div class="school-details">
-      {{#if school.motto}}{{school.motto}}{{/if}}
-      {{#if school.address}} &mdash; {{school.address}}{{/if}}
-    </div>
+    {{#if school.motto}}<div class="school-details">{{school.motto}}</div>{{/if}}
+    {{#if school.address}}<div class="school-address">{{school.address}}</div>{{/if}}
+    {{#if school.phone}}<div class="school-phone">Tel: {{school.phone}}</div>{{/if}}
   </div>
   <div class="report-label">
     <div class="report-label-main">Report Card</div>
@@ -116,30 +141,49 @@
   </div>
 </div>
 
-<div class="content">
+<div class="report-body">
 
-  <table class="info-table">
-    <tr>
-      <td class="label">Name</td>
-      <td class="value">{{student.fullName}}</td>
-      <td class="divider"></td>
-      <td class="label">Student No</td>
-      <td class="value">{{student.studentNo}}</td>
-      <td class="divider"></td>
-      <td class="label">Class</td>
-      <td class="value">{{student.classArm.level.name}} {{student.classArm.name}}</td>
-    </tr>
-    <tr>
-      <td class="label">Session</td>
-      <td class="value">{{academicSession.academicYear}}</td>
-      <td class="divider"></td>
-      <td class="label">Term</td>
-      <td class="value">{{term.name}}</td>
-      <td class="divider"></td>
-      <td class="label">Period</td>
-      <td class="value">{{termStartDate}} - {{termEndDate}}</td>
-    </tr>
-  </table>
+  <div class="student-info-block">
+    <div class="student-info-col">
+      <div class="info-pair">
+        <span class="label">Name</span>
+        <span class="value">{{student.fullName}}</span>
+      </div>
+      <div class="info-pair">
+        <span class="label">Student No</span>
+        <span class="value">{{student.studentNo}}</span>
+      </div>
+      <div class="info-pair">
+        <span class="label">Session</span>
+        <span class="value">{{academicSession.academicYear}}</span>
+      </div>
+    </div>
+    <div class="student-info-col">
+      <div class="info-pair">
+        <span class="label">Class</span>
+        <span class="value">{{student.classArm.level.name}} {{student.classArm.name}}</span>
+      </div>
+      <div class="info-pair">
+        <span class="label">Term</span>
+        <span class="value">{{term.name}}</span>
+      </div>
+      <div class="info-pair">
+        <span class="label">Period</span>
+        <span class="value">{{termStartDate}} - {{termEndDate}}</span>
+      </div>
+      {{#if attendance}}
+      <div class="info-pair">
+        <span class="label">Attendance</span>
+        <span class="value">{{#if attendance.daysAttended}}{{attendance.daysAttended}}{{else}}-{{/if}}/{{#if attendance.daysOpen}}{{attendance.daysOpen}}{{else}}-{{/if}}</span>
+      </div>
+      {{/if}}
+    </div>
+    {{#if avatarSrc}}
+    <div class="student-photo" style="border-radius: {{photoBorderRadius}};">
+      <img src="{{avatarSrc}}" alt="Student Photo">
+    </div>
+    {{/if}}
+  </div>
 
   <div class="section-divider"></div>
 
@@ -157,6 +201,7 @@
         <th>Total</th>
         {{#if hasPreviousTerms}}<th>Cum.<br><small>Avg</small></th>{{/if}}
         <th>Grade</th>
+        <th>Position</th>
         <th style="width:70px">Remark</th>
       </tr>
     </thead>
@@ -176,12 +221,16 @@
         <td class="total-cell">{{this.totalScore}}</td>
         {{#if ../hasPreviousTerms}}<td class="total-cell" style="color:#1a1a1a;">{{fixed this.cumulativeAverage 1}}</td>{{/if}}
         <td style="font-weight:700; color:{{this.gradeColor}};">{{or this.grade "-"}}</td>
+        <td style="font-weight:600;">{{or this.position "N/A"}} / {{this.totalStudentsInSubject}}</td>
         <td style="color:{{this.remarkColor}}; font-weight:600; font-size:9px;">{{this.remark}}</td>
       </tr>
       {{/each}}
     </tbody>
   </table>
 
+  <div class="table-bottom-spacer"></div>
+
+  <div class="report-bottom">
   <div class="summary-bar">
     <div class="summary-cell">
       <div class="label">Total Subjects</div>
@@ -203,12 +252,6 @@
       <div class="label">Class Position</div>
       <div class="value">{{or overallStats.position "N/A"}} / {{overallStats.totalStudents}}</div>
     </div>
-    {{#if attendance}}
-    <div class="summary-cell">
-      <div class="label">Attendance</div>
-      <div class="value">{{attendance.daysAttended}}{{#if attendance.daysOpen}} / {{attendance.daysOpen}}{{/if}}</div>
-    </div>
-    {{/if}}
   </div>
 
   {{#if gradingModel}}
@@ -229,8 +272,6 @@
     </table>
   </div>
   {{/if}}
-
-  <div style="flex:1; min-height:20px;"></div>
 
   <div class="remarks-section">
     <div class="remark-block">
@@ -264,11 +305,14 @@
     </div>
   </div>
 
+  <div class="footer">
+    <span>Generated on: {{generatedDate}}</span>
+    <span>Powered by Schos</span>
+  </div>
+  </div>
+
 </div>
 
-<div class="footer">
-  <span>Generated on: {{generatedDate}}</span>
-  <span>Powered by Schos</span>
 </div>
 
 </body>

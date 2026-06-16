@@ -5,6 +5,21 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { StudentResultsData } from '../../components/bff/student/types';
 import { ReceiptTemplateData } from '../../components/payments/receipts/receipt-template-data';
+import {
+  hexWithAlpha,
+  resolveResultPhotoBorderRadius,
+  resolveResultThemeColor,
+  resolveResultThemeTextColor,
+} from '../utils/result-theme.util';
+import {
+  RESULT_TEMPLATE_DESCRIPTIONS,
+  RESULT_TEMPLATE_DISPLAY_NAMES,
+} from '../utils/result-template-meta';
+import {
+  PDF_MARGIN_MM,
+  getResultPaperLayout,
+  resolveResultPaperSize,
+} from '../utils/result-paper-size.util';
 
 @Injectable()
 export class PdfService implements OnModuleInit, OnModuleDestroy {
@@ -12,7 +27,7 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
   private browser: puppeteer.Browser | null = null;
   private templateCache = new Map<string, HandlebarsTemplateDelegate>();
 
-  static readonly VALID_TEMPLATES = ['classic', 'traditional', 'professional'] as const;
+  static readonly VALID_TEMPLATES = ['classic', 'traditional', 'professional', 'report-sheet'] as const;
 
   // Default school crest SVG as data URI — used when school has no logo
   private static readonly DEFAULT_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140" fill="none">
@@ -32,16 +47,25 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
     'data:image/svg+xml;base64,' + Buffer.from(PdfService.DEFAULT_LOGO_SVG).toString('base64');
 
   static readonly TEMPLATE_INFO = [
-    { id: 'classic', name: 'Classic', description: 'Dark header with blue accents' },
+    {
+      id: 'classic',
+      name: RESULT_TEMPLATE_DISPLAY_NAMES.classic,
+      description: RESULT_TEMPLATE_DESCRIPTIONS.classic,
+    },
     {
       id: 'traditional',
-      name: 'Traditional',
-      description: 'Formal bordered design with serif fonts',
+      name: RESULT_TEMPLATE_DISPLAY_NAMES.traditional,
+      description: RESULT_TEMPLATE_DESCRIPTIONS.traditional,
     },
     {
       id: 'professional',
-      name: 'Professional',
-      description: 'Corporate formal style with subtle grey tones',
+      name: RESULT_TEMPLATE_DISPLAY_NAMES.professional,
+      description: RESULT_TEMPLATE_DESCRIPTIONS.professional,
+    },
+    {
+      id: 'report-sheet',
+      name: RESULT_TEMPLATE_DISPLAY_NAMES['report-sheet'],
+      description: RESULT_TEMPLATE_DESCRIPTIONS['report-sheet'],
     },
   ];
 
@@ -91,8 +115,6 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
     resultsData: StudentResultsData,
     templateId: string = 'professional',
   ): Promise<Buffer> {
-    await this.ensureBrowser();
-
     const template = this.getTemplate(templateId);
 
     const totalMaxScore = resultsData.assessmentStructures.reduce((sum, a) => sum + a.maxScore, 0);
@@ -102,15 +124,37 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
     const previousTerms = resultsData.previousTerms ?? [];
     const hasPreviousTerms = previousTerms.length > 0;
 
+    const gradesSummary = this.buildGradesSummary(resultsData.subjects);
+    const themeColor = resolveResultThemeColor(
+      templateId,
+      resultsData.school.resultThemeColor,
+    );
+    const themeTextColor = resolveResultThemeTextColor(
+      themeColor,
+      resultsData.school.resultThemeTextColor,
+    );
+    const photoBorderRadius = resolveResultPhotoBorderRadius(
+      resultsData.school.resultPhotoStyle,
+    );
+    const paperSize = resolveResultPaperSize(resultsData.school.resultPaperSize);
+    const paperLayout = getResultPaperLayout(paperSize, PDF_MARGIN_MM);
+
     const html = template({
       ...resultsData,
       logoSrc,
+      avatarSrc: resultsData.student.avatarUrl,
+      themeColor,
+      themeTextColor,
+      themeRowBg: hexWithAlpha(themeColor, 0.06),
+      photoBorderRadius,
+      paperContentMinHeight: paperLayout.paperContentMinHeight,
       termStartDate: this.formatDate(resultsData.term.startDate),
       termEndDate: this.formatDate(resultsData.term.endDate),
       generatedDate: this.formatDate(new Date()),
       totalMaxScore,
       hasPreviousTerms,
       previousTerms,
+      gradesSummary,
       subjects: resultsData.subjects.map((s, i) => ({
         ...s,
         serialNumber: i + 1,
@@ -137,18 +181,45 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
       })),
     });
 
-    const page = await this.browser.newPage();
+    const browser = await this.ensureBrowser();
+    const page = await browser.newPage();
     try {
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdf = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' },
-      });
-      return Buffer.from(pdf);
+      return await this.generateFixedPaperPdf(page, html, paperSize);
     } finally {
       await page.close();
     }
+  }
+
+  /**
+   * Renders a report card on a fixed paper size. Templates use flex layout so
+   * summary, remarks, and signatures anchor to the bottom of the printable area.
+   */
+  private async generateFixedPaperPdf(
+    page: puppeteer.Page,
+    html: string,
+    paperSize: ReturnType<typeof resolveResultPaperSize>,
+  ): Promise<Buffer> {
+    const layout = getResultPaperLayout(paperSize, PDF_MARGIN_MM);
+
+    await page.setViewport({
+      width: layout.contentWidthPx,
+      height: layout.contentHeightPx,
+      deviceScaleFactor: 1,
+    });
+    await page.emulateMediaType('screen');
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdf = await page.pdf({
+      format: layout.spec.puppeteerFormat,
+      printBackground: true,
+      margin: {
+        top: `${PDF_MARGIN_MM}mm`,
+        bottom: `${PDF_MARGIN_MM}mm`,
+        left: `${PDF_MARGIN_MM}mm`,
+        right: `${PDF_MARGIN_MM}mm`,
+      },
+    });
+    return Buffer.from(pdf);
   }
 
   async generateReceiptPDF(data: ReceiptTemplateData): Promise<Buffer> {
@@ -352,6 +423,21 @@ export class PdfService implements OnModuleInit, OnModuleDestroy {
           return status;
       }
     });
+  }
+
+  private buildGradesSummary(
+    subjects: StudentResultsData['subjects'],
+  ): string {
+    const gradeCounts = new Map<string, number>();
+    for (const subject of subjects) {
+      const grade = subject.cumulativeGrade ?? subject.grade;
+      if (!grade) continue;
+      gradeCounts.set(grade, (gradeCounts.get(grade) || 0) + 1);
+    }
+    return Array.from(gradeCounts.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([grade, count]) => `${count}(${grade})`)
+      .join(', ');
   }
 
   private formatDate(date: Date): string {

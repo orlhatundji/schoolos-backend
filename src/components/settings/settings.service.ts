@@ -2,7 +2,14 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { SchoolsService } from '../schools/schools.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { PdfService } from '../../shared/services';
 import { SchoolConfigDto, UpdateSchoolConfigDto } from './dto';
+import {
+  isValidHexColor,
+  RESULT_PHOTO_STYLES,
+} from '../../shared/utils/result-theme.util';
+import { pickSchoolResultCustomization } from '../../shared/utils/school-result-customization';
+import { RESULT_PAPER_SIZES } from '../../shared/utils/result-paper-size.util';
 
 @Injectable()
 export class SettingsService {
@@ -58,6 +65,7 @@ export class SettingsService {
       colorScheme: school.colorScheme || 'default',
       resultTemplateId: school.resultTemplateId || 'professional',
       showAttendanceOnReport: school.showAttendanceOnReport ?? false,
+      ...pickSchoolResultCustomization(school),
       schoolAddress: primaryAddress
         ? {
             street: primaryAddress.street1,
@@ -161,7 +169,7 @@ export class SettingsService {
       updatedFields.push('colorScheme');
     }
     if (updateData.resultTemplateId !== undefined) {
-      const validTemplates = ['classic', 'traditional', 'professional'];
+      const validTemplates: string[] = [...PdfService.VALID_TEMPLATES];
       if (!validTemplates.includes(updateData.resultTemplateId)) {
         throw new BadRequestException('Invalid result template ID');
       }
@@ -171,6 +179,39 @@ export class SettingsService {
     if (updateData.showAttendanceOnReport !== undefined) {
       updatePayload.showAttendanceOnReport = updateData.showAttendanceOnReport;
       updatedFields.push('showAttendanceOnReport');
+    }
+    if (updateData.resultThemeColor !== undefined) {
+      if (updateData.resultThemeColor !== null && !isValidHexColor(updateData.resultThemeColor)) {
+        throw new BadRequestException('Invalid result theme color — use a 6-digit hex value (e.g. #1b5e3b)');
+      }
+      updatePayload.resultThemeColor = updateData.resultThemeColor;
+      updatedFields.push('resultThemeColor');
+    }
+    if (updateData.resultThemeTextColor !== undefined) {
+      if (
+        updateData.resultThemeTextColor !== null &&
+        !isValidHexColor(updateData.resultThemeTextColor)
+      ) {
+        throw new BadRequestException(
+          'Invalid result theme text color — use a 6-digit hex value (e.g. #ffffff)',
+        );
+      }
+      updatePayload.resultThemeTextColor = updateData.resultThemeTextColor;
+      updatedFields.push('resultThemeTextColor');
+    }
+    if (updateData.resultPhotoStyle !== undefined) {
+      if (!(RESULT_PHOTO_STYLES as readonly string[]).includes(updateData.resultPhotoStyle)) {
+        throw new BadRequestException('Invalid result photo style — use "rounded" or "square"');
+      }
+      updatePayload.resultPhotoStyle = updateData.resultPhotoStyle;
+      updatedFields.push('resultPhotoStyle');
+    }
+    if (updateData.resultPaperSize !== undefined) {
+      if (!(RESULT_PAPER_SIZES as readonly string[]).includes(updateData.resultPaperSize)) {
+        throw new BadRequestException('Invalid result paper size — use "letter", "a4", or "legal"');
+      }
+      updatePayload.resultPaperSize = updateData.resultPaperSize;
+      updatedFields.push('resultPaperSize');
     }
 
     // Handle contact info updates

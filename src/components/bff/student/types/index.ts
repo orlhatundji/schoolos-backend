@@ -57,12 +57,18 @@ export interface StudentResultsData {
     motto?: string;
     logoUrl?: string;
     address?: string;
+    phone?: string;
     resultTemplateId?: string;
+    resultThemeColor?: string;
+    resultThemeTextColor?: string;
+    resultPhotoStyle?: string;
+    resultPaperSize?: string;
   };
   student: {
     id: string;
     studentNo: string;
     fullName: string;
+    avatarUrl?: string;
     classArm: {
       id: string;
       name: string;
@@ -93,6 +99,8 @@ export interface StudentResultsData {
     cumulativeTotal: number;
     cumulativeAverage: number;
     cumulativeGrade?: string;
+    position?: number;
+    totalStudentsInSubject?: number;
     assessments: {
       id: string;
       name: string;

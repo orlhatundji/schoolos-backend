@@ -6,6 +6,7 @@ import { GetCurrentUserId } from '../../common/decorators';
 import { AccessTokenGuard } from '../auth/strategies/jwt/guards';
 import { StrategyEnum } from '../auth/strategies';
 import { PdfService } from '../../shared/services';
+import { RESULT_PAPER_SIZE_INFO } from '../../shared/utils/result-paper-size.util';
 
 @Controller('settings')
 @ApiTags('Settings')
@@ -68,6 +69,20 @@ export class SettingsController {
       success: true,
       message: 'Result templates retrieved successfully',
       data: PdfService.TEMPLATE_INFO,
+    };
+  }
+
+  @Get('result-paper-sizes')
+  @ApiOperation({ summary: 'Get available report card paper sizes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paper sizes retrieved successfully',
+  })
+  getResultPaperSizes() {
+    return {
+      success: true,
+      message: 'Result paper sizes retrieved successfully',
+      data: RESULT_PAPER_SIZE_INFO,
     };
   }
 

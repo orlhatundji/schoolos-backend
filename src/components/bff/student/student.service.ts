@@ -26,6 +26,7 @@ import {
   StudentSubjectData,
 } from './types';
 import { computeSubjectCumulative, PriorBySubjectByTerm } from './student-cumulative.utils';
+import { pickSchoolResultCustomization } from '../../../shared/utils/school-result-customization';
 
 @Injectable()
 export class StudentService extends BaseService {
@@ -410,10 +411,11 @@ export class StudentService extends BaseService {
           status: { in: ['PRESENT', 'LATE'] },
         },
       });
-      attendance = {
-        daysAttended,
-        daysOpen: term.daysOpen ?? null,
-      };
+      const daysOpen = term.daysOpen ?? null;
+      // Omit the row when there is nothing meaningful to show (no term days-open and no records).
+      if (daysOpen !== null || daysAttended > 0) {
+        attendance = { daysAttended, daysOpen };
+      }
     }
 
     const assessmentWhereClause: any = {
@@ -608,29 +610,57 @@ export class StudentService extends BaseService {
     // all terms shown (priorTerms + current).
     const currentClassArmId = student.classArmStudents?.[0]?.classArmId;
     const cumulativeTermIds = [...priorTerms.map((t) => t.id), term.id];
-    const classArmAssessments = await this.prisma.classArmStudentAssessment.findMany({
-      where: {
-        termId: { in: cumulativeTermIds },
-        deletedAt: null,
-        classArmSubject: {
-          classArmId: currentClassArmId,
-        },
-      },
-      select: {
-        studentId: true,
-        score: true,
-      },
-    });
+    const classArmAssessments = currentClassArmId
+      ? await this.prisma.classArmStudentAssessment.findMany({
+          where: {
+            termId: { in: cumulativeTermIds },
+            deletedAt: null,
+            classArmSubject: {
+              classArmId: currentClassArmId,
+              deletedAt: null,
+            },
+          },
+          select: {
+            studentId: true,
+            score: true,
+            classArmSubject: { select: { subjectId: true } },
+          },
+        })
+      : [];
 
     // Aggregate total scores per student in the same class arm
     const studentScores = new Map<string, number>();
+    const subjectStudentScores = new Map<string, Map<string, number>>();
     for (const a of classArmAssessments) {
+      const subjectId = a.classArmSubject?.subjectId;
+      if (!subjectId) continue;
+
       studentScores.set(a.studentId, (studentScores.get(a.studentId) || 0) + a.score);
+      if (!subjectStudentScores.has(subjectId)) {
+        subjectStudentScores.set(subjectId, new Map());
+      }
+      const subjectBucket = subjectStudentScores.get(subjectId)!;
+      subjectBucket.set(a.studentId, (subjectBucket.get(a.studentId) || 0) + a.score);
     }
 
     const sortedStudents = Array.from(studentScores.entries()).sort((a, b) => b[1] - a[1]);
-    const position = sortedStudents.findIndex(([sid]) => sid === student.id) + 1;
+    const classRankIndex = sortedStudents.findIndex(([sid]) => sid === student.id);
+    const position = classRankIndex >= 0 ? classRankIndex + 1 : undefined;
     const classStudentsCount = sortedStudents.length;
+
+    const subjectsWithPosition = subjects.map((s) => {
+      const scores = subjectStudentScores.get(s.id);
+      if (!scores) {
+        return { ...s, position: undefined, totalStudentsInSubject: 0 };
+      }
+      const sorted = Array.from(scores.entries()).sort((a, b) => b[1] - a[1]);
+      const subjectRankIndex = sorted.findIndex(([sid]) => sid === student.id);
+      return {
+        ...s,
+        position: subjectRankIndex >= 0 ? subjectRankIndex + 1 : undefined,
+        totalStudentsInSubject: sorted.length,
+      };
+    });
 
     // Build school address string
     const addr = school?.primaryAddress;
@@ -669,12 +699,15 @@ export class StudentService extends BaseService {
         motto: school?.motto || undefined,
         logoUrl: school?.logoUrl || undefined,
         address: schoolAddress,
+        phone: school?.phone ?? undefined,
         resultTemplateId: school?.resultTemplateId || 'professional',
+        ...pickSchoolResultCustomization(school),
       },
       student: {
         id: student.id,
         studentNo: student.studentNo,
         fullName: `${student.user.firstName} ${student.user.lastName}`,
+        avatarUrl: student.user.avatarUrl ?? undefined,
         classArm: {
           id: student.classArmStudents?.[0]?.classArm?.id || '',
           name: student.classArmStudents?.[0]?.classArm?.name || 'N/A',
@@ -695,7 +728,7 @@ export class StudentService extends BaseService {
         startDate: term.startDate,
         endDate: term.endDate,
       },
-      subjects,
+      subjects: subjectsWithPosition,
       previousTerms,
       attendance,
       assessmentStructures: assessmentStructures.map((s: any) => ({

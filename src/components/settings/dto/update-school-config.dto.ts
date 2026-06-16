@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsObject,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -158,7 +159,7 @@ export class UpdateSchoolConfigDto {
   @IsString()
   colorScheme?: string;
 
-  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'traditional', 'professional'] })
+  @ApiProperty({ description: 'Result template ID', required: false, enum: ['classic', 'traditional', 'professional', 'report-sheet'] })
   @IsOptional()
   @IsString()
   resultTemplateId?: string;
@@ -167,6 +168,44 @@ export class UpdateSchoolConfigDto {
   @IsOptional()
   @IsBoolean()
   showAttendanceOnReport?: boolean;
+
+  @ApiProperty({
+    description: 'Primary accent color for report cards (6-digit hex, e.g. #1b5e3b)',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  resultThemeColor?: string | null;
+
+  @ApiProperty({
+    description: 'Text color on themed report card backgrounds (6-digit hex). Omit for auto contrast.',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  resultThemeTextColor?: string | null;
+
+  @ApiProperty({
+    description: 'Student photo style on report cards',
+    required: false,
+    enum: ['rounded', 'square'],
+  })
+  @IsOptional()
+  @IsString()
+  resultPhotoStyle?: string;
+
+  @ApiProperty({
+    description: 'Paper size for PDF report cards',
+    required: false,
+    enum: ['letter', 'a4', 'legal'],
+  })
+  @IsOptional()
+  @IsString()
+  resultPaperSize?: string;
 
   @ApiProperty({ description: 'School address', type: UpdateSchoolAddressDto, required: false })
   @IsOptional()

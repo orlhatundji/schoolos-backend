@@ -81,6 +81,10 @@ model School {
   principalSignatureUrl        String?
   resultTemplateId             String?                       @default("professional") @map("result_template_id")
   showAttendanceOnReport       Boolean                       @default(false) @map("show_attendance_on_report")
+  resultThemeColor             String?                       @map("result_theme_color")
+  resultThemeTextColor         String?                       @map("result_theme_text_color")
+  resultPhotoStyle             String?                       @default("rounded") @map("result_photo_style")
+  resultPaperSize              String?                       @default("letter") @map("result_paper_size")
   currentTermId                String?                       @map("current_term_id")
   currentTerm                  Term?                         @relation("SchoolCurrentTerm", fields: [currentTermId], references: [id])
   assessmentsEnabled           Boolean                       @default(false)

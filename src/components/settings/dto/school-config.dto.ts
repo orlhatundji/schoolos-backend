@@ -102,12 +102,38 @@ export class SchoolConfigDto {
   @ApiProperty({
     description: 'Result template ID',
     required: false,
-    enum: ['classic', 'traditional', 'professional'],
+    enum: ['classic', 'traditional', 'professional', 'report-sheet'],
   })
   resultTemplateId?: string;
 
   @ApiProperty({ description: 'Show attendance days on the report card', required: false })
   showAttendanceOnReport?: boolean;
+
+  @ApiProperty({
+    description: 'Primary accent color for report cards (6-digit hex)',
+    required: false,
+  })
+  resultThemeColor?: string;
+
+  @ApiProperty({
+    description: 'Text color on themed report card backgrounds (6-digit hex). Null uses auto contrast.',
+    required: false,
+  })
+  resultThemeTextColor?: string | null;
+
+  @ApiProperty({
+    description: 'Student photo style on report cards',
+    required: false,
+    enum: ['rounded', 'square'],
+  })
+  resultPhotoStyle?: string;
+
+  @ApiProperty({
+    description: 'Paper size for PDF report cards',
+    required: false,
+    enum: ['letter', 'a4', 'legal'],
+  })
+  resultPaperSize?: string;
 
   @ApiProperty({ description: 'School address', type: SchoolAddressDto, required: false })
   schoolAddress?: SchoolAddressDto;
